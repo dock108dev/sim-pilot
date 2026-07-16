@@ -22,6 +22,10 @@ Its purpose is to verify:
 
 The Reference Simulation is a testing environment, not a game.
 
+It is implemented as a standalone deterministic engine under
+`sim_pilot.reference_simulation`. It has no dependency on the runtime or adapter packages. The
+runtime-facing adapter is a separate consumer under `sim_pilot.adapters.reference`.
+
 ---
 
 # Goals
@@ -41,17 +45,24 @@ The simulation must:
 
 The simulation advances in discrete ticks.
 
-Every tick:
+Every tick executes in this order:
 
-1. Active projects progress.
-2. Population changes.
-3. Resources are consumed.
-4. Income is calculated.
-5. Expenses are deducted.
-6. Infrastructure degrades.
-7. Simulation state is updated.
+1. Reject progression if the simulation is paused or failed.
+2. Increment the tick.
+3. Progress active projects.
+4. Complete finished projects.
+5. Recalculate power usage.
+6. Calculate population growth.
+7. Calculate income.
+8. Calculate recurring expenses.
+9. Update cash.
+10. Degrade infrastructure.
+11. Recalculate derived values.
+12. Evaluate simulation failure conditions.
+13. Emit simulation events.
 
-No randomness is introduced unless a deterministic seed is supplied.
+Task 2 contains no random behavior. A seed remains part of the simulation constructor for future
+compatibility. Identical state, seed, and action sequence always produce identical output.
 
 ---
 
@@ -78,6 +89,7 @@ Fields
 | income_per_tick | float |
 | expense_per_tick | float |
 | paused | bool |
+| failed | bool |
 | active_projects | list[Project] |
 
 ---
@@ -109,7 +121,8 @@ Fields
 |---------|------|
 | id | UUID |
 | type | ProjectType |
-| progress | float |
+| amount | int |
+| progress | int |
 | duration | int |
 | remaining_ticks | int |
 | total_cost | float |
@@ -120,94 +133,57 @@ Fields
 
 - Housing
 - Power
-- Infrastructure
+
+Multiple projects and duplicate project types may run concurrently. At most five projects may be
+active. A project is paid in full when it starts. Housing projects take five ticks and power
+projects take eight ticks. Completed projects are removed from `active_projects` immediately.
 
 ---
 
 # Tick Processing
 
-Each simulation tick executes in the following order.
-
-```text
-Advance Tick
-
-↓
-
-Progress Projects
-
-↓
-
-Complete Finished Projects
-
-↓
-
-Calculate Population Growth
-
-↓
-
-Calculate Income
-
-↓
-
-Calculate Expenses
-
-↓
-
-Update Cash
-
-↓
-
-Update Infrastructure
-
-↓
-
-Recalculate Derived Values
-```
+The ordered steps in Runtime Model are canonical. Project completion effects occur before power
+usage, population growth, income, and expense calculations for that tick.
 
 ---
 
 # Population
 
-Population growth depends on:
+```text
+power_usage = population
+available_housing = housing - population
+available_power = power_capacity - power_usage
+base_growth = floor(population * 0.01)
+growth = min(base_growth, available_housing, max(available_power, 0))
+```
 
-- available housing
-- available power
-- infrastructure health
-
-Growth stops if:
-
-- housing is exhausted
-- power is exhausted
-- infrastructure falls below minimum operating threshold
-
-Population never exceeds housing capacity.
+Growth is zero when infrastructure is below 40, power capacity is below power usage, housing is
+not greater than population, or the simulation is paused or failed. Population never exceeds
+housing or supported power capacity.
 
 ---
 
 # Income
 
-Income is calculated as:
-
 ```text
-population × income_per_citizen
+base_income = population * 20
+infrastructure_multiplier = infrastructure / 100
+power_multiplier = 1.0 if power_capacity >= power_usage else 0.5
+income = base_income * infrastructure_multiplier * power_multiplier
 ```
-
-Income decreases when:
-
-- infrastructure declines
-- power shortages occur
 
 ---
 
 # Expenses
 
-Expenses include:
+Recurring expense is maintenance plus debt expense. Project costs are paid at project start and are
+not recurring expenses. Debt expense per tick is `debt * 0.001`.
 
-- maintenance
-- project costs
-- debt payments
-
-Expenses are deducted every tick.
+```text
+cash += income
+cash -= maintenance_cost
+cash -= debt_expense
+```
 
 ---
 
@@ -223,9 +199,13 @@ Infrastructure ranges from:
 100.0
 ```
 
-Infrastructure naturally degrades every tick.
+Only three maintenance levels are valid:
 
-Maintenance slows degradation.
+| Level | Recurring cost | Degradation per tick |
+|------:|---------------:|---------------------:|
+| 0.0 | 0 | 2.0 |
+| 0.5 | 2500 | 1.0 |
+| 1.0 | 5000 | 0.25 |
 
 Repair actions restore infrastructure.
 
@@ -291,7 +271,7 @@ build_housing(units)
 
 Creates a housing project.
 
-Consumes cash.
+Costs `units * 1000`, paid in full when the project starts. Units must be positive.
 
 Completes after project duration.
 
@@ -305,7 +285,7 @@ build_power(capacity)
 
 Creates a power project.
 
-Consumes cash.
+Costs `capacity * 1500`, paid in full when the project starts. Capacity must be positive.
 
 Completes after project duration.
 
@@ -317,9 +297,8 @@ Completes after project duration.
 repair(amount)
 ```
 
-Consumes cash.
-
-Immediately restores infrastructure.
+Costs `amount * 2000`. Amount must be positive. The immediate effect is
+`infrastructure = min(100, infrastructure + amount)`.
 
 ---
 
@@ -346,6 +325,9 @@ Immediately increases:
 - cash
 - debt
 
+The minimum loan is 10,000, the maximum per action is 500,000, and total debt may not exceed
+2,000,000.
+
 ---
 
 ## Repay Loan
@@ -359,6 +341,8 @@ Reduces:
 - cash
 - debt
 
+The amount must be positive and may not exceed either cash or debt.
+
 ---
 
 ## Pause
@@ -368,6 +352,18 @@ pause()
 ```
 
 Stops simulation progression.
+
+---
+
+## Resume
+
+```text
+resume()
+```
+
+Sets `paused` to false. `advance_time` is rejected while paused. `pause` is rejected when already
+paused, and `resume` is rejected unless paused. Failure is terminal, so resume is rejected after
+failure.
 
 ---
 
@@ -384,6 +380,10 @@ Validation checks include:
 - valid parameters
 - project limits
 - resource limits
+
+Validation is deterministic and does not mutate state. All state-changing actions are rejected
+after failure. While paused, `advance_time` is rejected; other valid actions may execute, including
+`resume`.
 
 Validation occurs before execution.
 
@@ -451,6 +451,8 @@ Infrastructure:       90
 Maintenance Level:    0.50
 
 Paused:               False
+
+Failed:               False
 ```
 
 ---
@@ -461,7 +463,6 @@ Paused:               False
 |-----------|----------|
 | Housing | 5 ticks |
 | Power | 8 ticks |
-| Infrastructure | Immediate |
 
 ---
 
@@ -469,10 +470,10 @@ Paused:               False
 
 | Action | Cost |
 |----------|------|
-| Build Housing | 100000 |
-| Build Power | 150000 |
-| Repair Infrastructure | Variable |
-| Maintenance | Recurring |
+| Build Housing | 1000 per unit |
+| Build Power | 1500 per capacity unit |
+| Repair Infrastructure | 2000 per point |
+| Maintenance | 0, 2500, or 5000 per tick |
 | Loan | No immediate cost |
 | Repayment | Amount repaid |
 
@@ -492,19 +493,26 @@ Completion immediately updates simulation state.
 
 # Failure Conditions
 
-Simulation failure occurs when:
+Simulation failure occurs after a tick or action when:
 
 - cash falls below zero
 - infrastructure reaches zero
-- debt exceeds configured limit
+- debt exceeds 2,000,000
 
-Failure state remains observable.
-
-The runtime determines whether failure ends the current task.
+Failure is terminal for that simulation instance. It sets `failed` and `paused` to true. State
+remains observable and all later state-changing actions are rejected.
 
 ---
 
 # Simulation Events
+
+`SimulationEvent` is an immutable strict model with:
+
+- schema_version
+- sequence
+- tick
+- type
+- details
 
 The simulation emits:
 
@@ -516,6 +524,12 @@ The simulation emits:
 - CashChanged
 - DebtChanged
 - SimulationPaused
+- SimulationResumed
+- SimulationFailed
+
+`SimulationFailure` is an immutable strict model containing a machine-readable `code` and a
+human-readable `message`. Failure codes are `negative_cash`, `infrastructure_depleted`, and
+`debt_limit_exceeded`.
 
 ---
 
@@ -527,7 +541,8 @@ Given:
 - identical initial state
 - identical actions
 
-The simulation must always produce identical observations.
+The simulation must always produce identical observations and events. Fixtures under
+`tests/fixtures` are canonical input states loaded directly by scenario tests.
 
 ---
 
@@ -639,33 +654,5 @@ The Reference Simulation is complete when:
 - Fixed simulation rules during execution.
 - No external dependencies.
 
-currency_unit: integer
-
-income_per_citizen_per_tick: 100
-
-power_usage_per_citizen: 1
-
-base_population_growth_per_tick: 10
-
-infrastructure_degradation_per_tick: 1
-
-maintenance_cost_per_level_per_tick: 1000
-
-housing:
-  units_per_project: 100
-  cost: 100000
-  duration_ticks: 5
-
-power:
-  capacity_per_project: 200
-  cost: 150000
-  duration_ticks: 8
-
-repair:
-  cost_per_infrastructure_point: 2000
-
-loan:
-  minimum_amount: 50000
-  maximum_amount: 500000
-  debt_limit: 1000000
-  interest_per_tick_basis_points: 10
+The simulation uses numeric currency values and deterministic arithmetic. The formulas, prices,
+durations, limits, and processing order in this RFC are the complete Task 2 rules.

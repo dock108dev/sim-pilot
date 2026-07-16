@@ -12,5 +12,6 @@
   "income_per_tick": 0,
   "expense_per_tick": 0,
   "paused": false,
+  "failed": false,
   "active_projects": []
 }

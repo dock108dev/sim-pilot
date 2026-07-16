@@ -19,6 +19,7 @@ EXPECTED_FIELDS = {
     "income_per_tick",
     "expense_per_tick",
     "paused",
+    "failed",
     "active_projects",
 }
 

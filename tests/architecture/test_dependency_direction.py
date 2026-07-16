@@ -30,3 +30,21 @@ def test_adapters_do_not_import_runtime() -> None:
     violations = {path: modules for path, modules in violations.items() if modules}
 
     assert not violations, f"Adapters must not import runtime modules: {violations}"
+
+
+def test_reference_simulation_does_not_import_adapters_or_runtime() -> None:
+    simulation_files = (PACKAGE_ROOT / "reference_simulation").rglob("*.py")
+    forbidden_prefixes = ("sim_pilot.adapters", "sim_pilot.runtime")
+
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden_prefixes)
+        )
+        for path in simulation_files
+    }
+    violations = {path: modules for path, modules in violations.items() if modules}
+
+    assert not violations, (
+        "The reference simulation must remain independent of adapters and runtime modules: "
+        f"{violations}"
+    )

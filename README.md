@@ -1,9 +1,9 @@
 # Sim Pilot
 
 Sim Pilot is a local runtime for translating natural-language objectives into validated actions
-against deterministic simulations. This repository currently contains the Month 1 project
-foundation and typed domain models; the runtime engine, LLM integration, persistence, and
-simulation behavior are intentionally not implemented yet.
+against deterministic simulations. The repository contains the Month 1 foundation, typed domain
+models, and standalone deterministic reference simulation. The runtime engine, LLM integration,
+and persistence are intentionally not implemented yet.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -44,8 +44,34 @@ uv run ruff format .
 ## Package layout
 
 The public Python package is `sim_pilot`. Domain models are exported from `sim_pilot.domain` and
-the package root. The `runtime`, `adapters`, `llm`, `persistence`, and `logging` subpackages are
-foundation boundaries only; their behavior belongs to later milestones.
+the package root. The standalone deterministic engine lives in `sim_pilot.reference_simulation`.
+Its runtime-facing wrapper lives in `sim_pilot.adapters.reference`. The `runtime`, `llm`,
+`persistence`, and `logging` subpackages remain foundation boundaries for later milestones.
 
-Dependency direction is `CLI -> Runtime -> Domain <- Adapter`. Adapters may import domain types,
-but must not import runtime modules.
+Dependency direction is `CLI -> Runtime -> Domain <- Adapter -> Reference Simulation`. Adapters
+may import domain and standalone simulation types, but must not import runtime modules. The
+reference simulation must not import adapters or runtime modules.
+
+## Reference simulation
+
+The deterministic engine is directly testable without the runtime:
+
+```bash
+uv run pytest tests/reference_simulation
+uv run pytest tests/adapters/test_reference_adapter.py
+```
+
+Construct and execute a typed action:
+
+```python
+from sim_pilot.reference_simulation import AdvanceTime, ReferenceSimulation
+
+simulation = ReferenceSimulation(seed=0)
+result = simulation.execute(AdvanceTime(ticks=1))
+
+assert result.success
+print(simulation.state.model_dump_json(indent=2))
+```
+
+`ReferenceSimulation.to_json()` serializes state and `ReferenceSimulation.from_json()` restores it.
+Canonical state inputs live under `tests/fixtures`.

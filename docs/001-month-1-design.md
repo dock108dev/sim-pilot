@@ -59,7 +59,7 @@ This milestone delivers the execution engine and validates the architecture usin
 
                      ▼
 
-          Simulation Adapter
+          Reference Adapter
 
                      │
 
@@ -135,6 +135,16 @@ sim-pilot/
 │       ├── runtime/
 │       ├── domain/
 │       ├── adapters/
+│       │   └── reference/
+│       │       └── adapter.py
+│       ├── reference_simulation/
+│       │   ├── state.py
+│       │   ├── economy.py
+│       │   ├── projects.py
+│       │   ├── tick.py
+│       │   ├── actions.py
+│       │   ├── validation.py
+│       │   └── simulation.py
 │       ├── llm/
 │       ├── persistence/
 │       └── logging/
@@ -354,6 +364,20 @@ Supported decisions
 ---
 
 # Simulation Adapter
+
+The deterministic reference simulation is a standalone engine. Its state transitions, economic
+rules, project progression, actions, and validation do not depend on the runtime or adapter
+packages. The reference adapter consumes that engine and translates between its API and the common
+runtime domain contract.
+
+Dependency direction is:
+
+```text
+CLI -> Runtime -> Domain <- Adapter -> Reference Simulation
+```
+
+Adapters must not import runtime modules. The reference simulation must not import adapter or
+runtime modules.
 
 ```python
 class SimulationAdapter(Protocol):

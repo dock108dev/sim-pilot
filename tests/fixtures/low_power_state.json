@@ -9,8 +9,9 @@
   "power_usage": 750,
   "infrastructure": 75.0,
   "maintenance_level": 0.5,
-  "income_per_tick": 50000,
-  "expense_per_tick": 500,
+  "income_per_tick": 5625,
+  "expense_per_tick": 2500,
   "paused": false,
+  "failed": false,
   "active_projects": []
 }
