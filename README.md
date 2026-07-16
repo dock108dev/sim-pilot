@@ -1,9 +1,10 @@
 # Sim Pilot
 
 Sim Pilot is a local runtime for translating natural-language objectives into validated actions
-against deterministic simulations. The repository contains the Month 1 foundation, typed domain
-models, and standalone deterministic reference simulation. The runtime engine, LLM integration,
-and persistence are intentionally not implemented yet.
+against deterministic simulations. The repository contains typed domain models, the standalone
+deterministic reference simulation, a deterministic runtime slice, and Task 4A SQLite persistence
+infrastructure. Runtime checkpoint integration, process-level resume, LLM integration, and
+natural-language compilation remain later milestones.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -45,8 +46,9 @@ uv run ruff format .
 
 The public Python package is `sim_pilot`. Domain models are exported from `sim_pilot.domain` and
 the package root. The standalone deterministic engine lives in `sim_pilot.reference_simulation`.
-Its runtime-facing wrapper lives in `sim_pilot.adapters.reference`. The `runtime`, `llm`,
-`persistence`, and `logging` subpackages remain foundation boundaries for later milestones.
+Its runtime-facing wrapper lives in `sim_pilot.adapters.reference`. Storage-independent contracts
+and records live in `sim_pilot.persistence`; SQLite code is isolated below
+`sim_pilot.persistence.sqlite`.
 
 Dependency direction is `CLI -> Runtime -> Domain <- Adapter -> Reference Simulation`. Adapters
 may import domain and standalone simulation types, but must not import runtime modules. The
@@ -145,3 +147,51 @@ Task 4 is split into:
 - 4A: persistence schema, repositories, migrations, and transactions
 - 4B: checkpointing, restoration, and resume
 - 4C: crash recovery, approval recovery, integration tests, and CLI wiring
+
+## SQLite database and migrations
+
+Alembic owns the durable schema. The checked-in default database URL is
+`sqlite:///data/sim-pilot.db`; local database files under `data/` are ignored by Git.
+
+Create or upgrade the local schema:
+
+```bash
+uv run alembic upgrade head
+uv run alembic current
+```
+
+Downgrade one revision when explicitly testing migration reversal:
+
+```bash
+uv run alembic downgrade -1
+```
+
+Application code must not call `metadata.create_all()` or issue ad hoc production DDL. Tests use a
+temporary path and invoke Alembic programmatically:
+
+```python
+from pathlib import Path
+
+from sim_pilot.persistence.sqlite import (
+    SQLiteUnitOfWork,
+    create_sqlite_engine,
+    upgrade_database,
+)
+
+database_url = f"sqlite:///{Path('/tmp') / 'sim-pilot-test.db'}"
+upgrade_database(database_url)
+engine = create_sqlite_engine(database_url)
+
+with SQLiteUnitOfWork(engine) as uow:
+    tasks = uow.tasks.list()
+```
+
+Repository consumers depend on `TaskRepository`, `EventRepository`, `ApprovalRepository`, and
+`SimulationRepository`, never SQLAlchemy, SQLite connections, or Alembic. A `UnitOfWork` exposes
+all four repositories on one transaction. Exiting its context commits on success and rolls back on
+an exception, so a future runtime iteration can atomically persist its task snapshot, events,
+approval changes, and simulation checkpoint.
+
+Task 4A establishes this persistence capability only. The current runtime still uses its Task 3
+in-memory state; checkpoint writes, restoration, resume, crash reconciliation, and persistence CLI
+commands remain Task 4B/4C work.

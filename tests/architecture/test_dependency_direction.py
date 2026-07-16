@@ -73,3 +73,60 @@ def test_pure_runtime_components_do_not_execute_actions() -> None:
             for node in ast.walk(tree)
         )
         assert not calls_execute, f"{name} must not execute actions"
+
+
+def test_runtime_contracts_do_not_import_sqlite_implementations() -> None:
+    runtime_files = (PACKAGE_ROOT / "runtime").rglob("*.py")
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module
+            for module in imported_modules(path)
+            if module.startswith("sim_pilot.persistence.sqlite")
+        )
+        for path in runtime_files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_persistence_interfaces_do_not_import_sqlite_implementations() -> None:
+    interface_files = (
+        PACKAGE_ROOT / "persistence" / "repositories.py",
+        PACKAGE_ROOT / "persistence" / "unit_of_work.py",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module
+            for module in imported_modules(path)
+            if module.startswith("sim_pilot.persistence.sqlite")
+        )
+        for path in interface_files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_adapters_and_reference_simulation_do_not_import_persistence() -> None:
+    files = tuple((PACKAGE_ROOT / "adapters").rglob("*.py")) + tuple(
+        (PACKAGE_ROOT / "reference_simulation").rglob("*.py")
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module
+            for module in imported_modules(path)
+            if module.startswith("sim_pilot.persistence")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_alembic_does_not_leak_into_domain_or_runtime() -> None:
+    files = tuple((PACKAGE_ROOT / "domain").rglob("*.py")) + tuple(
+        (PACKAGE_ROOT / "runtime").rglob("*.py")
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith("alembic")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}

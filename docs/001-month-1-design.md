@@ -522,6 +522,27 @@ Task 4 durable persistence is delivered incrementally:
 - Task 4B: simulation checkpointing, restoration, and task resume; no CLI
 - Task 4C: crash recovery, approval recovery, restart integration tests, and CLI wiring
 
+Task 4A uses SQLAlchemy Core for typed SQL construction and explicit transaction ownership. It does
+not expose ORM sessions or SQLAlchemy row models through runtime-facing interfaces. SQLite is
+accessed through Python's database driver beneath SQLAlchemy; no external database service or
+asynchronous driver is required.
+
+The storage-independent repository operations are:
+
+- `TaskRepository`: `create`, `get`, `update`, and `list`
+- `EventRepository`: `append`, `append_many`, `list_for_task`, `latest`, and `get_by_sequence`
+- `ApprovalRepository`: `create`, `get`, `get_pending_for_task`, `update`, and `list_for_task`
+- `SimulationRepository`: `save`, `latest`, and `get_by_runtime_sequence`
+
+Repository failures cross the boundary only as typed persistence errors: record not found,
+duplicate record, sequence conflict, stale update, transaction failure, unsupported schema
+version, or invalid persisted payload. SQLite and SQLAlchemy exceptions do not cross that boundary.
+
+`UnitOfWork` exposes all four repositories and supports explicit `begin`, `commit`, `rollback`, and
+context-manager use. A context commits on successful exit and deterministically rolls back on an
+exception. Task 4A supplies transactional in-memory and SQLite implementations that satisfy the
+same repository contract tests.
+
 ## Tasks
 
 ```text
@@ -531,6 +552,7 @@ specification
 sequence
 created_at
 updated_at
+cancel_requested
 ```
 
 Tasks store the latest lifecycle snapshot and accumulated spend. Historical transitions remain in
@@ -545,7 +567,9 @@ task_id
 schema_version
 state
 tick
-updated_at
+runtime_sequence
+simulation_schema_version
+created_at
 ```
 
 The latest versioned simulation state is loaded directly on restart.
@@ -562,6 +586,18 @@ event_type
 payload
 created_at
 ```
+
+Every durable table has a stable record identifier and `schema_version`. Timestamps are canonical
+timezone-aware UTC values. Task snapshots retain status, accumulated spend, current runtime
+sequence, and cancellation intent. Event sequences begin at one and append exactly in order.
+Simulation checkpoints are immutable per runtime sequence and reject any checkpoint at or below
+the latest stored sequence. Checkpoint lookup is by runtime sequence.
+
+The initial Alembic revision creates `tasks`, `events`, `approvals`, and
+`simulation_checkpoints`. Foreign keys associate every event, approval, and checkpoint with a
+task. Unique and lookup indexes enforce task-scoped event ordering, pending approval identity, and
+latest-checkpoint retrieval. A pending duplicate is defined as the same canonical action for the
+same task; approval history remains retained after resolution.
 
 For a given task, `sequence` starts at 1 and each append must use the next sequence exactly. Event
 payloads and stored event records include `schema_version`. Reading a stream always returns events
@@ -800,7 +836,7 @@ Validate
 | ID | Topic | Status |
 |----|-------|--------|
 | OQ-001 | Structured output provider implementation | Open |
-| OQ-002 | SQLite ORM vs direct SQL | Open |
+| OQ-002 | SQLite ORM vs direct SQL | Resolved: SQLAlchemy Core with explicit transactions |
 | OQ-003 | Prompt version storage | Open |
 | OQ-004 | Simulation state serialization format | Resolved: versioned JSON |
 | OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |
