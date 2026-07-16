@@ -10,7 +10,7 @@ from sim_pilot.persistence.errors import UnsupportedSchemaVersionError
 
 ALEMBIC_ROOT = Path(__file__).parents[4]
 ALEMBIC_INI = ALEMBIC_ROOT / "alembic.ini"
-HEAD_REVISION = "0001"
+HEAD_REVISION = "0002"
 
 
 def alembic_config(database_url: str) -> Config:

@@ -43,6 +43,7 @@ from sim_pilot.runtime.models import (
     ApprovalStatus,
     RuntimeEvent,
     RuntimeEventType,
+    RuntimeSafeguardState,
 )
 
 RowData = dict[str, Any]
@@ -145,6 +146,7 @@ class SQLiteTaskRepository:
             "current_sequence": task.sequence,
             "total_spend": str(task.total_spend),
             "cancel_requested": record.cancel_requested,
+            "runtime_state_json": record.runtime_state.model_dump_json(),
             "created_at": _utc_text(task.created_at),
             "updated_at": _utc_text(task.updated_at),
         }
@@ -164,7 +166,12 @@ class SQLiteTaskRepository:
                 created_at=_datetime(row["created_at"]),
                 updated_at=_datetime(row["updated_at"]),
             )
-            return TaskRecord(task=task, cancel_requested=bool(row["cancel_requested"]))
+            runtime_state = RuntimeSafeguardState.model_validate_json(row["runtime_state_json"])
+            return TaskRecord(
+                task=task,
+                cancel_requested=bool(row["cancel_requested"]),
+                runtime_state=runtime_state,
+            )
         except (KeyError, TypeError, ValueError, ValidationError) as error:
             raise _payload_error("task", error) from error
 
@@ -439,6 +446,10 @@ class SQLiteSimulationRepository:
             "runtime_sequence": metadata.runtime_sequence,
             "simulation_tick": metadata.simulation_tick,
             "simulation_schema_version": metadata.simulation_schema_version,
+            "adapter_type": metadata.adapter_type,
+            "adapter_schema_version": metadata.adapter_schema_version,
+            "adapter_observation_sequence": metadata.adapter_observation_sequence,
+            "adapter_seed": metadata.adapter_seed,
             "state_json": _json(checkpoint.state),
             "created_at": _utc_text(metadata.created_at),
         }
@@ -457,6 +468,10 @@ class SQLiteSimulationRepository:
                 runtime_sequence=cast("int", row["runtime_sequence"]),
                 simulation_tick=cast("int", row["simulation_tick"]),
                 simulation_schema_version=cast("int", row["simulation_schema_version"]),
+                adapter_type=cast("str", row["adapter_type"]),
+                adapter_schema_version=cast("int", row["adapter_schema_version"]),
+                adapter_observation_sequence=cast("int", row["adapter_observation_sequence"]),
+                adapter_seed=cast("str", row["adapter_seed"]),
                 created_at=_datetime(row["created_at"]),
             )
             state = cast("dict[str, JsonValue]", json.loads(cast("str", row["state_json"])))

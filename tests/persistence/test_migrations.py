@@ -40,7 +40,55 @@ def test_empty_database_upgrades_to_head_and_repeated_upgrade_is_safe(tmp_path: 
         "simulation_checkpoints",
         "tasks",
     }
+    task_columns = {column["name"] for column in inspect(engine).get_columns("tasks")}
+    assert "runtime_state_json" in task_columns
+    checkpoint_columns = {
+        column["name"] for column in inspect(engine).get_columns("simulation_checkpoints")
+    }
+    assert {
+        "adapter_type",
+        "adapter_schema_version",
+        "adapter_observation_sequence",
+        "adapter_seed",
+    } <= checkpoint_columns
     engine.dispose()
+
+
+def test_task_4a_database_upgrades_to_task_4b_with_runtime_defaults(tmp_path: Path) -> None:
+    url = database_url(tmp_path, "upgrade-4a.db")
+    command.upgrade(alembic_config(url), "0001")
+    engine = create_sqlite_engine(url)
+    record = task_record()
+    task = record.task
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """INSERT INTO tasks
+                (id, schema_version, status, specification_json, current_sequence,
+                 total_spend, cancel_requested, created_at, updated_at)
+                VALUES (:id, 1, :status, :specification, 0, '0', 0, :created_at, :updated_at)"""
+            ),
+            {
+                "id": str(task.id),
+                "status": task.status.value,
+                "specification": task.specification.model_dump_json(),
+                "created_at": task.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": task.updated_at.isoformat().replace("+00:00", "Z"),
+            },
+        )
+    engine.dispose()
+
+    upgrade_database(url)
+    upgraded_engine = create_sqlite_engine(url)
+    uow = SQLiteUnitOfWork(upgraded_engine)
+    uow.begin()
+    try:
+        upgraded = uow.tasks.get(task.id)
+    finally:
+        uow.rollback()
+    assert upgraded.runtime_state.iterations == 0
+    assert upgraded.runtime_state.approved_once_action is None
+    upgraded_engine.dispose()
 
 
 def test_initial_schema_has_expected_constraints_indexes_and_foreign_keys(

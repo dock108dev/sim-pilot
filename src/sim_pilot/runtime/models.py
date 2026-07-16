@@ -67,6 +67,20 @@ class RuntimeConfiguration(RuntimeModel):
     block_on_false_completion: bool = False
 
 
+class RuntimeSafeguardState(RuntimeModel):
+    """Minimal durable state needed to preserve safeguards across restart."""
+
+    iterations: int = Field(default=0, ge=0)
+    consecutive_failures: int = Field(default=0, ge=0)
+    repeated_action_count: int = Field(default=0, ge=0)
+    repeated_state_count: int = Field(default=0, ge=0)
+    rejected_action_count: int = Field(default=0, ge=0)
+    last_action_fingerprint: str | None = None
+    last_state_fingerprint: str | None = None
+    approved_once_action: Action | None = None
+    approved_approval_id: UUID | None = None
+
+
 class RuntimeEventType(StrEnum):
     TASK_CREATED = "task_created"
     TASK_STARTED = "task_started"

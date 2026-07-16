@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.domain import Action
 from sim_pilot.domain.models import JsonValue
@@ -129,3 +130,42 @@ def test_adapter_shutdown_rejects_further_operations() -> None:
             await adapter.observe()
 
     asyncio.run(scenario())
+
+
+def test_reference_adapter_snapshot_restores_state_sequence_and_future_behavior() -> None:
+    async def scenario() -> None:
+        original = ReferenceSimulationAdapter()
+        await original.initialize()
+        await original.observe()
+        await original.execute(action("advance_time", {"ticks": 1}))
+        before_restart = await original.observe()
+        snapshot = original.snapshot()
+
+        restored = ReferenceSimulationAdapter.from_snapshot(snapshot)
+        assert restored.simulation.state == original.simulation.state
+        assert restored.snapshot() == snapshot
+        await restored.initialize()
+        after_restart = await restored.observe()
+        assert after_restart.sequence == before_restart.sequence + 1
+        assert after_restart.tick == before_restart.tick
+
+        next_action = action("advance_time", {"ticks": 1})
+        original_result = await original.execute(next_action)
+        restored_result = await restored.execute(next_action)
+        assert restored_result == original_result
+        assert restored.simulation.state == original.simulation.state
+
+    asyncio.run(scenario())
+
+
+def test_reference_adapter_rejects_unsupported_snapshot_schema() -> None:
+    snapshot = ReferenceSimulationAdapter().snapshot()
+    unsupported = AdapterSnapshot(
+        adapter_type="reference",
+        simulation_schema_version=2,
+        observation_sequence=0,
+        seed="0",
+        state=snapshot.state,
+    )
+    with pytest.raises(ValueError, match="simulation schema"):
+        ReferenceSimulationAdapter.from_snapshot(unsupported)

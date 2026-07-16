@@ -2,9 +2,9 @@
 
 Sim Pilot is a local runtime for translating natural-language objectives into validated actions
 against deterministic simulations. The repository contains typed domain models, the standalone
-deterministic reference simulation, a deterministic runtime slice, and Task 4A SQLite persistence
-infrastructure. Runtime checkpoint integration, process-level resume, LLM integration, and
-natural-language compilation remain later milestones.
+deterministic reference simulation, a deterministic runtime, and Task 4B durable SQLite
+checkpointing and process-level resume. Crash-window reconciliation, persistence CLI commands,
+LLM integration, and natural-language compilation remain later milestones.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -133,9 +133,10 @@ print(engine.event_store.list_events(task.id))
 
 ## Runtime persistence roadmap
 
-Task 3 uses an append-only in-memory event store and establishes runtime semantics without database
-mechanics. Durable Task 4 persistence uses SQLite with current task and simulation snapshots plus
-the complete event log. A restart loads snapshots directly rather than replaying every event.
+The runtime defaults to transactional in-memory repositories and accepts a `UnitOfWork` factory for
+SQLite or test-specific storage. Durable persistence uses current task and simulation snapshots
+plus the complete event log. A restart loads snapshots directly rather than replaying events to
+rebuild simulation state.
 
 Runtime code sees only `TaskRepository`, `EventRepository`, `ApprovalRepository`, and
 `SimulationRepository`; SQLite stays below those interfaces. One runtime iteration commits its
@@ -192,6 +193,52 @@ all four repositories on one transaction. Exiting its context commits on success
 an exception, so a future runtime iteration can atomically persist its task snapshot, events,
 approval changes, and simulation checkpoint.
 
-Task 4A establishes this persistence capability only. The current runtime still uses its Task 3
-in-memory state; checkpoint writes, restoration, resume, crash reconciliation, and persistence CLI
-commands remain Task 4B/4C work.
+## Programmatic restart and resume
+
+Task 4B checkpoints the initial observation, every verified state-changing action, and initialized
+terminal states. The example below runs one committed iteration, closes every database-backed
+object, then reconstructs and resumes with fresh objects:
+
+```python
+database_url = "sqlite:///data/sim-pilot.db"
+upgrade_database(database_url)
+
+first_engine = create_sqlite_engine(database_url)
+first_runtime = RuntimeEngine(
+    unit_of_work_factory=lambda: SQLiteUnitOfWork(first_engine)
+)
+partial = asyncio.run(
+    first_runtime.run(
+        task,
+        ReferenceSimulationAdapter(),
+        provider,
+        iteration_budget=1,
+    )
+)
+first_engine.dispose()
+
+second_engine = create_sqlite_engine(database_url)
+second_runtime = RuntimeEngine(
+    unit_of_work_factory=lambda: SQLiteUnitOfWork(second_engine)
+)
+
+def restore_reference(context):
+    if context.checkpoint is None:
+        return ReferenceSimulationAdapter()
+    return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
+
+remaining_provider = ScriptedDecisionProvider(
+    [Decision(type=DecisionType.EXECUTE, reason="Advance.", action=advance)] * 9
+)
+outcome = asyncio.run(
+    second_runtime.resume(task.id, restore_reference, remaining_provider)
+)
+second_engine.dispose()
+```
+
+`resume` returns pending approvals and terminal tasks without initializing or executing an adapter.
+Approval grants persist one exact action authorization across restart. Safeguard counters and
+fingerprints also continue across processes. An atomic persistence failure rolls back task, event,
+approval, and checkpoint writes and raises `DurablePersistenceError`.
+
+Task 4C still owns deliberate reconciliation of the external-action crash window and CLI commands.

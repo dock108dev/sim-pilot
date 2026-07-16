@@ -543,6 +543,57 @@ context-manager use. A context commits on successful exit and deterministically 
 exception. Task 4A supplies transactional in-memory and SQLite implementations that satisfy the
 same repository contract tests.
 
+Task 4B integrates this boundary into the runtime. Task creation is one transaction containing the
+pending task snapshot and `TaskCreated`. Adapter initialization is followed by one transaction
+containing `TaskStarted`, the initial observation, the running task snapshot, and the initial
+simulation checkpoint. Each later runtime iteration buffers its evaluation, decision, policy,
+execution, observation, verification, lifecycle, and approval events and commits them with the
+updated task and optional checkpoint. No task sequence, spend, approval, event, or checkpoint
+advances if that transaction fails. A storage-independent `DurablePersistenceError` reports the
+rollback. The external adapter action remains outside the database transaction; Task 4C owns
+reconciliation if that side effect succeeds before persistence fails.
+
+Checkpoint cadence is:
+
+- after adapter initialization and the first observation
+- after every successfully verified state-changing action
+- after pause and resume, which are state-changing actions
+- on terminal transition when an initialized simulation checkpoint exists
+- not for evaluation-only, policy-only, approval-only, or verified no-change iterations
+
+A checkpoint retains simulation state and schema, tick, runtime sequence, adapter type and schema,
+adapter observation sequence, and deterministic seed. A no-change action can produce a newer
+observation without duplicating state; reconstruction obtains that observation sequence from the
+event stream while loading simulation state from the latest checkpoint.
+
+Runtime safeguard state is stored with the current task snapshot: total iteration count,
+consecutive failures, repeated-action and repeated-state counts and fingerprints, rejected-action
+count, and any approved-once action plus its approval identifier. The event stream remains the
+audit source for decisions and rejection history; those payloads are not duplicated in the task
+snapshot.
+
+Reconstruction loads the task snapshot, complete ordered event stream, approval history, and
+latest checkpoint in one read unit of work. It rejects non-contiguous events, task/event sequence
+mismatch, a checkpoint ahead of the task, checkpoint state/tick/schema mismatch, an observation
+that disagrees with checkpoint state, incompatible approval/status combinations, incomplete
+approved-once identity, and cancellation/status mismatch. Reconstruction never executes an
+adapter action.
+
+Resume behavior by status is:
+
+- `pending`: initialize a new adapter and start normally
+- `running`: restore the adapter from the latest committed checkpoint and continue
+- `waiting_for_approval` with a pending request: return without restoring or executing an adapter
+- `waiting_for_approval` after approval: restore, transition to running, and authorize that exact
+  action once
+- `completed`, `blocked`, `failed`, or `cancelled`: return the persisted terminal outcome without
+  adapter initialization or execution
+
+Denial atomically resolves the approval, appends `ApprovalDenied` and `TaskBlocked`, and persists
+the blocked task. Cancellation atomically persists cancellation intent, cancelled status, and
+`TaskCancelled`. A task cancelled before adapter initialization has no fabricated simulation
+checkpoint.
+
 ## Tasks
 
 ```text
@@ -840,3 +891,5 @@ Validate
 | OQ-003 | Prompt version storage | Open |
 | OQ-004 | Simulation state serialization format | Resolved: versioned JSON |
 | OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |
+| OQ-006 | Checkpoint cadence | Resolved: initial, verified state change, and initialized terminal |
+| OQ-007 | Safeguard recovery | Resolved: minimal counters/fingerprints stored on task snapshot |

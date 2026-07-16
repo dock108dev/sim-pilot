@@ -544,6 +544,14 @@ Given:
 The simulation must always produce identical observations and events. Fixtures under
 `tests/fixtures` are canonical input states loaded directly by scenario tests.
 
+For Task 4B, the reference adapter exposes a storage-independent snapshot containing the complete
+`SimulationState`, simulation schema version, deterministic seed, and current observation
+sequence. Restoration validates schema version and recreates the adapter without observing,
+advancing a tick, or executing an action. The first observation after restoration continues at the
+next sequence, and applying the same future actions produces the same state as uninterrupted
+execution. Runtime persistence stores this snapshot data without the adapter importing persistence
+or runtime modules.
+
 ---
 
 # Test Scenarios

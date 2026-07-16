@@ -63,7 +63,7 @@ def test_event_store_does_not_import_adapters() -> None:
 
 
 def test_pure_runtime_components_do_not_execute_actions() -> None:
-    for name in ("evaluator.py", "policy.py", "verification.py"):
+    for name in ("evaluator.py", "policy.py", "verification.py", "reconstruction.py"):
         path = PACKAGE_ROOT / "runtime" / name
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         calls_execute = any(
@@ -75,13 +75,15 @@ def test_pure_runtime_components_do_not_execute_actions() -> None:
         assert not calls_execute, f"{name} must not execute actions"
 
 
-def test_runtime_contracts_do_not_import_sqlite_implementations() -> None:
+def test_runtime_contracts_do_not_import_storage_implementations() -> None:
     runtime_files = (PACKAGE_ROOT / "runtime").rglob("*.py")
     violations = {
         str(path.relative_to(PACKAGE_ROOT)): sorted(
             module
             for module in imported_modules(path)
-            if module.startswith("sim_pilot.persistence.sqlite")
+            if module.startswith(
+                ("sim_pilot.persistence.sqlite", "sim_pilot.persistence.in_memory")
+            )
         )
         for path in runtime_files
     }
@@ -126,6 +128,36 @@ def test_alembic_does_not_leak_into_domain_or_runtime() -> None:
     violations = {
         str(path.relative_to(PACKAGE_ROOT)): sorted(
             module for module in imported_modules(path) if module.startswith("alembic")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_sqlite_does_not_import_reference_adapter_internals() -> None:
+    files = (PACKAGE_ROOT / "persistence" / "sqlite").rglob("*.py")
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module
+            for module in imported_modules(path)
+            if module.startswith("sim_pilot.adapters.reference")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_repositories_do_not_import_runtime_policy_or_execution() -> None:
+    files = tuple((PACKAGE_ROOT / "persistence").rglob("*.py"))
+    forbidden = (
+        "sim_pilot.runtime.engine",
+        "sim_pilot.runtime.evaluator",
+        "sim_pilot.runtime.policy",
+        "sim_pilot.runtime.verification",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
         )
         for path in files
     }

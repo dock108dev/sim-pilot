@@ -10,6 +10,7 @@ from sim_pilot.persistence.errors import (
     TransactionError,
     UnsupportedSchemaVersionError,
 )
+from sim_pilot.persistence.factories import in_memory_unit_of_work_factory
 from sim_pilot.persistence.in_memory import InMemoryPersistenceState, InMemoryUnitOfWork
 from sim_pilot.persistence.models import (
     ApprovalRecord,
@@ -35,6 +36,7 @@ __all__ = [
     "EventRepository",
     "InMemoryPersistenceState",
     "InMemoryUnitOfWork",
+    "in_memory_unit_of_work_factory",
     "InvalidPersistedPayloadError",
     "PersistenceError",
     "RecordNotFoundError",

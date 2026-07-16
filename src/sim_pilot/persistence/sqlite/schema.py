@@ -27,6 +27,7 @@ tasks = Table(
     Column("current_sequence", Integer, nullable=False),
     Column("total_spend", Text, nullable=False),
     Column("cancel_requested", Boolean, nullable=False),
+    Column("runtime_state_json", Text, nullable=False),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     CheckConstraint("schema_version >= 1", name="ck_tasks_schema_version"),
@@ -80,6 +81,10 @@ simulation_checkpoints = Table(
     Column("runtime_sequence", Integer, nullable=False),
     Column("simulation_tick", Integer, nullable=False),
     Column("simulation_schema_version", Integer, nullable=False),
+    Column("adapter_type", String(128), nullable=False),
+    Column("adapter_schema_version", Integer, nullable=False),
+    Column("adapter_observation_sequence", Integer, nullable=False),
+    Column("adapter_seed", Text, nullable=False),
     Column("state_json", Text, nullable=False),
     Column("created_at", Text, nullable=False),
     CheckConstraint("schema_version >= 1", name="ck_checkpoints_schema_version"),
@@ -87,6 +92,10 @@ simulation_checkpoints = Table(
     CheckConstraint("simulation_tick >= 0", name="ck_checkpoints_simulation_tick"),
     CheckConstraint(
         "simulation_schema_version >= 1", name="ck_checkpoints_simulation_schema_version"
+    ),
+    CheckConstraint("adapter_schema_version >= 1", name="ck_checkpoints_adapter_schema_version"),
+    CheckConstraint(
+        "adapter_observation_sequence >= 0", name="ck_checkpoints_adapter_observation_sequence"
     ),
     UniqueConstraint("task_id", "runtime_sequence", name="uq_checkpoints_task_runtime_sequence"),
 )

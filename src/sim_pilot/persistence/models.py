@@ -8,7 +8,12 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from sim_pilot.domain import Task
 from sim_pilot.domain.models import JsonValue
-from sim_pilot.runtime.models import ApprovalRequest, ApprovalStatus, RuntimeEvent
+from sim_pilot.runtime.models import (
+    ApprovalRequest,
+    ApprovalStatus,
+    RuntimeEvent,
+    RuntimeSafeguardState,
+)
 
 
 def _is_utc(value: AwareDatetime) -> bool:
@@ -28,6 +33,7 @@ class TaskRecord(PersistenceRecord):
 
     task: Task
     cancel_requested: bool = False
+    runtime_state: RuntimeSafeguardState = Field(default_factory=RuntimeSafeguardState)
 
     @model_validator(mode="after")
     def validate_utc_timestamps(self) -> Self:
@@ -86,6 +92,10 @@ class CheckpointMetadata(PersistenceRecord):
     runtime_sequence: int = Field(ge=0)
     simulation_tick: int = Field(ge=0)
     simulation_schema_version: int = Field(ge=1)
+    adapter_type: str = Field(default="reference", min_length=1)
+    adapter_schema_version: int = Field(default=1, ge=1)
+    adapter_observation_sequence: int = Field(default=0, ge=0)
+    adapter_seed: str = "0"
     created_at: AwareDatetime
 
     @model_validator(mode="after")

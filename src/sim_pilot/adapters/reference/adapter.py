@@ -5,7 +5,9 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.domain import Action, ExecutionResult, Observation
+from sim_pilot.domain.models import JsonValue
 from sim_pilot.reference_simulation import ReferenceSimulation, SimulationAction, ValidationResult
 from sim_pilot.reference_simulation.validation import invalid
 
@@ -133,6 +135,39 @@ class ReferenceSimulationAdapter:
 
     async def shutdown(self) -> None:
         self._initialized = False
+
+    def snapshot(self) -> AdapterSnapshot:
+        """Capture everything needed for deterministic adapter restoration."""
+        state = cast("dict[str, JsonValue]", self.simulation.state.model_dump(mode="json"))
+        return AdapterSnapshot(
+            adapter_type="reference",
+            simulation_schema_version=self.simulation.state.schema_version,
+            observation_sequence=self._observation_sequence,
+            seed=self.simulation.seed,
+            state=state,
+        )
+
+    @classmethod
+    def from_snapshot(
+        cls,
+        snapshot: AdapterSnapshot,
+        *,
+        forbidden_actions: frozenset[str] = frozenset(),
+    ) -> "ReferenceSimulationAdapter":
+        """Restore without observing or advancing the simulation."""
+        if snapshot.adapter_type != "reference" or snapshot.schema_version != 1:
+            msg = "unsupported reference adapter snapshot"
+            raise ValueError(msg)
+        if snapshot.simulation_schema_version != 1:
+            msg = "unsupported reference simulation schema version"
+            raise ValueError(msg)
+        simulation = ReferenceSimulation.from_json(
+            TypeAdapter(dict[str, JsonValue]).dump_json(snapshot.state).decode(),
+            seed=snapshot.seed,
+        )
+        adapter = cls(simulation, forbidden_actions=forbidden_actions)
+        adapter._observation_sequence = snapshot.observation_sequence
+        return adapter
 
     def _parse_action(self, action: Action) -> SimulationAction | ValidationResult:
         payload: dict[str, object] = {"type": action.type, **action.parameters}

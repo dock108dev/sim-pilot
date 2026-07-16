@@ -46,6 +46,10 @@ class ReferenceSimulation:
     def last_events(self) -> tuple[SimulationEvent, ...]:
         return self._last_events
 
+    @property
+    def seed(self) -> str:
+        return self._seed
+
     def validate(self, action: SimulationAction) -> ValidationResult:
         """Validate without changing state or event history."""
         return validate_action(self._state, action)
