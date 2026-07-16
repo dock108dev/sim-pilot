@@ -246,6 +246,22 @@ Possible outcomes
 
 Stores runtime state.
 
+Task 3 uses an append-only in-memory event store behind a storage interface. The runtime depends on
+that interface rather than a database implementation. Task 4 adds SQLite durability behind the
+same interface without changing runtime behavior.
+
+The Task 3 store guarantees:
+
+- immutable, versioned events
+- task-scoped event streams
+- monotonically increasing sequence numbers
+- append-only writes with no update, deletion, or out-of-order insertion
+- deterministic ordered reads and replay
+
+In-memory storage does not survive process termination. Restart boundaries are exercised by
+constructing a new runtime over an existing populated store instance. Process-level durability,
+SQLite schema design, transactions, and migrations are Task 4 concerns.
+
 Persists
 
 - tasks
@@ -471,6 +487,10 @@ payload
 created_at
 ```
 
+For a given task, `sequence` starts at 1 and each append must use the next sequence exactly. Event
+payloads and stored event records include `schema_version`. Reading a stream always returns events
+in ascending sequence order.
+
 ---
 
 ## Approvals
@@ -633,9 +653,9 @@ Validate
 
 ## Persistence
 
-- task storage
-- event storage
-- approval storage
+- append-only in-memory event store in Task 3
+- storage interface and replay boundary
+- SQLite task, event, and approval storage in Task 4
 
 ## Adapter
 
@@ -681,8 +701,9 @@ Validate
 
 ## Persistence
 
-- Restores runtime state after restart.
-- Maintains ordered event history.
+- Restores runtime state from an existing event stream.
+- Maintains immutable, ordered event history.
+- Allows SQLite to replace the in-memory implementation without runtime behavior changes.
 
 ---
 

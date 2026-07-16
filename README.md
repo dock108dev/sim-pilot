@@ -75,3 +75,10 @@ print(simulation.state.model_dump_json(indent=2))
 
 `ReferenceSimulation.to_json()` serializes state and `ReferenceSimulation.from_json()` restores it.
 Canonical state inputs live under `tests/fixtures`.
+
+## Runtime persistence roadmap
+
+Task 3 will use an append-only in-memory event store behind a storage interface. It establishes
+ordered task lifecycle events, replay, action verification, completion, approval suspension,
+blocked-state behavior, and restart boundaries without introducing database mechanics. Task 4 will
+replace that implementation with SQLite without changing runtime behavior.
