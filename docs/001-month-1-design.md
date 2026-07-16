@@ -240,6 +240,20 @@ Possible outcomes
 - Blocked
 - WaitingForApproval
 
+The evaluator has final authority over objective completion. A decision provider may suggest
+`Complete`, but the runtime completes only after the evaluator confirms the objective from an
+observation. Premature completion claims are rejected.
+
+Task 3 objective parameter contracts are:
+
+- `ReachResource`: `resource`, numeric `target`
+- `MaintainResource`: `resource`, numeric `target`, `direction` (`above` or `below`)
+- `RunUntil`: `resource`, numeric `target`, `direction` (`above` or `below`)
+- `CompleteProject`: `project_type`; complete when no matching active project remains
+
+Task 3 stop conditions use the deterministic string grammar
+`<resource> <operator> <number>`, where operator is `>`, `>=`, `<`, `<=`, or `==`.
+
 ---
 
 ## Persistence
@@ -292,6 +306,15 @@ Fields
 - created_at
 - updated_at
 
+Task lifecycle statuses are `pending`, `running`, `waiting_for_approval`, `completed`, `blocked`,
+`failed`, and `cancelled`. Valid transitions are:
+
+- pending to running or cancelled
+- running to completed, blocked, failed, waiting_for_approval, or cancelled
+- waiting_for_approval to running, blocked, or cancelled
+
+Terminal statuses do not transition.
+
 ---
 
 ## TaskSpecification
@@ -326,6 +349,14 @@ Supported types
 - AllowedAction
 - ForbiddenAction
 - ResourceFloor
+
+Task 3 constraint parameter contracts are:
+
+- `ForbiddenAction`: `action`
+- `AllowedAction`: `action` or `actions`
+- `MaximumSpend`: numeric `amount`, enforced against accumulated spend plus proposed cost
+- `MinimumReserve`: numeric `amount`, enforced against cash after proposed cost
+- `ResourceFloor`: `resource` and numeric `floor`
 
 ---
 
@@ -423,41 +454,45 @@ class SimulationAdapter(Protocol):
 
 # Runtime Execution Sequence
 
-```text
-Observe
+1. Transition the task to running.
+2. Initialize the adapter.
+3. Observe and append `ObservationRecorded`.
+4. Evaluate the objective and stop conditions.
+5. Complete or block if evaluation is terminal.
+6. Request exactly one decision from the decision provider.
+7. Validate decision consistency.
+8. Ask the adapter to validate an action, when present.
+9. Evaluate task constraints and authority through the policy engine.
+10. Reject, suspend for approval, or execute one action.
+11. Append the execution result and observe again.
+12. Verify the observed effect and append verification.
+13. Update accumulated spend only after verified success.
+14. Repeat until terminal or suspended.
+15. Shut down the adapter on every exit path.
 
-↓
+The runtime depends on a decision-provider interface. Task 3 supplies a scripted implementation
+that returns one decision per request and fails deterministically when exhausted. LLM providers are
+out of scope.
 
-Evaluate
+Policy evaluation and adapter validation do not mutate state. The adapter owns simulation-specific
+validity; the policy engine owns constraints and authority. `maximum_single_spend` is the autonomous
+approval threshold. `maximum_total_spend` is a hard cumulative ceiling.
 
-↓
+After execution, verification compares the prior observation, proposed action, reported result,
+validated cost, and resulting observation. A false success, unexpected mutation on failure,
+incorrect cost, missing required state change, or incorrect reference-action effect fails the task.
 
-Generate Decision
+Approval suspends execution in `waiting_for_approval` and shuts down the adapter. Granting approval
+records `ApprovalGranted` and permits that exact action once on resume. Denial records
+`ApprovalDenied` and blocks the task. Approval state remains in memory for Task 3.
 
-↓
+Runtime safeguard defaults are:
 
-Validate Policy
-
-↓
-
-Execute Action
-
-↓
-
-Observe
-
-↓
-
-Verify
-
-↓
-
-Persist
-
-↓
-
-Repeat
-```
+- maximum iterations: 100
+- maximum consecutive failures: 3
+- repeated identical action against identical state: 3
+- repeated state: 3
+- false completion: reject and continue until another safeguard or decision terminates execution
 
 ---
 
@@ -521,6 +556,9 @@ resolved_at
 - TaskCompleted
 - TaskBlocked
 - TaskFailed
+- EvaluationRecorded
+- VerificationRecorded
+- TaskCancelled
 
 ---
 
@@ -723,5 +761,5 @@ Validate
 | OQ-001 | Structured output provider implementation | Open |
 | OQ-002 | SQLite ORM vs direct SQL | Open |
 | OQ-003 | Prompt version storage | Open |
-| OQ-004 | Simulation state serialization format | Open |
-| OQ-005 | Event payload schema versioning | Open |
+| OQ-004 | Simulation state serialization format | Resolved: versioned JSON |
+| OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |

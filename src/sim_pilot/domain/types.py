@@ -6,7 +6,7 @@ from enum import StrEnum
 class TaskStatus(StrEnum):
     """Lifecycle states available to a task."""
 
-    CREATED = "created"
+    PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     BLOCKED = "blocked"

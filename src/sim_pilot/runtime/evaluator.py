@@ -1,0 +1,122 @@
+"""Deterministic objective and stop-condition evaluation."""
+
+import re
+from collections.abc import Callable
+from typing import cast
+
+from sim_pilot.domain import ObjectiveType, Observation, TaskSpecification
+from sim_pilot.runtime.models import EvaluationStatus, RuntimeEvaluation
+
+COMPARATORS: dict[str, Callable[[float, float], bool]] = {
+    ">": lambda value, target: value > target,
+    ">=": lambda value, target: value >= target,
+    "<": lambda value, target: value < target,
+    "<=": lambda value, target: value <= target,
+    "==": lambda value, target: value == target,
+}
+CONDITION = re.compile(
+    r"^\s*(?P<resource>[A-Za-z_][A-Za-z0-9_]*)\s*"
+    r"(?P<operator>>=|<=|==|>|<)\s*"
+    r"(?P<target>-?\d+(?:\.\d+)?)\s*$"
+)
+
+
+def numeric_resource(observation: Observation, name: str) -> float | None:
+    value = observation.state.get(name)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+class ProgressEvaluator:
+    """Give final authority over objective completion to deterministic state checks."""
+
+    def evaluate(
+        self,
+        specification: TaskSpecification,
+        observation: Observation,
+    ) -> RuntimeEvaluation:
+        for condition in specification.stop_conditions:
+            match = CONDITION.fullmatch(condition)
+            if match is None:
+                return RuntimeEvaluation(
+                    current_status=EvaluationStatus.BLOCKED,
+                    complete=False,
+                    progress_summary="Stop condition could not be evaluated.",
+                    blocked_reason=f"unsupported stop condition: {condition}",
+                )
+            resource = match.group("resource")
+            value = numeric_resource(observation, resource)
+            if value is None:
+                return RuntimeEvaluation(
+                    current_status=EvaluationStatus.BLOCKED,
+                    complete=False,
+                    progress_summary="Stop-condition resource is unavailable.",
+                    blocked_reason=f"resource is not numeric or missing: {resource}",
+                )
+            target = float(match.group("target"))
+            if COMPARATORS[match.group("operator")](value, target):
+                return RuntimeEvaluation(
+                    current_status=EvaluationStatus.BLOCKED,
+                    complete=False,
+                    progress_summary=f"Stop condition met: {condition}.",
+                    stop_condition_met=True,
+                    blocked_reason=f"stop condition met: {condition}",
+                )
+
+        objective = specification.objective
+        parameters = objective.parameters
+        if objective.type is ObjectiveType.COMPLETE_PROJECT:
+            project_type = parameters.get("project_type")
+            projects = observation.state.get("active_projects")
+            if not isinstance(project_type, str) or not isinstance(projects, list):
+                return self._blocked("project_type or active_projects is unavailable")
+            project_items = cast("list[object]", projects)
+            active = any(
+                isinstance(project, dict)
+                and cast("dict[object, object]", project).get("type") == project_type
+                for project in project_items
+            )
+            return self._result(
+                not active,
+                f"Project type {project_type} is {'active' if active else 'complete'}.",
+            )
+
+        resource = parameters.get("resource")
+        target = parameters.get("target")
+        if (
+            not isinstance(resource, str)
+            or isinstance(target, bool)
+            or not isinstance(target, (int, float))
+        ):
+            return self._blocked("objective requires numeric target and resource")
+        value = numeric_resource(observation, resource)
+        if value is None:
+            return self._blocked(f"resource is not numeric or missing: {resource}")
+
+        if objective.type is ObjectiveType.REACH_RESOURCE:
+            complete = value >= float(target)
+        else:
+            direction = parameters.get("direction", "above")
+            if direction not in {"above", "below"}:
+                return self._blocked("direction must be above or below")
+            complete = value >= float(target) if direction == "above" else value <= float(target)
+        return self._result(
+            complete,
+            f"{resource}={value:g}; target={float(target):g}.",
+        )
+
+    def _result(self, complete: bool, summary: str) -> RuntimeEvaluation:
+        return RuntimeEvaluation(
+            current_status=(EvaluationStatus.COMPLETED if complete else EvaluationStatus.RUNNING),
+            complete=complete,
+            progress_summary=summary,
+        )
+
+    def _blocked(self, reason: str) -> RuntimeEvaluation:
+        return RuntimeEvaluation(
+            current_status=EvaluationStatus.BLOCKED,
+            complete=False,
+            progress_summary="Objective cannot be evaluated deterministically.",
+            blocked_reason=reason,
+        )

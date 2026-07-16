@@ -76,6 +76,59 @@ print(simulation.state.model_dump_json(indent=2))
 `ReferenceSimulation.to_json()` serializes state and `ReferenceSimulation.from_json()` restores it.
 Canonical state inputs live under `tests/fixtures`.
 
+## Deterministic runtime
+
+Task 3 runs structured tasks through the reference adapter with a scripted decision provider:
+
+```python
+import asyncio
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from sim_pilot.adapters.reference import ReferenceSimulationAdapter
+from sim_pilot.domain import (
+    Action,
+    AuthorityPolicy,
+    Decision,
+    DecisionType,
+    Objective,
+    ObjectiveType,
+    Task,
+    TaskSpecification,
+    TaskStatus,
+)
+from sim_pilot.runtime import RuntimeEngine, ScriptedDecisionProvider
+
+now = datetime.now(UTC)
+task = Task(
+    id=uuid4(),
+    status=TaskStatus.PENDING,
+    specification=TaskSpecification(
+        objective=Objective(
+            type=ObjectiveType.REACH_RESOURCE,
+            description="Reach 520000 cash.",
+            parameters={"resource": "cash", "target": 520000},
+        ),
+        authority=AuthorityPolicy(),
+    ),
+    created_at=now,
+    updated_at=now,
+)
+advance = Action(
+    type="advance_time",
+    parameters={"ticks": 1},
+    expected_effect="Advance one simulation tick.",
+)
+provider = ScriptedDecisionProvider(
+    [Decision(type=DecisionType.EXECUTE, reason="Advance.", action=advance)] * 10
+)
+engine = RuntimeEngine()
+outcome = asyncio.run(engine.run(task, ReferenceSimulationAdapter(), provider))
+
+print(outcome.status)
+print(engine.event_store.list_events(task.id))
+```
+
 ## Runtime persistence roadmap
 
 Task 3 will use an append-only in-memory event store behind a storage interface. It establishes

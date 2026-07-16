@@ -48,3 +48,28 @@ def test_reference_simulation_does_not_import_adapters_or_runtime() -> None:
         "The reference simulation must remain independent of adapters and runtime modules: "
         f"{violations}"
     )
+
+
+def test_event_store_does_not_import_adapters() -> None:
+    event_store = PACKAGE_ROOT / "runtime" / "events.py"
+
+    violations = sorted(
+        module
+        for module in imported_modules(event_store)
+        if module.startswith("sim_pilot.adapters")
+    )
+
+    assert not violations, f"Event stores must not depend on adapters: {violations}"
+
+
+def test_pure_runtime_components_do_not_execute_actions() -> None:
+    for name in ("evaluator.py", "policy.py", "verification.py"):
+        path = PACKAGE_ROOT / "runtime" / name
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        calls_execute = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "execute"
+            for node in ast.walk(tree)
+        )
+        assert not calls_execute, f"{name} must not execute actions"

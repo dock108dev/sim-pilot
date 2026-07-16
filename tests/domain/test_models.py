@@ -63,7 +63,7 @@ def make_task() -> Task:
     created_at = datetime(2026, 7, 16, 12, 0, tzinfo=UTC)
     return Task(
         id=uuid4(),
-        status=TaskStatus.CREATED,
+        status=TaskStatus.PENDING,
         specification=make_specification(),
         sequence=0,
         total_spend=Decimal(0),
@@ -226,7 +226,7 @@ def test_observation_is_immutable() -> None:
         (
             lambda: Task(
                 id=uuid4(),
-                status=TaskStatus.CREATED,
+                status=TaskStatus.PENDING,
                 specification=make_specification(),
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC) - timedelta(days=1),
