@@ -276,11 +276,28 @@ In-memory storage does not survive process termination. Restart boundaries are e
 constructing a new runtime over an existing populated store instance. Process-level durability,
 SQLite schema design, transactions, and migrations are Task 4 concerns.
 
+Task 4 uses current-state snapshots plus the complete append-only event log. It does not require
+event replay to reconstruct current state. Restart loads the latest task and simulation snapshots,
+then uses the event stream for audit and diagnostics.
+
+Runtime persistence ownership is expressed through `TaskRepository`, `EventRepository`,
+`ApprovalRepository`, and `SimulationRepository`. Runtime code depends only on those interfaces.
+SQLite connections, SQL, tables, mappings, and Alembic integration remain inside the persistence
+package. A unit-of-work boundary coordinates the repositories.
+
+Everything durably representing one runtime iteration commits in one transaction: task changes,
+simulation checkpoint, approval changes, and appended events either all commit or none commit.
+Adapter execution itself is external to SQLite; Task 4C defines reconciliation when a crash occurs
+after the action side effect but before the checkpoint transaction commits.
+
+Alembic owns the SQLite schema from its initial revision onward. Application startup does not create
+or modify schema outside migrations.
+
 Persists
 
 - tasks
-- observations
-- events
+- current simulation snapshots
+- append-only events and observations
 - approvals
 
 ---
@@ -498,6 +515,13 @@ Runtime safeguard defaults are:
 
 # Persistence Model
 
+Task 4 durable persistence is delivered incrementally:
+
+- Task 4A: schema, repository implementations, Alembic migrations, and atomic transaction tests;
+  no runtime changes
+- Task 4B: simulation checkpointing, restoration, and task resume; no CLI
+- Task 4C: crash recovery, approval recovery, restart integration tests, and CLI wiring
+
 ## Tasks
 
 ```text
@@ -508,6 +532,23 @@ sequence
 created_at
 updated_at
 ```
+
+Tasks store the latest lifecycle snapshot and accumulated spend. Historical transitions remain in
+the event stream.
+
+---
+
+## Simulation Snapshots
+
+```text
+task_id
+schema_version
+state
+tick
+updated_at
+```
+
+The latest versioned simulation state is loaded directly on restart.
 
 ---
 

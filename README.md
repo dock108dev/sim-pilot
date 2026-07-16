@@ -131,7 +131,17 @@ print(engine.event_store.list_events(task.id))
 
 ## Runtime persistence roadmap
 
-Task 3 will use an append-only in-memory event store behind a storage interface. It establishes
-ordered task lifecycle events, replay, action verification, completion, approval suspension,
-blocked-state behavior, and restart boundaries without introducing database mechanics. Task 4 will
-replace that implementation with SQLite without changing runtime behavior.
+Task 3 uses an append-only in-memory event store and establishes runtime semantics without database
+mechanics. Durable Task 4 persistence uses SQLite with current task and simulation snapshots plus
+the complete event log. A restart loads snapshots directly rather than replaying every event.
+
+Runtime code sees only `TaskRepository`, `EventRepository`, `ApprovalRepository`, and
+`SimulationRepository`; SQLite stays below those interfaces. One runtime iteration commits its
+task, simulation, approval, and event changes atomically. Alembic owns schema migrations from the
+initial revision.
+
+Task 4 is split into:
+
+- 4A: persistence schema, repositories, migrations, and transactions
+- 4B: checkpointing, restoration, and resume
+- 4C: crash recovery, approval recovery, integration tests, and CLI wiring
