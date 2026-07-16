@@ -522,6 +522,20 @@ Task 4 durable persistence is delivered incrementally:
 - Task 4B: simulation checkpointing, restoration, and task resume; no CLI
 - Task 4C: crash recovery, approval recovery, restart integration tests, and CLI wiring
 
+Task 4C journals the external action boundary through append-only events. An action is prepared and
+assigned a stable identifier before execution starts. A successful completion transaction contains
+the execution result, resulting observation, verification, task and spend updates, simulation
+checkpoint, and attempt completion. The runtime does not claim exactly-once execution because the
+adapter side effect is outside SQLite.
+
+On restart, a prepared attempt that never entered execution is safely retired as not executed. An
+attempt that entered execution without a committed checkpoint suspends further actions and requires
+reconciliation. Task status remains `running`; the unresolved attempt is the durable
+recovery-required marker. Reconciliation outcomes are definitely not executed, definitely executed,
+inferable, ambiguous, and adapter unavailable. Ambiguous or unavailable attempts are never retried
+automatically. Operator resolutions are accept current state, mark executed, mark not executed,
+abandon, and restore the prior checkpoint.
+
 Task 4A uses SQLAlchemy Core for typed SQL construction and explicit transaction ownership. It does
 not expose ORM sessions or SQLAlchemy row models through runtime-facing interfaces. SQLite is
 accessed through Python's database driver beneath SQLAlchemy; no external database service or

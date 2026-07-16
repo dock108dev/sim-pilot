@@ -2,6 +2,12 @@
 
 from typing import TYPE_CHECKING, Any
 
+from sim_pilot.runtime.action_attempts import (
+    ActionAttempt,
+    ActionAttemptStatus,
+    ReconciliationClassification,
+    RecoveryResolution,
+)
 from sim_pilot.runtime.errors import DurablePersistenceError, ReconstructionConsistencyError
 from sim_pilot.runtime.models import (
     RuntimeConfiguration,
@@ -9,6 +15,7 @@ from sim_pilot.runtime.models import (
     RuntimeOutcome,
     RuntimeSafeguardState,
 )
+from sim_pilot.runtime.recovery import CrashPoint, ReconciliationReport
 
 if TYPE_CHECKING:
     from sim_pilot.runtime.decisions import ScriptedDecisionProvider
@@ -20,10 +27,15 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "ActionAttempt",
+    "ActionAttemptStatus",
+    "CrashPoint",
     "DurablePersistenceError",
     "EventStore",
     "InMemoryEventStore",
     "ReconstructedRuntimeContext",
+    "ReconciliationClassification",
+    "ReconciliationReport",
     "ReconstructionConsistencyError",
     "RuntimeConfiguration",
     "RuntimeEngine",
@@ -31,6 +43,7 @@ __all__ = [
     "RuntimeOutcome",
     "RuntimeReconstructor",
     "RuntimeSafeguardState",
+    "RecoveryResolution",
     "ScriptedDecisionProvider",
 ]
 

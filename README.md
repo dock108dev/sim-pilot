@@ -2,9 +2,9 @@
 
 Sim Pilot is a local runtime for translating natural-language objectives into validated actions
 against deterministic simulations. The repository contains typed domain models, the standalone
-deterministic reference simulation, a deterministic runtime, and Task 4B durable SQLite
-checkpointing and process-level resume. Crash-window reconciliation, persistence CLI commands,
-LLM integration, and natural-language compilation remain later milestones.
+deterministic reference simulation, a deterministic runtime, durable SQLite checkpointing,
+process-level resume, crash-window reconciliation, and a minimal persistence CLI. LLM integration
+and natural-language compilation remain later milestones.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -241,4 +241,50 @@ Approval grants persist one exact action authorization across restart. Safeguard
 fingerprints also continue across processes. An atomic persistence failure rolls back task, event,
 approval, and checkpoint writes and raises `DurablePersistenceError`.
 
-Task 4C still owns deliberate reconciliation of the external-action crash window and CLI commands.
+## Durable CLI
+
+All commands accept `--database PATH` before the command group. The same value may be supplied as
+`SIM_PILOT_DATABASE`.
+
+```bash
+uv run sim-pilot --database /tmp/sim-pilot-demo.db db upgrade
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task create \
+  --task-id 00000000-0000-0000-0000-000000000123 --target-cash 520000
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
+  00000000-0000-0000-0000-000000000123 --iterations 1
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task show \
+  00000000-0000-0000-0000-000000000123
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task events \
+  00000000-0000-0000-0000-000000000123
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task resume \
+  00000000-0000-0000-0000-000000000123
+```
+
+`task create --spec task.json` accepts a serialized `TaskSpecification`. Without `--spec`, the
+command creates the deterministic cash-target demo. Approval commands take an approval ID.
+Recovery commands are:
+
+```bash
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task recovery show TASK_ID
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task recovery resolve \
+  TASK_ID mark_not_executed
+```
+
+`recovery show` accepts `--snapshot snapshot.json` when current adapter state is independently
+observable. Without it, an interrupted in-process reference adapter is classified as
+`adapter_unavailable`. Resolution never automatically retries the interrupted action.
+
+Task exit codes are 0 for success or a committed slice, 10 for approval required, 11 for recovery
+required, 12 for blocked, 13 for failed, 14 for cancelled, 20 for invalid input, 21 for persistence
+or reconstruction failure, and 22 for migration failure.
+
+## Crash-injection demonstration
+
+```bash
+uv run python scripts/demo_crash_recovery.py
+```
+
+The demonstration injects a stop after adapter execution, opens a fresh runtime over the same
+SQLite database, classifies independently retained adapter state, and resolves the attempt without
+retrying it. Crash hooks are test instrumentation and are not exposed by production CLI
+composition. Sim Pilot does not claim exactly-once execution.

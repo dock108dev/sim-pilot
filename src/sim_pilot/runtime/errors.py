@@ -7,3 +7,7 @@ class DurablePersistenceError(RuntimeError):
 
 class ReconstructionConsistencyError(RuntimeError):
     """Durable records disagree and cannot be resumed safely."""
+
+
+class SimulatedCrash(BaseException):
+    """Test-only process interruption raised from an injected crash hook."""

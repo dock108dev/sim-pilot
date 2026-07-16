@@ -378,10 +378,12 @@ def test_scenario_g_failed_iteration_transaction_rolls_back(tmp_path: Path) -> N
 
         engine2, runtime2 = open_runtime(url)
         after = runtime2.reconstruct(task.id)
-        assert after.task.sequence == before.task.sequence
+        assert after.task.sequence > before.task.sequence
         assert after.task.total_spend == before.task.total_spend
         assert after.checkpoint == before.checkpoint
-        assert after.events == before.events
+        assert after.events[: len(before.events)] == before.events
+        assert after.unresolved_attempt is not None
+        assert after.unresolved_attempt.status.value == "execution_started"
         engine2.dispose()
 
     asyncio.run(scenario())

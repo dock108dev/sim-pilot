@@ -20,6 +20,12 @@ from sim_pilot.persistence import (
     TaskRecord,
     in_memory_unit_of_work_factory,
 )
+from sim_pilot.runtime.action_attempts import (
+    ActionAttemptStatus,
+    RecoveryResolution,
+    action_fingerprint,
+    observation_fingerprint,
+)
 from sim_pilot.runtime.decisions import ScriptedDecisionExhaustedError
 from sim_pilot.runtime.errors import DurablePersistenceError
 from sim_pilot.runtime.evaluator import ProgressEvaluator
@@ -45,6 +51,11 @@ from sim_pilot.runtime.reconstruction import (
     ReconstructedRuntimeContext,
     RuntimeReconstructor,
 )
+from sim_pilot.runtime.recovery import (
+    CrashPoint,
+    ReconciliationReport,
+    reconcile_reference_action,
+)
 from sim_pilot.runtime.verification import ActionVerifier
 
 type AdapterFactory = Callable[[ReconstructedRuntimeContext], SimulationAdapter]
@@ -64,6 +75,7 @@ class RuntimeEngine:
         unit_of_work_factory: UnitOfWorkFactory | None = None,
         configuration: RuntimeConfiguration | None = None,
         cancellation_check: Callable[[UUID], bool] | None = None,
+        crash_hook: Callable[[CrashPoint], None] | None = None,
     ) -> None:
         if unit_of_work_factory is None:
             unit_of_work_factory = in_memory_unit_of_work_factory()
@@ -72,6 +84,7 @@ class RuntimeEngine:
         self.event_store = RepositoryEventView(unit_of_work_factory)
         self.configuration = configuration or RuntimeConfiguration()
         self.cancellation_check = cancellation_check or never_cancel
+        self.crash_hook = crash_hook
         self.evaluator = ProgressEvaluator()
         self.policy = PolicyEngine()
         self.verifier = ActionVerifier()
@@ -93,6 +106,96 @@ class RuntimeEngine:
             return None
         record = context.pending_approval
         return None if record is None else record.approval
+
+    async def inspect_recovery(
+        self,
+        task_id: UUID,
+        current_snapshot: AdapterSnapshot | None = None,
+    ) -> ReconciliationReport | None:
+        """Classify an unresolved attempt without mutating durable state."""
+        context = self.reconstruct(task_id)
+        attempt = context.unresolved_attempt
+        if attempt is None:
+            return None
+        return await reconcile_reference_action(
+            attempt, context.adapter_snapshot(), current_snapshot
+        )
+
+    async def resolve_recovery(
+        self,
+        task_id: UUID,
+        resolution: RecoveryResolution,
+        *,
+        current_snapshot: AdapterSnapshot | None = None,
+    ) -> None:
+        """Apply an explicit operator decision; never retry the interrupted action."""
+        context = self.reconstruct(task_id)
+        attempt = context.unresolved_attempt
+        if attempt is None:
+            raise ValueError("task has no unresolved action attempt")
+        report = await reconcile_reference_action(
+            attempt, context.adapter_snapshot(), current_snapshot
+        )
+        payload: dict[str, JsonValue] = {
+            "action_id": str(attempt.action_id),
+            "classification": report.classification.value,
+            "resolution": resolution.value,
+            "reason": report.reason,
+        }
+        task_next = context.task
+        snapshot: AdapterSnapshot | None = None
+        drafts: list[EventDraft] = []
+        runtime_state = context.runtime_state.model_copy(
+            update={"approved_once_action": None, "approved_approval_id": None}
+        )
+        if resolution in {
+            RecoveryResolution.ACCEPT_CURRENT,
+            RecoveryResolution.MARK_EXECUTED,
+        }:
+            if current_snapshot is None or report.expected_result is None:
+                raise ValueError("this resolution requires independently observed current state")
+            previous = context.observation
+            if previous is None:
+                raise ValueError("recovery requires a prior observation")
+            tick = current_snapshot.state.get("tick")
+            if isinstance(tick, bool) or not isinstance(tick, int):
+                raise ValueError("current adapter snapshot has an invalid tick")
+            observation = Observation(
+                sequence=previous.sequence + 1,
+                timestamp=datetime.now(UTC),
+                tick=tick,
+                summary=f"Recovered state after action {attempt.action_id}.",
+                state=cast("dict[str, object]", current_snapshot.state),
+            )
+            drafts.append(self._observation_draft(observation))
+            result = report.expected_result
+            if result.success:
+                task_next = task_next.model_copy(
+                    update={"total_spend": task_next.total_spend + Decimal(str(result.cost))}
+                )
+            snapshot = current_snapshot.model_copy(
+                update={"observation_sequence": observation.sequence}
+            )
+        elif resolution is RecoveryResolution.ABANDON:
+            task_next = self._with_status(task_next, TaskStatus.BLOCKED)
+        elif resolution not in {
+            RecoveryResolution.MARK_NOT_EXECUTED,
+            RecoveryResolution.RESTORE_PRIOR_CHECKPOINT,
+        }:
+            raise ValueError(f"unsupported recovery resolution: {resolution.value}")
+        drafts.append(EventDraft(RuntimeEventType.ACTION_RECONCILED, payload))
+        if resolution is RecoveryResolution.ABANDON:
+            drafts.append(
+                EventDraft(RuntimeEventType.TASK_BLOCKED, {"reason": "recovery abandoned"})
+            )
+            snapshot = self.persistence.copy_checkpoint_for_terminal(context.checkpoint)
+        self.persistence.commit_iteration(
+            self._task_record(context),
+            task=task_next,
+            runtime_state=runtime_state,
+            event_drafts=tuple(drafts),
+            adapter_snapshot=snapshot,
+        )
 
     def approve(self, task_id: UUID) -> ApprovalRequest:
         context = self.reconstruct(task_id)
@@ -177,6 +280,14 @@ class RuntimeEngine:
         iteration_budget: int | None = None,
     ) -> RuntimeOutcome:
         context = self.reconstruct(task_id)
+        context = self._gate_recovery(context)
+        if context.unresolved_attempt is not None:
+            return self._outcome(
+                context.task,
+                context.runtime_state,
+                "recovery intervention required",
+                context,
+            )
         if self._is_terminal(context.task.status) or (
             context.task.status is TaskStatus.WAITING_FOR_APPROVAL
             and context.pending_approval is not None
@@ -199,6 +310,14 @@ class RuntimeEngine:
         iteration_budget: int | None = None,
     ) -> RuntimeOutcome:
         context = self._load_or_create(task)
+        context = self._gate_recovery(context)
+        if context.unresolved_attempt is not None:
+            return self._outcome(
+                context.task,
+                context.runtime_state,
+                "recovery intervention required",
+                context,
+            )
         if self._is_terminal(context.task.status):
             return self._outcome(context.task, context.runtime_state, context.reason, context)
         if (
@@ -223,6 +342,7 @@ class RuntimeEngine:
         initialization_attempted = False
         committed_this_run = 0
         reason: str | None = None
+        active_action_id: UUID | None = None
 
         try:
             try:
@@ -556,7 +676,51 @@ class RuntimeEngine:
                     break
 
                 before = observation
+                latest_checkpoint = self.reconstruct(current.task.id).checkpoint
+                attempt_sequence = current.task.sequence + len(drafts) + 1
+                action_id = uuid5(
+                    NAMESPACE_URL,
+                    f"sim-pilot:{current.task.id}:action-attempt:{attempt_sequence}",
+                )
+                active_action_id = action_id
+                drafts.append(
+                    EventDraft(
+                        RuntimeEventType.ACTION_PREPARED,
+                        {
+                            "action_id": str(action_id),
+                            "action_fingerprint": action_fingerprint(action),
+                            "action": cast("dict[str, JsonValue]", action.model_dump(mode="json")),
+                            "prior_checkpoint_id": (
+                                None
+                                if latest_checkpoint is None
+                                else str(latest_checkpoint.metadata.id)
+                            ),
+                            "prior_observation_fingerprint": observation_fingerprint(before),
+                            "expected_effect": action.expected_effect,
+                            "estimated_cost": float(adapter_validation.estimated_cost),
+                        },
+                    )
+                )
+                current = self._commit_with_drafts(
+                    current, current.task, runtime_state, tuple(drafts), None
+                )
+                drafts = []
+                self._crash(CrashPoint.AFTER_PREPARED)
+                current = self._commit_with_drafts(
+                    current,
+                    current.task,
+                    runtime_state,
+                    (
+                        EventDraft(
+                            RuntimeEventType.ACTION_EXECUTION_STARTED,
+                            {"action_id": str(action_id)},
+                        ),
+                    ),
+                    None,
+                )
+                self._crash(CrashPoint.BEFORE_EXECUTION)
                 result = await adapter.execute(action)
+                self._crash(CrashPoint.AFTER_EXECUTION)
                 drafts.append(
                     EventDraft(
                         RuntimeEventType.ACTION_EXECUTED,
@@ -564,6 +728,7 @@ class RuntimeEngine:
                     )
                 )
                 observation = await adapter.observe()
+                self._crash(CrashPoint.AFTER_OBSERVATION)
                 drafts.append(self._observation_draft(observation))
                 verification = self.verifier.verify(
                     before,
@@ -578,6 +743,7 @@ class RuntimeEngine:
                         cast("dict[str, JsonValue]", verification.model_dump(mode="json")),
                     )
                 )
+                self._crash(CrashPoint.AFTER_VERIFICATION)
                 runtime_state = runtime_state.model_copy(
                     update={"approved_once_action": None, "approved_approval_id": None}
                 )
@@ -625,13 +791,32 @@ class RuntimeEngine:
                 if terminal_status is None and observation.state.get("failed") is True:
                     reason = "simulation entered terminal failure"
                     terminal_status = TaskStatus.FAILED
+                terminal_draft: EventDraft | None = None
                 if terminal_status is not None:
                     task_next = self._with_status(task_next, terminal_status)
                     event_type = {
                         TaskStatus.BLOCKED: RuntimeEventType.TASK_BLOCKED,
                         TaskStatus.FAILED: RuntimeEventType.TASK_FAILED,
                     }[terminal_status]
-                    drafts.append(EventDraft(event_type, {"reason": cast("str", reason)}))
+                    terminal_draft = EventDraft(event_type, {"reason": cast("str", reason)})
+                drafts.append(
+                    EventDraft(
+                        RuntimeEventType.ACTION_EXECUTION_CONFIRMED,
+                        {
+                            "action_id": str(action_id),
+                            "success": result.success,
+                            "verified": verification.verified,
+                        },
+                    )
+                )
+                drafts.append(
+                    EventDraft(
+                        RuntimeEventType.ACTION_CHECKPOINT_COMMITTED,
+                        {"action_id": str(action_id)},
+                    )
+                )
+                if terminal_draft is not None:
+                    drafts.append(terminal_draft)
                 snapshot = (
                     self._snapshot(adapter, observation)
                     if result.state_changed or terminal_status is not None
@@ -640,6 +825,8 @@ class RuntimeEngine:
                 current = self._commit_with_drafts(
                     current, task_next, runtime_state, tuple(drafts), snapshot
                 )
+                active_action_id = None
+                self._crash(CrashPoint.AFTER_COMMIT)
                 committed_this_run += 1
                 if terminal_status is not None:
                     break
@@ -650,11 +837,24 @@ class RuntimeEngine:
             if current.task.status is TaskStatus.RUNNING:
                 failed = self._with_status(current.task, TaskStatus.FAILED)
                 snapshot = self._snapshot(adapter, observation) if observation is not None else None
+                failure_drafts = (
+                    (
+                        EventDraft(
+                            RuntimeEventType.ACTION_ATTEMPT_FAILED,
+                            {"action_id": str(active_action_id), "reason": reason},
+                        ),
+                    )
+                    if active_action_id is not None
+                    else ()
+                )
                 commit = self.persistence.commit_iteration(
                     current,
                     task=failed,
                     runtime_state=runtime_state,
-                    event_drafts=(EventDraft(RuntimeEventType.TASK_FAILED, {"reason": reason}),),
+                    event_drafts=(
+                        *failure_drafts,
+                        EventDraft(RuntimeEventType.TASK_FAILED, {"reason": reason}),
+                    ),
                     adapter_snapshot=snapshot,
                 )
                 current = commit.task_record
@@ -690,6 +890,51 @@ class RuntimeEngine:
         except RecordNotFoundError:
             self.create_task(task)
             return self.reconstruct(task.id)
+
+    def _gate_recovery(self, context: ReconstructedRuntimeContext) -> ReconstructedRuntimeContext:
+        attempt = context.unresolved_attempt
+        if attempt is None:
+            return context
+        current = self._task_record(context)
+        if attempt.status is ActionAttemptStatus.PREPARED:
+            self.persistence.commit_iteration(
+                current,
+                task=context.task,
+                runtime_state=context.runtime_state,
+                event_drafts=(
+                    EventDraft(
+                        RuntimeEventType.ACTION_RECONCILED,
+                        {
+                            "action_id": str(attempt.action_id),
+                            "classification": "definitely_not_executed",
+                            "resolution": "mark_not_executed",
+                            "reason": "execution boundary was never entered",
+                        },
+                    ),
+                ),
+            )
+            return self.reconstruct(context.task.id)
+        if attempt.status is not ActionAttemptStatus.RECONCILIATION_REQUIRED:
+            self.persistence.commit_iteration(
+                current,
+                task=context.task,
+                runtime_state=context.runtime_state,
+                event_drafts=(
+                    EventDraft(
+                        RuntimeEventType.ACTION_RECONCILIATION_REQUIRED,
+                        {
+                            "action_id": str(attempt.action_id),
+                            "reason": "execution began without a committed checkpoint",
+                        },
+                    ),
+                ),
+            )
+            return self.reconstruct(context.task.id)
+        return context
+
+    def _crash(self, point: CrashPoint) -> None:
+        if self.crash_hook is not None:
+            self.crash_hook(point)
 
     def _commit_terminal(
         self,

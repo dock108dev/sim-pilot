@@ -8,6 +8,7 @@ from pydantic import ConfigDict
 from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.domain import Observation, Task, TaskStatus
 from sim_pilot.persistence import ApprovalRecord, SimulationCheckpoint, TaskRecord
+from sim_pilot.runtime.action_attempts import ActionAttempt, unresolved_action_attempt
 from sim_pilot.runtime.errors import ReconstructionConsistencyError
 from sim_pilot.runtime.models import (
     ApprovalStatus,
@@ -41,6 +42,7 @@ class ReconstructedRuntimeContext(RuntimeModel):
     checkpoint: SimulationCheckpoint | None
     observation: Observation | None
     reason: str | None = None
+    unresolved_attempt: ActionAttempt | None = None
 
     def adapter_snapshot(self) -> AdapterSnapshot:
         checkpoint = self.checkpoint
@@ -101,6 +103,7 @@ class RuntimeReconstructor:
             checkpoint=checkpoint,
             observation=observation,
             reason=reason,
+            unresolved_attempt=unresolved_action_attempt(events),
         )
 
     @staticmethod
