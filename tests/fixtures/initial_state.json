@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "tick": 0,
+  "cash": 500000,
+  "debt": 0,
+  "population": 500,
+  "housing": 600,
+  "power_capacity": 700,
+  "power_usage": 500,
+  "infrastructure": 90.0,
+  "maintenance_level": 0.5,
+  "income_per_tick": 0,
+  "expense_per_tick": 0,
+  "paused": false,
+  "active_projects": []
+}
