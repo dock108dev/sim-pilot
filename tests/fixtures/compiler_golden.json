@@ -1,0 +1,102 @@
+[
+  {
+    "instruction": "Reach one million cash.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach one million cash.", "parameters": {"resource": "cash", "target": 1000000}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Maintain infrastructure above 70 percent.",
+    "response": {"specification": {"objective": {"type": "maintain_resource", "description": "Maintain infrastructure above 70.", "parameters": {"resource": "infrastructure", "target": 70, "direction": "above"}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Finish the active housing project.",
+    "response": {"specification": {"objective": {"type": "complete_project", "description": "Complete housing project.", "parameters": {"project_type": "housing"}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": ["The request refers to an already active housing project."], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Run until population reaches 2000.",
+    "response": {"specification": {"objective": {"type": "run_until", "description": "Run until population reaches 2000.", "parameters": {"resource": "population", "target": 2000, "direction": "above"}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 600000 cash without taking loans.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [{"type": "forbidden_action", "description": "Do not take loans.", "parameters": {"action": "take_loan"}}], "authority": {"forbidden_actions": ["take_loan"]}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 700000 cash and keep 100000 available.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 700000 cash.", "parameters": {"resource": "cash", "target": 700000}}, "constraints": [{"type": "minimum_reserve", "description": "Keep 100000 cash available.", "parameters": {"amount": 100000}}], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 600000 cash and ask before spending more than 50000.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [], "authority": {"maximum_single_spend": "50000"}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 600000 cash and spend no more than 200000 total.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [], "authority": {"maximum_total_spend": "200000"}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 1000 population while keeping infrastructure at least 50.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 1000 population.", "parameters": {"resource": "population", "target": 1000}}, "constraints": [{"type": "resource_floor", "description": "Keep infrastructure at least 50.", "parameters": {"resource": "infrastructure", "floor": 50}}], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 600000 cash using only time advancement and repairs.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [{"type": "allowed_action", "description": "Only advance time and repair.", "parameters": {"actions": ["advance_time", "repair"]}}], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Notify me when cash reaches 800000.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 800000 cash.", "parameters": {"resource": "cash", "target": 800000}}, "constraints": [], "authority": {}, "notifications": ["Notify when cash reaches 800000."], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 1000 population but stop if cash falls below 50000.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 1000 population.", "parameters": {"resource": "population", "target": 1000}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": ["cash < 50000"]}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Keep enough cash available.",
+    "response": {"specification": null, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": ["Minimum reserve amount was not specified."]},
+    "status": "clarification_required"
+  },
+  {
+    "instruction": "Beat the game efficiently.",
+    "response": {"specification": null, "assumptions": [], "warnings": [], "unsupported_requests": ["Winning and efficiency optimization are not supported objectives."], "ambiguities": []},
+    "status": "unsupported"
+  },
+  {
+    "instruction": "Reach 900000 liquid cash.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 900000 cash.", "parameters": {"resource": "cash", "target": 900000}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": ["Liquid cash means the cash resource."], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  },
+  {
+    "instruction": "Reach 10 gold.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 10 gold.", "parameters": {"resource": "gold", "target": 10}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "invalid"
+  },
+  {
+    "instruction": "Reach 600000 cash using teleport.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [{"type": "allowed_action", "description": "Use teleport.", "parameters": {"actions": ["teleport"]}}], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "invalid"
+  },
+  {
+    "instruction": "Only take loans, but never take loans.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 600000 cash.", "parameters": {"resource": "cash", "target": 600000}}, "constraints": [{"type": "allowed_action", "description": "Only loans.", "parameters": {"actions": ["take_loan"]}}, {"type": "forbidden_action", "description": "No loans.", "parameters": {"action": "take_loan"}}], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "invalid"
+  },
+  {
+    "instruction": "Reach infrastructure 120.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach infrastructure 120.", "parameters": {"resource": "infrastructure", "target": 120}}, "constraints": [], "authority": {}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "invalid"
+  },
+  {
+    "instruction": "Run until cash reaches one million. Do not take loans. Keep at least 100000 available. Ask before spending more than 50000.",
+    "response": {"specification": {"objective": {"type": "run_until", "description": "Run until cash reaches one million.", "parameters": {"resource": "cash", "target": 1000000, "direction": "above"}}, "constraints": [{"type": "forbidden_action", "description": "Do not take loans.", "parameters": {"action": "take_loan"}}, {"type": "minimum_reserve", "description": "Keep at least 100000 cash.", "parameters": {"amount": 100000}}], "authority": {"maximum_single_spend": "50000", "forbidden_actions": ["take_loan"]}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "valid"
+  }
+]

@@ -175,6 +175,40 @@ Responsibilities
 
 Converts natural language into a structured task specification.
 
+Task 5 names this component the **Intent Compiler**. It translates user intent but never chooses
+runtime actions. Its provider-independent pipeline is:
+
+```text
+Instruction -> CompilerProvider -> CompilerResponse -> Deterministic Validation
+            -> CompilerReport -> TaskSpecification
+```
+
+`CompilerReport` records prompt version, validation status, assumptions, warnings, unsupported
+requests, ambiguities, and structured validation errors. Validation statuses are `valid`,
+`clarification_required`, `unsupported`, and `invalid`. Only `valid` results expose a
+`TaskSpecification` to the runtime.
+
+The provider response is strict structured output. Provider prose is never parsed. The OpenAI
+implementation uses provider-native Pydantic structured output and is the only module allowed to
+import the OpenAI SDK. Scripted providers cover automated tests; live provider tests are opt-in and
+never required by CI.
+
+Prompt version `intent-compiler-v1` defines all supported objective and constraint contracts,
+reference-simulation resources and actions, authority fields, and unsupported behavior. A semantic
+prompt change requires a new version and golden-fixture review. The compiler never invents a
+missing threshold or runtime capability.
+
+Supported compiler resources are `tick`, `cash`, `debt`, `population`, `housing`,
+`power_capacity`, `power_usage`, `infrastructure`, `maintenance_level`, `income_per_tick`, and
+`expense_per_tick`. Supported project types are `housing` and `power`. Supported action names are
+the nine actions in RFC-002.
+
+Deterministic validation rejects invalid parameter shapes, resources, actions, project types,
+thresholds, stop conditions, impossible bounded-resource objectives, mutually exclusive allowed
+rules, allowed/forbidden conflicts, approval/forbidden conflicts, and objective/resource-floor
+contradictions. Material ambiguity requires clarification. Broad strategy requests such as winning,
+optimizing, or making smart decisions are unsupported.
+
 Input
 
 ```text
@@ -900,9 +934,9 @@ Validate
 
 | ID | Topic | Status |
 |----|-------|--------|
-| OQ-001 | Structured output provider implementation | Open |
+| OQ-001 | Structured output provider implementation | Resolved: provider-native Pydantic structured output |
 | OQ-002 | SQLite ORM vs direct SQL | Resolved: SQLAlchemy Core with explicit transactions |
-| OQ-003 | Prompt version storage | Open |
+| OQ-003 | Prompt version storage | Resolved: version constant recorded in every CompilerReport |
 | OQ-004 | Simulation state serialization format | Resolved: versioned JSON |
 | OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |
 | OQ-006 | Checkpoint cadence | Resolved: initial, verified state change, and initialized terminal |

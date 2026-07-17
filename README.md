@@ -3,8 +3,9 @@
 Sim Pilot is a local runtime for translating natural-language objectives into validated actions
 against deterministic simulations. The repository contains typed domain models, the standalone
 deterministic reference simulation, a deterministic runtime, durable SQLite checkpointing,
-process-level resume, crash-window reconciliation, and a minimal persistence CLI. LLM integration
-and natural-language compilation remain later milestones.
+process-level resume, crash-window reconciliation, a versioned natural-language Intent Compiler,
+and a durable CLI. Runtime decision making remains scripted; hosted model use is limited to intent
+translation.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -50,9 +51,11 @@ Its runtime-facing wrapper lives in `sim_pilot.adapters.reference`. Storage-inde
 and records live in `sim_pilot.persistence`; SQLite code is isolated below
 `sim_pilot.persistence.sqlite`.
 
-Dependency direction is `CLI -> Runtime -> Domain <- Adapter -> Reference Simulation`. Adapters
-may import domain and standalone simulation types, but must not import runtime modules. The
-reference simulation must not import adapters or runtime modules.
+Execution dependency direction is `CLI -> Runtime -> Domain <- Adapter -> Reference Simulation`.
+Compilation is `CLI -> Intent Compiler -> CompilerProvider`, with compiler output validated into
+Domain. Only the OpenAI provider imports its SDK. Adapters may import domain and standalone
+simulation types, but must not import runtime modules. The reference simulation must not import
+adapters or runtime modules.
 
 ## Reference simulation
 
@@ -242,6 +245,48 @@ fingerprints also continue across processes. An atomic persistence failure rolls
 approval, and checkpoint writes and raises `DurablePersistenceError`.
 
 ## Durable CLI
+
+### Natural-language compilation
+
+Set an API key and optionally override the hosted compiler model:
+
+```bash
+export OPENAI_API_KEY="..."
+export SIM_PILOT_COMPILER_MODEL="gpt-5.6"
+```
+
+Compile without persisting:
+
+```bash
+uv run sim-pilot task compile --instruction \
+  'Run until cash reaches $1 million. Do not take loans. Keep at least $100,000 available. Ask before spending more than $50,000.'
+```
+
+Compile, review, confirm, and persist:
+
+```bash
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task create --instruction \
+  'Run until cash reaches $1 million. Do not take loans. Keep at least $100,000 available. Ask before spending more than $50,000.'
+```
+
+Omit `--instruction` from `task compile` for an interactive prompt. Use `--yes` with
+`task create --instruction` only after accepting noninteractive persistence. Compiler output
+includes assumptions, warnings, unsupported requests, ambiguities, deterministic validation
+errors, and `prompt_version`. Only a `valid` compilation can be persisted.
+
+Supported language covers all four RFC objectives, the five constraint types, notification and
+stop conditions, per-action and total authority limits, approval actions, and all reference
+simulation resources/actions. Missing material thresholds require clarification. Broad strategy,
+optimization, action planning, and unsupported game capabilities are rejected.
+
+Automated tests never make paid calls. To explicitly run the live structured-output test:
+
+```bash
+SIM_PILOT_LIVE_COMPILER=1 uv run pytest -m live \
+  tests/intent_compiler/test_live_openai.py
+```
+
+### Persistence and runtime
 
 All commands accept `--database PATH` before the command group. The same value may be supplied as
 `SIM_PILOT_DATABASE`.

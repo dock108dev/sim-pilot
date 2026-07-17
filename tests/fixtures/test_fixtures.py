@@ -22,6 +22,12 @@ EXPECTED_FIELDS = {
     "failed",
     "active_projects",
 }
+STATE_FIXTURES = (
+    "initial_state.json",
+    "cash_target_state.json",
+    "bankrupt_state.json",
+    "low_power_state.json",
+)
 
 
 def load_fixture(name: str) -> dict[str, object]:
@@ -31,8 +37,8 @@ def load_fixture(name: str) -> dict[str, object]:
 
 
 def test_fixtures_have_the_documented_state_shape() -> None:
-    for path in FIXTURE_ROOT.glob("*.json"):
-        state = load_fixture(path.name)
+    for name in STATE_FIXTURES:
+        state = load_fixture(name)
         assert set(state) == EXPECTED_FIELDS
         assert state["schema_version"] == 1
 

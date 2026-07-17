@@ -14,7 +14,7 @@ from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
-from sim_pilot.config import database_url
+from sim_pilot.config import compiler_model, database_url
 from sim_pilot.domain import (
     Action,
     AuthorityPolicy,
@@ -27,6 +27,8 @@ from sim_pilot.domain import (
     TaskSpecification,
     TaskStatus,
 )
+from sim_pilot.intent_compiler import CompilerError, IntentCompiler, ValidationStatus
+from sim_pilot.intent_compiler.providers import OpenAICompilerProvider
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
     SQLiteUnitOfWork,
@@ -80,6 +82,10 @@ def _context(ctx: typer.Context) -> CLIContext:
 def _runtime(ctx: typer.Context) -> tuple[Engine, RuntimeEngine]:
     engine = create_sqlite_engine(_context(ctx).url)
     return engine, RuntimeEngine(unit_of_work_factory=lambda: SQLiteUnitOfWork(engine))
+
+
+def _intent_compiler() -> IntentCompiler:
+    return IntentCompiler(OpenAICompilerProvider(model=compiler_model()))
 
 
 def _restore(context: ReconstructedRuntimeContext) -> ReferenceSimulationAdapter:
@@ -142,9 +148,26 @@ def task_create(
     ] = None,
     target_cash: Annotated[float, typer.Option(min=0)] = 520_000,
     task_id: Annotated[UUID | None, typer.Option()] = None,
+    instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
 ) -> None:
     try:
-        if specification is None:
+        if specification is not None and instruction is not None:
+            raise ValueError("--spec and --instruction are mutually exclusive")
+        if instruction is not None:
+            result = asyncio.run(_intent_compiler().compile(instruction))
+            _emit(result)
+            if result.report.validation_status is not ValidationStatus.VALID:
+                raise ValueError(
+                    f"instruction did not compile: {result.report.validation_status.value}"
+                )
+            if result.specification is None:
+                raise ValueError("valid compilation returned no task specification")
+            if not yes and not typer.confirm("Persist this compiled task?"):
+                typer.echo("task not persisted")
+                return
+            spec = result.specification
+        elif specification is None:
             spec = TaskSpecification(
                 objective=Objective(
                     type=ObjectiveType.REACH_RESOURCE,
@@ -169,8 +192,22 @@ def task_create(
         finally:
             engine.dispose()
         _emit(created)
-    except (OSError, ValidationError, ValueError, PersistenceError) as error:
+    except (OSError, CompilerError, ValidationError, ValueError, PersistenceError) as error:
         _fail(error, INVALID_INPUT)
+
+
+@task_app.command("compile")
+def task_compile(
+    instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
+) -> None:
+    text = instruction if instruction is not None else typer.prompt("Prompt")
+    try:
+        result = asyncio.run(_intent_compiler().compile(text))
+        _emit(result)
+    except (CompilerError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+    if result.report.validation_status is not ValidationStatus.VALID:
+        raise typer.Exit(INVALID_INPUT)
 
 
 async def _run_task(ctx: typer.Context, task_id: UUID, iterations: int | None) -> int:
