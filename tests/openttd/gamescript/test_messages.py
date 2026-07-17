@@ -55,6 +55,19 @@ def test_unknown_fields_types_versions_and_payload_mismatch_fail_closed() -> Non
         BridgeMessage.model_validate(raw, strict=True)
 
 
+def test_hello_rejects_an_incompatible_adapter_version() -> None:
+    with pytest.raises(ValidationError, match="openttd-gamescript-v1"):
+        HelloPayload.model_validate(
+            {
+                "loaded": False,
+                "save_generation": 0,
+                "start_generation": 1,
+                "adapter_version": "openttd-gamescript-v2",
+            },
+            strict=True,
+        )
+
+
 def test_payload_size_malformed_json_and_correlation_are_validated() -> None:
     with pytest.raises(ValueError, match="exceeds"):
         parse_bridge_message("{}" * 1000, maximum_bytes=10)

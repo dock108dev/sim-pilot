@@ -93,9 +93,18 @@ class SimPilotBridge extends GSController {
     }
 
     function HandleMessage(message) {
-        if (message == null || !message.rawin("protocol_version") ||
-                !message.rawin("message_id") || !message.rawin("message_type") ||
-                !message.rawin("payload")) {
+        if (!this.HasExactKeys(message, [
+                "protocol_version", "sequence", "message_id", "correlation_id",
+                "script_instance_id", "message_type", "game_date", "company_id", "payload"
+            ]) || typeof message.protocol_version != "integer" ||
+                typeof message.sequence != "integer" || message.sequence < 1 ||
+                typeof message.message_id != "string" || message.message_id.len() == 0 ||
+                typeof message.script_instance_id != "string" ||
+                typeof message.message_type != "string" ||
+                typeof message.game_date != "integer" || message.game_date < 0 ||
+                typeof message.payload != "table" ||
+                (message.correlation_id != null && typeof message.correlation_id != "string") ||
+                (message.company_id != null && typeof message.company_id != "integer")) {
             this.SendError(null, "protocol_mismatch", "invalid bridge envelope", null, null);
             return;
         }
@@ -122,6 +131,14 @@ class SimPilotBridge extends GSController {
     }
 
     function HandleResync(message) {
+        if (!this.HasExactKeys(message.payload, [
+                "last_script_instance_id", "last_sequence", "reason"
+            ]) || typeof message.payload.reason != "string") {
+            this.SendError(
+                message.message_id, "invalid_parameters", "invalid resync payload", null, null
+            );
+            return;
+        }
         this.SendHello(message.message_id);
         this.SendCapabilities(message.message_id);
         this.Send("resync_response", message.message_id, this.active_company, {
@@ -169,10 +186,18 @@ class SimPilotBridge extends GSController {
 
     function HandleCommand(message) {
         local payload = message.payload;
-        if (!payload.rawin("command_id") || !payload.rawin("action") ||
-                !payload.rawin("parameters") || !payload.rawin("action_fingerprint") ||
-                !payload.rawin("expected_capability_fingerprint") ||
-                !payload.rawin("expected_company_id") || !payload.rawin("prior_snapshot_id")) {
+        if (!this.HasExactKeys(payload, [
+                "command_id", "action", "parameters", "action_fingerprint",
+                "expected_capability_fingerprint", "expected_company_id",
+                "prior_snapshot_id", "request_timestamp"
+            ]) || typeof payload.command_id != "string" || payload.command_id.len() == 0 ||
+                typeof payload.action != "string" || typeof payload.parameters != "table" ||
+                typeof payload.action_fingerprint != "string" ||
+                typeof payload.expected_capability_fingerprint != "string" ||
+                typeof payload.expected_company_id != "integer" ||
+                typeof payload.prior_snapshot_id != "string" ||
+                typeof payload.request_timestamp != "string" ||
+                !this.HasExactKeys(payload.parameters, ["name"])) {
             this.SendError(
                 message.message_id, "invalid_parameters", "missing command field", null, null
             );
@@ -351,6 +376,14 @@ class SimPilotBridge extends GSController {
     function Remember(record) {
         this.command_ledger.append(record);
         if (this.command_ledger.len() > this.ledger_limit) this.command_ledger.remove(0);
+    }
+
+    function HasExactKeys(value, keys) {
+        if (value == null || typeof value != "table" || value.len() != keys.len()) return false;
+        foreach (key in keys) {
+            if (!value.rawin(key)) return false;
+        }
+        return true;
     }
 
     function Save() {

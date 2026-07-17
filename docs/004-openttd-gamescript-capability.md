@@ -118,7 +118,7 @@ should use deltas plus periodic snapshots.
 | Game settings | P | `GSGameSettings.GetValue`; only script-exposed settings, invalid name errors | source |
 | Loaded NewGRFs | P | `GSNewGRF` parameter/name access; not a complete content manifest | source |
 | Cargo types; vehicle engines; road/rail/infrastructure types | A | cargo/engine/road/rail lists and `GSCargo`, `GSEngine`, `GSRoad`, `GSRail` | source |
-| Company IDs, names, human/AI, inactive/bankruptcy | A | `GSCompanyList`, `GetName`, `IsHuman`, `IsAI`; list membership; bankruptcy partly events | live name; rest source |
+| Company IDs, names, inactive/bankruptcy | A/P | `GSCompanyList`, `GetName`; list membership; bankruptcy partly events. Human/AI status is not exposed by the production API 15 surface and comes from Admin Network. | live name; rest source |
 | Bank balance | A | `GSCompany.GetBankBalance(id)`; signed money | live |
 | Loan | C | `GSCompany.GetLoanAmount()` in selected company | live |
 | Maximum loan | P | game setting plus loan rules; derive current limit, may change over time | source |
@@ -161,12 +161,14 @@ should use deltas plus periodic snapshots.
 
 ### Admin Network comparison and combined observation
 
-Admin Network and GameScript both expose date, company identity/name/AI flag,
+Admin Network and GameScript both expose date, company identity/name,
 cash/loan, quarterly economy, performance, cargo totals, and aggregate vehicle
 and station counts. They should match after allowing for packet cadence. Admin
 money is serialized integer money; GameScript uses `Money`. Any disagreement is
 resolved by a fresh Admin poll for lifecycle/economy and a GameScript full
 snapshot for entity/map detail, with both source timestamps retained.
+
+Human/AI status is Admin-only in the production bridge contract.
 
 Admin-only material data: connection/server metadata, network clients, protocol
 health, and authoritative server/new-game/shutdown notifications. GameScript-only

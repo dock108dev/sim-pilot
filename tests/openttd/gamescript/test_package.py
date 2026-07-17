@@ -16,6 +16,7 @@ def test_package_declares_the_verified_openttd_api_and_protocol() -> None:
     assert "protocol_version = 1;" in main
     assert "ledger_limit = 64;" in main
     assert '"set_company_name"' in main
+    assert "function HasExactKeys(value, keys)" in main
 
 
 def test_package_does_not_advertise_unverified_actions_or_deltas() -> None:

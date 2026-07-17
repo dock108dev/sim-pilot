@@ -54,7 +54,7 @@ class HelloPayload(BridgeModel):
     openttd_version: Literal["15.3"] = "15.3"
     gamescript_api_version: Literal["15"] = "15"
     script_version: Literal[1] = 1
-    adapter_version: str = SIM_PILOT_ADAPTER_VERSION
+    adapter_version: Literal["openttd-gamescript-v1"] = SIM_PILOT_ADAPTER_VERSION
     loaded: bool
     save_generation: int = Field(ge=0)
     start_generation: int = Field(ge=1)

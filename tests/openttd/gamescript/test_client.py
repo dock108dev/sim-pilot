@@ -43,6 +43,18 @@ def test_sequence_gap_duplicate_and_identity_change_fail_outside_resync() -> Non
 
     asyncio.run(sequence_gap())
 
+    async def duplicate() -> None:
+        transport = FakeBridgeTransport(sync_messages())
+        client = GameScriptBridgeClient(transport, company_id=0)
+        await client.synchronize()
+        duplicate_message = message(5, MessageType.STATE_SNAPSHOT, snapshot())
+        transport.messages.extend((duplicate_message, duplicate_message))
+        await client._receive()  # pyright: ignore[reportPrivateUsage]
+        with pytest.raises(BridgeSequenceError, match="duplicate bridge message"):
+            await client._receive()  # pyright: ignore[reportPrivateUsage]
+
+    asyncio.run(duplicate())
+
 
 def test_resume_rejects_a_different_script_instance_as_a_new_game() -> None:
     async def scenario() -> BridgeHealth:
