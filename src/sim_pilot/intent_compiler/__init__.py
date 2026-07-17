@@ -9,8 +9,12 @@ from sim_pilot.intent_compiler.errors import (
 from sim_pilot.intent_compiler.interfaces import CompilerProvider
 from sim_pilot.intent_compiler.models import (
     CompilationResult,
+    CompilerProviderMetadata,
+    CompilerProviderResult,
+    CompilerRecording,
     CompilerReport,
     CompilerResponse,
+    CompilerTokenUsage,
     CompilerValidationError,
     ValidationStatus,
 )
@@ -20,9 +24,13 @@ __all__ = [
     "CompilationResult",
     "CompilerError",
     "CompilerProvider",
+    "CompilerProviderMetadata",
     "CompilerProviderError",
+    "CompilerProviderResult",
+    "CompilerRecording",
     "CompilerReport",
     "CompilerResponse",
+    "CompilerTokenUsage",
     "CompilerValidationError",
     "IntentCompiler",
     "InvalidCompilerOutputError",

@@ -4,6 +4,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, NoReturn
 from uuid import UUID, uuid4
@@ -27,8 +28,17 @@ from sim_pilot.domain import (
     TaskSpecification,
     TaskStatus,
 )
-from sim_pilot.intent_compiler import CompilerError, IntentCompiler, ValidationStatus
-from sim_pilot.intent_compiler.providers import OpenAICompilerProvider
+from sim_pilot.intent_compiler import (
+    CompilerError,
+    CompilerProvider,
+    IntentCompiler,
+    ValidationStatus,
+)
+from sim_pilot.intent_compiler.providers import (
+    NoProviderConfigured,
+    OpenAICompilerProvider,
+    RecordingCompilerProvider,
+)
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
     SQLiteUnitOfWork,
@@ -64,6 +74,11 @@ class CLIContext:
     url: str
 
 
+class CompilerProviderName(StrEnum):
+    NONE = "none"
+    OPENAI = "openai"
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -84,8 +99,18 @@ def _runtime(ctx: typer.Context) -> tuple[Engine, RuntimeEngine]:
     return engine, RuntimeEngine(unit_of_work_factory=lambda: SQLiteUnitOfWork(engine))
 
 
-def _intent_compiler() -> IntentCompiler:
-    return IntentCompiler(OpenAICompilerProvider(model=compiler_model()))
+def _intent_compiler(
+    provider_name: CompilerProviderName,
+    recording_directory: Path | None,
+) -> IntentCompiler:
+    provider: CompilerProvider
+    if provider_name is CompilerProviderName.OPENAI:
+        provider = OpenAICompilerProvider(model=compiler_model())
+    else:
+        provider = NoProviderConfigured()
+    if recording_directory is not None:
+        provider = RecordingCompilerProvider(provider, recording_directory)
+    return IntentCompiler(provider)
 
 
 def _restore(context: ReconstructedRuntimeContext) -> ReferenceSimulationAdapter:
@@ -149,13 +174,25 @@ def task_create(
     target_cash: Annotated[float, typer.Option(min=0)] = 520_000,
     task_id: Annotated[UUID | None, typer.Option()] = None,
     instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
+    provider: Annotated[
+        CompilerProviderName,
+        typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
+    ] = CompilerProviderName.NONE,
+    record_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--record-dir",
+            file_okay=False,
+            help="Opt in to local JSON recordings containing the instruction and full prompt.",
+        ),
+    ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
 ) -> None:
     try:
         if specification is not None and instruction is not None:
             raise ValueError("--spec and --instruction are mutually exclusive")
         if instruction is not None:
-            result = asyncio.run(_intent_compiler().compile(instruction))
+            result = asyncio.run(_intent_compiler(provider, record_dir).compile(instruction))
             _emit(result)
             if result.report.validation_status is not ValidationStatus.VALID:
                 raise ValueError(
@@ -199,12 +236,24 @@ def task_create(
 @task_app.command("compile")
 def task_compile(
     instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
+    provider: Annotated[
+        CompilerProviderName,
+        typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
+    ] = CompilerProviderName.NONE,
+    record_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--record-dir",
+            file_okay=False,
+            help="Opt in to local JSON recordings containing the instruction and full prompt.",
+        ),
+    ] = None,
 ) -> None:
     text = instruction if instruction is not None else typer.prompt("Prompt")
     try:
-        result = asyncio.run(_intent_compiler().compile(text))
+        result = asyncio.run(_intent_compiler(provider, record_dir).compile(text))
         _emit(result)
-    except (CompilerError, ValidationError, ValueError) as error:
+    except (OSError, CompilerError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)
     if result.report.validation_status is not ValidationStatus.VALID:
         raise typer.Exit(INVALID_INPUT)

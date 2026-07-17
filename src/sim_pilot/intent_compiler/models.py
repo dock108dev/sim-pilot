@@ -1,9 +1,10 @@
-"""Strict structured-output and reporting models for intent compilation."""
+"""Strict structured-output, provider, and reporting models for intent compilation."""
 
 from enum import StrEnum
 from typing import Literal, Self
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from sim_pilot.domain import TaskSpecification
 
@@ -35,6 +36,38 @@ class CompilerResponse(CompilerModel):
     warnings: tuple[str, ...]
     unsupported_requests: tuple[str, ...]
     ambiguities: tuple[str, ...]
+
+
+class CompilerTokenUsage(CompilerModel):
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+
+
+class CompilerProviderMetadata(CompilerModel):
+    provider: str = Field(min_length=1)
+    model: str | None = None
+    token_usage: CompilerTokenUsage | None = None
+
+
+class CompilerProviderResult(CompilerModel):
+    """One provider response plus non-semantic request metadata."""
+
+    response: CompilerResponse
+    metadata: CompilerProviderMetadata
+
+
+class CompilerRecording(CompilerModel):
+    """Local diagnostic record emitted only by an explicit recording wrapper."""
+
+    id: UUID
+    captured_at: AwareDatetime
+    prompt_version: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    instruction: str = Field(min_length=1)
+    latency_ms: float = Field(ge=0)
+    provider_metadata: CompilerProviderMetadata
+    response: CompilerResponse
 
 
 class CompilerReport(CompilerModel):

@@ -2,8 +2,8 @@
 
 from typing import Protocol
 
-from sim_pilot.intent_compiler.models import CompilerResponse
+from sim_pilot.intent_compiler.models import CompilerProviderResult
 
 
 class CompilerProvider(Protocol):
-    async def compile(self, instruction: str) -> CompilerResponse: ...
+    async def compile(self, instruction: str) -> CompilerProviderResult: ...

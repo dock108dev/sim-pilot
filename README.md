@@ -258,14 +258,14 @@ export SIM_PILOT_COMPILER_MODEL="gpt-5.6"
 Compile without persisting:
 
 ```bash
-uv run sim-pilot task compile --instruction \
+uv run sim-pilot task compile --provider openai --instruction \
   'Run until cash reaches $1 million. Do not take loans. Keep at least $100,000 available. Ask before spending more than $50,000.'
 ```
 
 Compile, review, confirm, and persist:
 
 ```bash
-uv run sim-pilot --database /tmp/sim-pilot-demo.db task create --instruction \
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task create --provider openai --instruction \
   'Run until cash reaches $1 million. Do not take loans. Keep at least $100,000 available. Ask before spending more than $50,000.'
 ```
 
@@ -273,6 +273,24 @@ Omit `--instruction` from `task compile` for an interactive prompt. Use `--yes` 
 `task create --instruction` only after accepting noninteractive persistence. Compiler output
 includes assumptions, warnings, unsupported requests, ambiguities, deterministic validation
 errors, and `prompt_version`. Only a `valid` compilation can be persisted.
+
+The default provider is `none`, which fails without making a network request. Codex CLI's ChatGPT
+login is only for the development tool and is not used by Sim Pilot. Select `--provider openai`
+explicitly when hosted compilation is intended; the provider then uses independently configured
+OpenAI API credentials. Scripted compilation remains the deterministic test and fixture path.
+
+To opt in to a local diagnostic recording, pass a directory:
+
+```bash
+uv run sim-pilot task compile --provider openai \
+  --record-dir ./data/compiler-recordings \
+  --instruction 'Reach $1 million cash.'
+```
+
+Each successful request creates one atomic, versioned JSON file containing the instruction, full
+prompt, prompt version, structured response, latency, provider, model, and token usage when the
+provider reports it. These files may contain sensitive user text and are never created unless
+`--record-dir` is supplied; choose and protect the output directory accordingly.
 
 Supported language covers all four RFC objectives, the five constraint types, notification and
 stop conditions, per-action and total authority limits, approval actions, and all reference

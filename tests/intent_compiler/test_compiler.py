@@ -1,6 +1,7 @@
 """Provider-independent Intent Compiler pipeline tests."""
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -95,3 +96,43 @@ def test_openai_provider_configuration_failure_is_typed(
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(CompilerProviderError, match="configuration failed"):
         OpenAICompilerProvider(model="test-model")
+
+
+def test_openai_provider_returns_model_and_token_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_response = response(valid_specification())
+
+    class FakeResponses:
+        async def parse(self, **kwargs: object) -> SimpleNamespace:
+            assert kwargs["model"] == "test-model"
+            return SimpleNamespace(
+                output_parsed=expected_response,
+                usage=SimpleNamespace(
+                    input_tokens=120,
+                    output_tokens=30,
+                    total_tokens=150,
+                ),
+            )
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str | None = None) -> None:
+            del api_key
+            self.responses = FakeResponses()
+
+    monkeypatch.setattr(
+        "sim_pilot.intent_compiler.providers.openai.AsyncOpenAI",
+        FakeAsyncOpenAI,
+    )
+
+    async def scenario() -> None:
+        result = await OpenAICompilerProvider(model="test-model", api_key="test-key").compile(
+            "Reach one million cash."
+        )
+        assert result.response == expected_response
+        assert result.metadata.provider == "openai"
+        assert result.metadata.model == "test-model"
+        assert result.metadata.token_usage is not None
+        assert result.metadata.token_usage.total_tokens == 150
+
+    asyncio.run(scenario())

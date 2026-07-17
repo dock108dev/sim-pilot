@@ -179,8 +179,8 @@ Task 5 names this component the **Intent Compiler**. It translates user intent b
 runtime actions. Its provider-independent pipeline is:
 
 ```text
-Instruction -> CompilerProvider -> CompilerResponse -> Deterministic Validation
-            -> CompilerReport -> TaskSpecification
+Instruction -> CompilerProvider -> CompilerProviderResult -> CompilerResponse
+            -> Deterministic Validation -> CompilerReport -> TaskSpecification
 ```
 
 `CompilerReport` records prompt version, validation status, assumptions, warnings, unsupported
@@ -188,10 +188,23 @@ requests, ambiguities, and structured validation errors. Validation statuses are
 `clarification_required`, `unsupported`, and `invalid`. Only `valid` results expose a
 `TaskSpecification` to the runtime.
 
-The provider response is strict structured output. Provider prose is never parsed. The OpenAI
-implementation uses provider-native Pydantic structured output and is the only module allowed to
-import the OpenAI SDK. Scripted providers cover automated tests; live provider tests are opt-in and
-never required by CI.
+The provider response is strict structured output. Provider prose is never parsed. Each provider
+returns a `CompilerProviderResult` containing that `CompilerResponse` plus provider name, optional
+model identifier, and optional token usage. This telemetry envelope does not alter compilation
+semantics or the frozen `TaskSpecification` contract.
+
+The OpenAI implementation uses provider-native Pydantic structured output and is the only module
+allowed to import the OpenAI SDK. Hosted access is never selected implicitly: the CLI defaults to
+`NoProviderConfigured`, and `--provider openai` is required for an OpenAI request. Codex CLI or
+ChatGPT login state is development-tool authentication and is not consumed as runtime API
+authentication. Scripted providers cover automated tests; live provider tests are opt-in and never
+required by CI.
+
+An opt-in `RecordingCompilerProvider` decorates any configured provider and writes one atomic JSON
+record per successful request. Records contain the original instruction, complete prompt, prompt
+version, structured response, latency, provider, model, and token usage when available. Because
+instructions and prompts may contain sensitive data, recording is disabled by default and requires
+an explicit local output directory.
 
 Prompt version `intent-compiler-v1` defines all supported objective and constraint contracts,
 reference-simulation resources and actions, authority fields, and unsupported behavior. A semantic
@@ -941,3 +954,5 @@ Validate
 | OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |
 | OQ-006 | Checkpoint cadence | Resolved: initial, verified state change, and initialized terminal |
 | OQ-007 | Safeguard recovery | Resolved: minimal counters/fingerprints stored on task snapshot |
+| OQ-008 | Default compiler provider | Resolved: none; hosted access requires `--provider openai` |
+| OQ-009 | Compiler request telemetry | Resolved: typed result envelope plus opt-in atomic JSON recorder |

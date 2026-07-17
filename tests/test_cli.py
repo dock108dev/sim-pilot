@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from typer.testing import CliRunner
 
-from sim_pilot.cli import app
+from sim_pilot.cli import CompilerProviderName, app
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from tests.intent_compiler.helpers import response, valid_specification
@@ -46,11 +46,27 @@ def test_compile_and_create_from_instruction(
     task_id = UUID(int=902)
     responses = [response(valid_specification()), response(valid_specification())]
     compiler = IntentCompiler(ScriptedCompilerProvider(responses))
-    monkeypatch.setattr("sim_pilot.cli._intent_compiler", lambda: compiler)
+
+    def compiler_factory(
+        provider_name: CompilerProviderName, recording_directory: Path | None
+    ) -> IntentCompiler:
+        del provider_name, recording_directory
+        return compiler
+
+    monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)
 
     assert runner.invoke(app, [*prefix, "db", "upgrade"]).exit_code == 0
     compiled = runner.invoke(
-        app, [*prefix, "task", "compile", "--instruction", "Reach one million cash."]
+        app,
+        [
+            *prefix,
+            "task",
+            "compile",
+            "--instruction",
+            "Reach one million cash.",
+            "--provider",
+            "openai",
+        ],
     )
     assert compiled.exit_code == 0, compiled.output
     assert '"validation_status": "valid"' in compiled.output
@@ -63,6 +79,8 @@ def test_compile_and_create_from_instruction(
             "create",
             "--instruction",
             "Reach one million cash.",
+            "--provider",
+            "openai",
             "--task-id",
             str(task_id),
             "--yes",
@@ -84,7 +102,14 @@ def test_instruction_creation_requires_valid_compilation(
             [response(ambiguities=("Minimum reserve amount was not specified.",))]
         )
     )
-    monkeypatch.setattr("sim_pilot.cli._intent_compiler", lambda: compiler)
+
+    def compiler_factory(
+        provider_name: CompilerProviderName, recording_directory: Path | None
+    ) -> IntentCompiler:
+        del provider_name, recording_directory
+        return compiler
+
+    monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)
     assert runner.invoke(app, ["--database", database, "db", "upgrade"]).exit_code == 0
     result = runner.invoke(
         app,
@@ -95,8 +120,20 @@ def test_instruction_creation_requires_valid_compilation(
             "create",
             "--instruction",
             "Keep enough cash available.",
+            "--provider",
+            "openai",
             "--yes",
         ],
     )
     assert result.exit_code == 20
     assert "clarification_required" in result.output
+
+
+def test_compiler_provider_must_be_selected_explicitly() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["task", "compile", "--instruction", "Reach one million cash."],
+    )
+    assert result.exit_code == 20
+    assert "no compiler provider configured" in result.output
+    assert "--provider openai" in result.output

@@ -21,7 +21,8 @@ class IntentCompiler:
         normalized = instruction.strip()
         if not normalized:
             raise ValueError("instruction must not be empty")
-        response = await self._provider.compile(normalized)
+        provider_result = await self._provider.compile(normalized)
+        response = provider_result.response
         errors = validate_specification(response.specification)
         if errors:
             status = ValidationStatus.INVALID

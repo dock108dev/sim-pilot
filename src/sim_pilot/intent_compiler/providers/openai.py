@@ -7,7 +7,12 @@ from sim_pilot.intent_compiler.errors import (
     CompilerProviderError,
     InvalidCompilerOutputError,
 )
-from sim_pilot.intent_compiler.models import CompilerResponse
+from sim_pilot.intent_compiler.models import (
+    CompilerProviderMetadata,
+    CompilerProviderResult,
+    CompilerResponse,
+    CompilerTokenUsage,
+)
 from sim_pilot.intent_compiler.prompt import INTENT_COMPILER_PROMPT
 
 
@@ -28,7 +33,7 @@ class OpenAICompilerProvider:
         except OpenAIError as error:
             raise CompilerProviderError(f"OpenAI compiler configuration failed: {error}") from error
 
-    async def compile(self, instruction: str) -> CompilerResponse:
+    async def compile(self, instruction: str) -> CompilerProviderResult:
         if not instruction.strip():
             raise ValueError("instruction must not be empty")
         try:
@@ -51,4 +56,21 @@ class OpenAICompilerProvider:
             raise InvalidCompilerOutputError(
                 "OpenAI response contained no structured compiler output"
             )
-        return parsed
+        usage = response.usage
+        token_usage = (
+            None
+            if usage is None
+            else CompilerTokenUsage(
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                total_tokens=usage.total_tokens,
+            )
+        )
+        return CompilerProviderResult(
+            response=parsed,
+            metadata=CompilerProviderMetadata(
+                provider="openai",
+                model=self._model,
+                token_usage=token_usage,
+            ),
+        )
