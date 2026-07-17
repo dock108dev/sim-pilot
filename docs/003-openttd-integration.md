@@ -13,7 +13,14 @@ requires no patch or script, and supports polling structured company/date state.
 strictly read-only. Task 6C adds exactly one write, `set_server_name(name)`, through the documented
 Admin RCON packet. It waits for the matching RCON completion marker, reconnects, and independently
 verifies the value from a new `SERVER_WELCOME`. RCON text alone is not proof of mutation. Chat,
-GameScript, arbitrary RCON, and gameplay commands remain unavailable.
+arbitrary RCON, and other gameplay commands remain unavailable through that boundary.
+
+Task 7B adds the separately gated production `SimPilotBridge` GameScript over
+the same Admin connection. It negotiates protocol v1, supplies snapshot-only
+pause/town/industry telemetry, persists bridge identity and a bounded command
+ledger in the save, and supports only the independently verified
+`set_company_name` action. Admin Network remains authoritative for shared
+server/company fields. See `docs/005-openttd-bridge-protocol.md`.
 
 ## Integration-path comparison
 
@@ -128,6 +135,8 @@ Provider and do not read `OPENAI_API_KEY`. Later natural-language demos must sti
 | `SIM_PILOT_OPENTTD_ACTION_TIMEOUT_SECONDS` | `5` | RCON and postcondition timeout |
 | `SIM_PILOT_OPENTTD_STALE_THRESHOLD_DAYS` | `3` | Allowed date drift before rejection |
 | `SIM_PILOT_OPENTTD_ALLOW_WRITES` | `0` | Explicit disposable-server write opt-in |
+| `SIM_PILOT_OPENTTD_GS_ENABLED` | `0` | Compose and synchronize the installed GameScript bridge |
+| `SIM_PILOT_OPENTTD_GS_ALLOW_WRITES` | `0` | Separate opt-in for the verified company-name command |
 | `SIM_PILOT_OPENTTD_EXECUTABLE` | none | Optional doctor-only local path |
 | `SIM_PILOT_OPENTTD_REQUIRED_SCRIPT` | none | Optional doctor path; no script is required by this method |
 | `SIM_PILOT_OPENTTD_SAVE_PATH` | none | Optional local setup metadata; never restored by the adapter |
@@ -167,10 +176,14 @@ currency conversion is attempted.
 Sequence increases once per successful adapter observation. Timestamp is capture time in UTC.
 `tick` is the raw calendar date and therefore may remain equal across successive observations.
 
-Unsupported state includes paused/speed status, gross revenue, expenses, distinct profit, depots,
+The Admin-only boundary does not expose paused/speed status, gross revenue, expenses, distinct profit, depots,
 active/stopped/lost vehicles, vehicle profitability, route/order detail, towns, industries,
 subsidies, alerts/news, and save identity. Recorded fixtures named for paused and stopped-vehicle
 scenarios explicitly mark those fields unavailable instead of fabricating values.
+
+With the Task 7B bridge enabled, pause state, town count, industry count,
+company name, bridge/save identity, and synchronization health are available.
+All other items in the Admin-only unsupported list remain unavailable.
 
 ## Persistence and recovery
 

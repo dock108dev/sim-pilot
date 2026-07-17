@@ -20,6 +20,15 @@ Task 7B should therefore implement telemetry, capability negotiation, recovery,
 and the narrow verified command substrate. It must not advertise construction or
 vehicle management until a disposable human-company construction probe passes.
 
+Task 7B implemented that constrained decision as protocol v1: periodic
+heartbeat, full snapshots, resynchronization, saved identity and command ledger,
+and the sole verified `set_company_name` action. State deltas and generic events
+were not productionized because Task 7A did not verify them. Production API
+validation also revised the proposed human/AI GameScript field: API 15 does not
+provide the supported getter assumed during discovery, so the combined adapter
+uses Admin Network as the only authority for human/AI status. See
+`docs/005-openttd-bridge-protocol.md`.
+
 ## 2. Tested versions and primary evidence
 
 - OpenTTD 15.3, exact tag commit `14ec60f248547d4d062a1160f0fc26d742319888`.
@@ -388,15 +397,15 @@ Principal risks are save compatibility, script failure leaving the game running
 without automation, small outbound packets, tick-budget pressure, entity-ID
 changes, duplicate commands across save boundaries, and API drift after 15.3.
 
-Proceed with **Task 7B constrained scope**:
+The **Task 7B constrained scope** is now implemented as follows:
 
-1. Productionize protocol v1, strict typed messages, subscription, hello,
-   capability negotiation, snapshots/deltas, heartbeat, resync, and saved
-   command ledger.
+1. Protocol v1 provides strict typed messages, subscription, hello, capability
+   negotiation, full snapshots, heartbeat, resync, and a saved command ledger.
+   Deltas remain unsupported.
 2. Expose the verified richer read catalog and cross-check shared company fields
    against Admin Network.
 3. Keep all writes opt-in and capability-gated.
-4. Add a disposable human-created company fixture and require a road
+4. A future milestone may add a disposable human-created company fixture and must require a road
    test/build/observe/remove/save/reload probe before promoting construction to
    supported.
 5. Do not add UI control, NoAI indirection, or a patched OpenTTD build.

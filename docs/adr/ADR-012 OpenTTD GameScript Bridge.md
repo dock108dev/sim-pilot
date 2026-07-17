@@ -52,3 +52,12 @@ internals.
 
 See `docs/004-openttd-gamescript-capability.md` and the isolated
 `discovery/openttd_gamescript` probes and sanitized results.
+
+## Task 7B implementation note
+
+Protocol v1 implements snapshot-only telemetry and the one live-proven command,
+`set_company_name`. Production API validation narrowed one discovery claim: the
+GameScript package does not expose a supported human/AI status getter in the
+OpenTTD 15.3 API surface used by the package. Admin Network therefore remains
+the sole source for that field. This does not broaden or reverse the constrained
+go decision. Construction, state deltas, and generalized events remain absent.

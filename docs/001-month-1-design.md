@@ -1005,3 +1005,27 @@ Validate
 | OQ-009 | Compiler request telemetry | Resolved: typed result envelope plus opt-in atomic JSON recorder |
 | OQ-010 | Runtime decision provider | Resolved: bounded context plus explicit scripted/OpenAI/unconfigured providers |
 | OQ-011 | Decision provider recording | Resolved: opt-in redacted atomic JSON; recording failure blocks execution |
+| OQ-012 | OpenTTD gameplay bridge | Resolved: constrained snapshot-only GameScript protocol v1 with `set_company_name` as the sole supported action |
+
+## Task 7B OpenTTD bridge interface
+
+The OpenTTD adapter may compose one `OpenTTDAdminClient` with a protocol-v1
+GameScript bridge client. The Admin client exclusively owns the TCP stream and
+routes GameScript packets; the bridge client does not import runtime or
+persistence. A combined observation retains Admin as authority for connection,
+date, map, company identity/economy, and aggregate counts, while the GameScript
+snapshot adds pause state and town/industry counts. Source disagreements are
+recorded explicitly.
+
+The live capability intersection, not a global static catalog, controls action
+availability. Protocol v1 supports full snapshots and the zero-cost,
+state-comparable `set_company_name` action only. It does not support deltas,
+events, construction, vehicle control, or restore. Writes require a separate
+loopback/disposable-server opt-in and runtime success requires a fresh snapshot
+plus combined-state verification.
+
+Bridge health and the latest snapshot are stored inside the existing
+observational checkpoint. On resume the CLI reconstructs that health,
+resynchronizes through the same Admin transport, and rejects a different saved
+script identity as a new-game boundary. Checkpoints do not roll OpenTTD back and
+ambiguous actions are never automatically retried.

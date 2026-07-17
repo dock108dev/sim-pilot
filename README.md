@@ -70,6 +70,11 @@ The only writable action is `set_server_name`; it is verified from fresh welcome
 reconnecting. It does not restore the game. Full setup and limitations are in
 [`docs/003-openttd-integration.md`](docs/003-openttd-integration.md).
 
+Task 7B adds the separately installed `SimPilotBridge` GameScript protocol v1,
+snapshot-only richer telemetry, save/reconnect identity, and one separately
+gated company action: `set_company_name`. Installation and the exact protocol
+are in [`docs/005-openttd-bridge-protocol.md`](docs/005-openttd-bridge-protocol.md).
+
 After configuring the local OpenTTD admin port and exporting
 `SIM_PILOT_OPENTTD_ADMIN_PASSWORD`:
 
@@ -78,6 +83,9 @@ uv run sim-pilot openttd doctor
 uv run sim-pilot openttd capabilities
 uv run sim-pilot openttd observe
 uv run sim-pilot openttd watch --count 5
+uv run sim-pilot openttd bridge doctor
+uv run sim-pilot openttd bridge capabilities
+uv run sim-pilot openttd bridge observe
 ```
 
 Live writes are independently disabled unless explicitly enabled on the disposable test server:
@@ -85,6 +93,14 @@ Live writes are independently disabled unless explicitly enabled on the disposab
 ```bash
 export SIM_PILOT_OPENTTD_ALLOW_WRITES=1
 uv run sim-pilot openttd action set-server-name "Sim Pilot Local Test"
+```
+
+Enable bridge composition with `SIM_PILOT_OPENTTD_GS_ENABLED=1`. On a disposable
+loopback server only, enable its distinct write boundary:
+
+```bash
+export SIM_PILOT_OPENTTD_GS_ALLOW_WRITES=1
+uv run sim-pilot openttd bridge action set-company-name "Sim Pilot Test"
 ```
 
 Compiler and decision providers are selected independently for a natural-language durable task:
