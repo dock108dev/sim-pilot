@@ -1,0 +1,95 @@
+[
+  {
+    "scenario": "initial_company",
+    "game_date_raw": 712223,
+    "cash": 100000,
+    "loan": 100000,
+    "net_income_current_year": 0,
+    "company_value_last_quarter": 100000,
+    "vehicles": [0, 0, 0, 0, 0],
+    "stations": [0, 0, 0, 0, 0],
+    "unavailable_fields": []
+  },
+  {
+    "scenario": "profitable_company",
+    "game_date_raw": 712588,
+    "cash": 425000,
+    "loan": 50000,
+    "net_income_current_year": 175000,
+    "company_value_last_quarter": 850000,
+    "vehicles": [8, 5, 3, 2, 1],
+    "stations": [6, 4, 3, 2, 1],
+    "unavailable_fields": []
+  },
+  {
+    "scenario": "loss_making_company",
+    "game_date_raw": 712953,
+    "cash": -25000,
+    "loan": 300000,
+    "net_income_current_year": -75000,
+    "company_value_last_quarter": 150000,
+    "vehicles": [3, 4, 2, 0, 0],
+    "stations": [3, 3, 2, 0, 0],
+    "unavailable_fields": []
+  },
+  {
+    "scenario": "paused_game",
+    "game_date_raw": 713318,
+    "cash": 250000,
+    "loan": 0,
+    "net_income_current_year": 20000,
+    "company_value_last_quarter": 400000,
+    "vehicles": [2, 0, 1, 0, 0],
+    "stations": [2, 0, 1, 0, 0],
+    "unavailable_fields": ["paused"]
+  },
+  {
+    "scenario": "company_with_vehicles",
+    "game_date_raw": 713683,
+    "cash": 600000,
+    "loan": 0,
+    "net_income_current_year": 250000,
+    "company_value_last_quarter": 1200000,
+    "vehicles": [12, 6, 9, 3, 2],
+    "stations": [10, 5, 8, 3, 2],
+    "unavailable_fields": []
+  },
+  {
+    "scenario": "company_with_stopped_vehicle",
+    "game_date_raw": 714048,
+    "cash": 320000,
+    "loan": 0,
+    "net_income_current_year": 90000,
+    "company_value_last_quarter": 650000,
+    "vehicles": [5, 2, 1, 0, 0],
+    "stations": [4, 2, 1, 0, 0],
+    "unavailable_fields": ["active_vehicles", "stopped_vehicles"]
+  },
+  {
+    "scenario": "loan_balance",
+    "game_date_raw": 714413,
+    "cash": 180000,
+    "loan": 250000,
+    "net_income_current_year": 45000,
+    "company_value_last_quarter": 375000,
+    "vehicles": [2, 3, 0, 0, 0],
+    "stations": [2, 2, 0, 0, 0],
+    "unavailable_fields": []
+  },
+  {
+    "scenario": "disconnected_response",
+    "error": "disconnected_session"
+  },
+  {
+    "scenario": "unsupported_version_response",
+    "openttd_version": "16.0-beta1",
+    "protocol_version": 3,
+    "error": "unsupported_version"
+  },
+  {
+    "scenario": "missing_company_response",
+    "requested_company_id": 7,
+    "companies": [],
+    "error": "state_unavailable"
+  }
+]

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot
+from sim_pilot.adapters.openttd import OpenTTDReadOnlyAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.config import (
     compiler_model,
@@ -32,6 +33,7 @@ from sim_pilot.domain import (
     DecisionType,
     Objective,
     ObjectiveType,
+    Observation,
     Task,
     TaskSpecification,
     TaskStatus,
@@ -46,6 +48,13 @@ from sim_pilot.intent_compiler.providers import (
     NoProviderConfigured,
     OpenAICompilerProvider,
     RecordingCompilerProvider,
+)
+from sim_pilot.openttd import (
+    OpenTTDAdapterCapabilities,
+    OpenTTDAdminClient,
+    OpenTTDError,
+    OpenTTDObservationState,
+    openttd_configuration,
 )
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
@@ -74,13 +83,16 @@ CANCELLED = 14
 INVALID_INPUT = 20
 PERSISTENCE_FAILURE = 21
 MIGRATION_FAILURE = 22
+OPENTTD_FAILURE = 23
 
 app = typer.Typer(help="Durable local runtime for the deterministic reference simulation.")
 db_app = typer.Typer(help="Manage durable schema state.")
 task_app = typer.Typer(help="Create and operate structured tasks.")
 recovery_app = typer.Typer(help="Inspect and resolve interrupted action attempts.")
+openttd_app = typer.Typer(help="Observe a local OpenTTD 15.3 game through its admin port.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
+app.add_typer(openttd_app, name="openttd")
 task_app.add_typer(recovery_app, name="recovery")
 
 
@@ -203,6 +215,137 @@ def _emit(value: object) -> None:
 def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
     typer.echo(f"error: {error}", err=True)
     raise typer.Exit(code)
+
+
+def _openttd_adapter() -> OpenTTDReadOnlyAdapter:
+    """Compose only the local adapter; never initialize a hosted provider."""
+    return OpenTTDReadOnlyAdapter(OpenTTDAdminClient(openttd_configuration()))
+
+
+async def _capture_openttd_observation() -> Observation:
+    adapter = _openttd_adapter()
+    await adapter.initialize()
+    try:
+        return await adapter.observe()
+    finally:
+        await adapter.shutdown()
+
+
+@openttd_app.command("capabilities")
+def openttd_capabilities() -> None:
+    """Display static Task 6B capabilities without configuration or network access."""
+    _emit(OpenTTDAdapterCapabilities())
+
+
+@openttd_app.command("doctor")
+def openttd_doctor() -> None:
+    """Check local configuration and the read-only Admin Network connection."""
+
+    async def check() -> dict[str, object]:
+        try:
+            configuration = openttd_configuration()
+        except (ValidationError, ValueError) as error:
+            return {
+                "configuration_valid": False,
+                "connection_status": "not_checked",
+                "error": str(error),
+                "capabilities": OpenTTDAdapterCapabilities().model_dump(mode="json"),
+            }
+        executable_status = (
+            "not_configured"
+            if configuration.executable is None
+            else "available"
+            if configuration.executable.exists()
+            else "unavailable"
+        )
+        script_status = (
+            "not_required"
+            if configuration.required_script_path is None
+            else "available"
+            if configuration.required_script_path.exists()
+            else "unavailable"
+        )
+        client = OpenTTDAdminClient(configuration)
+        try:
+            await client.connect()
+            return {
+                "configuration_valid": True,
+                "connection_status": "connected",
+                "integration_method": "admin_network",
+                "openttd_version": client.metadata.openttd_version,
+                "protocol_version": client.metadata.protocol_version,
+                "selected_company": configuration.company_id,
+                "executable_status": executable_status,
+                "required_component_status": script_status,
+                "capabilities": OpenTTDAdapterCapabilities().model_dump(mode="json"),
+            }
+        except OpenTTDError as error:
+            return {
+                "configuration_valid": True,
+                "connection_status": "unavailable",
+                "selected_company": configuration.company_id,
+                "executable_status": executable_status,
+                "required_component_status": script_status,
+                "error": str(error),
+                "capabilities": OpenTTDAdapterCapabilities().model_dump(mode="json"),
+            }
+        finally:
+            await client.close()
+
+    _emit(asyncio.run(check()))
+
+
+@openttd_app.command("observe")
+def openttd_observe() -> None:
+    """Capture one structured canonical observation."""
+    try:
+        _emit(asyncio.run(_capture_openttd_observation()))
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_app.command("watch")
+def openttd_watch(
+    count: Annotated[int, typer.Option(min=1, help="Bounded observation count.")] = 10,
+) -> None:
+    """Poll local OpenTTD and print only supported resource changes."""
+
+    async def watch() -> None:
+        configuration = openttd_configuration()
+        adapter = OpenTTDReadOnlyAdapter(OpenTTDAdminClient(configuration))
+        previous: dict[str, str | int | None] | None = None
+        await adapter.initialize()
+        try:
+            for index in range(count):
+                observation = await adapter.observe()
+                state = OpenTTDObservationState.model_validate(observation.state, strict=True)
+                current = {
+                    "date": state.resources.date,
+                    "cash": state.resources.cash,
+                    "loan": state.resources.debt,
+                    "income": state.resources.income,
+                    "expenses": state.resources.expenses,
+                    "profit": state.resources.profit,
+                    "vehicle_count": state.resources.vehicle_count,
+                    "alerts": None,
+                }
+                changes = (
+                    current
+                    if previous is None
+                    else {key: value for key, value in current.items() if previous[key] != value}
+                )
+                if changes:
+                    _emit({"sequence": observation.sequence, "changes": changes})
+                previous = current
+                if index + 1 < count:
+                    await asyncio.sleep(configuration.polling_interval_seconds)
+        finally:
+            await adapter.shutdown()
+
+    try:
+        asyncio.run(watch())
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
 
 
 @db_app.command("upgrade")

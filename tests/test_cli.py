@@ -1,15 +1,20 @@
 """Minimal process-facing CLI coverage."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import SecretStr
 from typer.testing import CliRunner
 
 from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
+from sim_pilot.domain import Observation
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
+from sim_pilot.openttd.config import OpenTTDConfiguration
 from tests.intent_compiler.helpers import response, valid_specification
+from tests.openttd.helpers import FakeOpenTTDClient, state
 
 
 def test_database_create_run_show_events_and_cancel(tmp_path: Path) -> None:
@@ -243,3 +248,74 @@ def test_openai_runtime_provider_requires_explicit_selection(
     assert len(constructed) == 1
     assert constructed[0]["model"]
     assert constructed[0]["timeout_seconds"] == 30
+
+
+def test_openttd_capabilities_is_offline_and_provider_independent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise AssertionError("OpenTTD capabilities must not initialize external clients")
+
+    monkeypatch.setattr("sim_pilot.cli._intent_compiler", unexpected)
+    monkeypatch.setattr("sim_pilot.cli._decision_provider", unexpected)
+    monkeypatch.setattr("sim_pilot.cli.openttd_configuration", unexpected)
+
+    result = CliRunner().invoke(app, ["openttd", "capabilities"])
+
+    assert result.exit_code == 0, result.output
+    assert '"read_state": true' in result.output
+    assert '"execute_actions": false' in result.output
+
+
+def test_openttd_doctor_reports_missing_local_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SIM_PILOT_OPENTTD_ADMIN_PASSWORD", raising=False)
+
+    result = CliRunner().invoke(app, ["openttd", "doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert '"configuration_valid": false' in result.output
+    assert "SIM_PILOT_OPENTTD_ADMIN_PASSWORD is required" in result.output
+
+
+def test_openttd_observe_uses_local_observation_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def capture() -> Observation:
+        return Observation(
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            tick=712223,
+            summary="Local fixture observation.",
+            state={"source": "openttd"},
+        )
+
+    monkeypatch.setattr("sim_pilot.cli._capture_openttd_observation", capture)
+
+    result = CliRunner().invoke(app, ["openttd", "observe"])
+
+    assert result.exit_code == 0, result.output
+    assert "Local fixture observation." in result.output
+
+
+def test_openttd_watch_is_bounded_and_emits_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configuration = OpenTTDConfiguration(password=SecretStr("local"), polling_interval_seconds=0.1)
+    fake = FakeOpenTTDClient([state("initial_company"), state("profitable_company")])
+
+    def client_factory(configuration: OpenTTDConfiguration) -> FakeOpenTTDClient:
+        del configuration
+        return fake
+
+    monkeypatch.setattr("sim_pilot.cli.openttd_configuration", lambda: configuration)
+    monkeypatch.setattr("sim_pilot.cli.OpenTTDAdminClient", client_factory)
+
+    result = CliRunner().invoke(app, ["openttd", "watch", "--count", "2"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.count('"sequence"') == 2
+    assert '"cash": 425000' in result.output
+    assert fake.closed is True

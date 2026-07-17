@@ -207,3 +207,33 @@ def test_decision_providers_do_not_import_adapters_or_sqlite() -> None:
         for path in files
     }
     assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_openttd_client_is_below_adapter_and_provider_boundaries() -> None:
+    files = (PACKAGE_ROOT / "openttd").rglob("*.py")
+    forbidden = (
+        "sim_pilot.adapters",
+        "sim_pilot.runtime",
+        "sim_pilot.persistence",
+        "sim_pilot.intent_compiler",
+        "sim_pilot.decision_provider",
+        "openai",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_runtime_does_not_import_openttd_client() -> None:
+    files = (PACKAGE_ROOT / "runtime").rglob("*.py")
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith("sim_pilot.openttd")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}

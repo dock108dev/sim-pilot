@@ -4,8 +4,8 @@ Sim Pilot is a local runtime for translating natural-language objectives into va
 against deterministic simulations. The repository contains typed domain models, the standalone
 deterministic reference simulation, a deterministic runtime, durable SQLite checkpointing,
 process-level resume, crash-window reconciliation, a versioned natural-language Intent Compiler,
-and a durable CLI. Runtime decision making remains scripted; hosted model use is limited to intent
-translation.
+a model-backed runtime Decision Provider, a read-only OpenTTD 15.3 adapter, and a durable CLI.
+Hosted providers and live-game integration are always explicit; deterministic tests remain offline.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
 `TaskSpecification`, `Observation`, `Action`, or `Decision` require an accompanying RFC update.
@@ -56,6 +56,30 @@ Compilation is `CLI -> Intent Compiler -> CompilerProvider`, with compiler outpu
 Domain. Only the OpenAI provider imports its SDK. Adapters may import domain and standalone
 simulation types, but must not import runtime modules. The reference simulation must not import
 adapters or runtime modules.
+
+The OpenTTD protocol client lives in `sim_pilot.openttd` below the adapter boundary. Its runtime-
+facing read-only wrapper lives in `sim_pilot.adapters.openttd`. Runtime never imports the OpenTTD
+client, and the client never imports runtime, persistence, adapters, or provider SDKs.
+
+## Read-only OpenTTD observation
+
+Task 6B supports the official OpenTTD 15.3 Admin Network protocol v3 on a loopback-bound dedicated
+server. It observes date, company economy, fleet counts, and station-facility counts. It does not
+execute actions or restore the game. Full setup and limitations are in
+[`docs/003-openttd-integration.md`](docs/003-openttd-integration.md).
+
+After configuring the local OpenTTD admin port and exporting
+`SIM_PILOT_OPENTTD_ADMIN_PASSWORD`:
+
+```bash
+uv run sim-pilot openttd doctor
+uv run sim-pilot openttd capabilities
+uv run sim-pilot openttd observe
+uv run sim-pilot openttd watch --count 5
+```
+
+These commands do not initialize OpenAI clients and work without `OPENAI_API_KEY`. A natural-
+language compiler remains separately gated by explicit `--provider openai` selection.
 
 ## Reference simulation
 
