@@ -30,6 +30,8 @@ class OpenTTDConfiguration(BaseModel):
     action_timeout_seconds: float = Field(default=5.0, gt=0)
     stale_observation_threshold_days: int = Field(default=3, ge=0)
     allow_writes: bool = False
+    gamescript_enabled: bool = False
+    allow_gamescript_writes: bool = False
     executable: Path | None = None
     required_script_path: Path | None = None
     save_path: Path | None = None
@@ -100,6 +102,8 @@ def openttd_configuration() -> OpenTTDConfiguration:
             os.getenv("SIM_PILOT_OPENTTD_STALE_THRESHOLD_DAYS", "3")
         ),
         allow_writes=_enabled("SIM_PILOT_OPENTTD_ALLOW_WRITES"),
+        gamescript_enabled=_enabled("SIM_PILOT_OPENTTD_GS_ENABLED"),
+        allow_gamescript_writes=_enabled("SIM_PILOT_OPENTTD_GS_ALLOW_WRITES"),
         executable=_optional_path("SIM_PILOT_OPENTTD_EXECUTABLE"),
         required_script_path=_optional_path("SIM_PILOT_OPENTTD_REQUIRED_SCRIPT"),
         save_path=_optional_path("SIM_PILOT_OPENTTD_SAVE_PATH"),

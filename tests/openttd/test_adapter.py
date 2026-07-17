@@ -1,6 +1,7 @@
 """Read-only OpenTTD adapter contract tests."""
 
 import asyncio
+import json
 from datetime import UTC
 
 from sim_pilot.adapters.base import ActionDefinition, SimulationAdapter
@@ -10,6 +11,9 @@ from sim_pilot.adapters.openttd import (
     OpenTTDValidation,
 )
 from sim_pilot.domain import Action, ExecutionResult, Observation
+from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
+from sim_pilot.openttd.models import OpenTTDObservationState
+from tests.openttd.gamescript.helpers import FakeBridgeTransport, sync_messages
 from tests.openttd.helpers import FakeOpenTTDClient, state
 
 
@@ -116,3 +120,50 @@ def test_stale_economy_rejects_action_without_rcon() -> None:
     assert validation.state_stale is True
     assert validation.code == "stale_observation"
     assert client.rcon_commands == []
+
+
+def test_adapter_combines_bridge_snapshot_and_negotiates_live_actions() -> None:
+    async def scenario() -> tuple[Observation, list[ActionDefinition]]:
+        admin = FakeOpenTTDClient()
+        bridge = GameScriptBridgeClient(
+            FakeBridgeTransport(sync_messages()),
+            company_id=0,
+            allow_writes=True,
+        )
+        adapter = OpenTTDAdapter(
+            admin,
+            bridge=bridge,
+            allow_gamescript_writes=True,
+        )
+        await adapter.initialize()
+        observation = await adapter.observe()
+        actions = await adapter.available_actions()
+        await adapter.shutdown()
+        return observation, actions
+
+    observation, actions = asyncio.run(scenario())
+    combined = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
+    assert combined.resources.town_count == 12
+    assert combined.resources.industry_count == 8
+    assert combined.bridge is not None
+    assert combined.bridge.script_instance_id == "bridge-instance"
+    assert combined.source_attribution.inconsistencies == ()
+    assert [action.type for action in actions] == ["set_company_name"]
+    assert "towns=12 industries=8 paused=False bridge=synchronized" in observation.summary
+
+
+def test_bridge_actions_remain_absent_without_separate_write_opt_in() -> None:
+    async def scenario() -> list[ActionDefinition]:
+        admin = FakeOpenTTDClient()
+        bridge = GameScriptBridgeClient(
+            FakeBridgeTransport(sync_messages()),
+            company_id=0,
+        )
+        adapter = OpenTTDAdapter(admin, bridge=bridge)
+        await adapter.initialize()
+        await adapter.observe()
+        actions = await adapter.available_actions()
+        await adapter.shutdown()
+        return actions
+
+    assert asyncio.run(scenario()) == []

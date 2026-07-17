@@ -14,6 +14,9 @@ from sim_pilot.adapters.base import (
     ActionParameterType,
 )
 from sim_pilot.domain import Action, ExecutionResult, Observation
+from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
+from sim_pilot.openttd.gamescript.errors import BridgeCommandError
+from sim_pilot.openttd.gamescript.models import BridgeHealth, SynchronizationState
 from sim_pilot.openttd.models import (
     OpenTTDAdapterCapabilities,
     OpenTTDClient,
@@ -22,6 +25,7 @@ from sim_pilot.openttd.models import (
 )
 
 SET_SERVER_NAME = "set_server_name"
+SET_COMPANY_NAME = "set_company_name"
 MAX_SERVER_NAME_BYTES = 79
 
 
@@ -57,6 +61,31 @@ class SetServerNameOpenTTDAction(BaseModel):
         return f'server_name "{self.name}"'
 
 
+class SetCompanyNameOpenTTDAction(BaseModel):
+    """The only Task 7A-verified GameScript company mutation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    action_type: Literal["set_company_name"] = SET_COMPANY_NAME
+    name: str = Field(min_length=1, max_length=128)
+
+    @classmethod
+    def from_action(cls, action: Action) -> SetCompanyNameOpenTTDAction:
+        if action.type != SET_COMPANY_NAME:
+            raise ValueError(f"unsupported OpenTTD GameScript action: {action.type}")
+        if set(action.parameters) != {"name"}:
+            raise ValueError("set_company_name requires exactly the 'name' parameter")
+        name = action.parameters.get("name")
+        if not isinstance(name, str):
+            raise ValueError("set_company_name name must be a string")
+        candidate = cls(name=name)
+        if candidate.name != candidate.name.strip():
+            raise ValueError("company name must not have leading or trailing whitespace")
+        if any(ord(character) < 32 for character in candidate.name):
+            raise ValueError("company name contains a control character")
+        return candidate
+
+
 class OpenTTDValidation(BaseModel):
     """Typed deterministic adapter validation result."""
 
@@ -81,29 +110,60 @@ class OpenTTDAdapter:
         allow_writes: bool = False,
         stale_days: int = 3,
         action_timeout_seconds: float = 5.0,
+        bridge: GameScriptBridgeClient | None = None,
+        allow_gamescript_writes: bool = False,
     ) -> None:
         self.client = client
         self.allow_writes = allow_writes
         self.stale_days = stale_days
         self.action_timeout_seconds = action_timeout_seconds
+        self.bridge = bridge
+        self.allow_gamescript_writes = allow_gamescript_writes
         self._initialized = False
         self._observation_sequence = 0
         self._pending_state: OpenTTDState | None = None
         self._last_observed_state: OpenTTDState | None = None
+        self._pending_bridge_health: BridgeHealth | None = None
+        self._last_bridge_health: BridgeHealth | None = None
 
     @property
     def capabilities(self) -> OpenTTDAdapterCapabilities:
-        writable = self._initialized and self.allow_writes
+        rcon_writable = self._initialized and self.allow_writes
+        bridge_health = self.bridge.health if self.bridge is not None else None
+        bridge_capabilities = None if bridge_health is None else bridge_health.capabilities
+        bridge_detected = (
+            bridge_health is not None
+            and bridge_health.synchronization_state is SynchronizationState.SYNCHRONIZED
+        )
+        bridge_actions = (
+            () if bridge_capabilities is None else bridge_capabilities.supported_actions
+        )
+        company_name_writable = (
+            bridge_detected and self.allow_gamescript_writes and SET_COMPANY_NAME in bridge_actions
+        )
         return OpenTTDAdapterCapabilities(
-            execute_actions=writable,
-            supports_reconciliation=writable,
-            supports_set_server_name=writable,
+            execute_actions=rcon_writable or company_name_writable,
+            supports_reconciliation=rcon_writable or company_name_writable,
+            supports_set_server_name=rcon_writable,
+            bridge_detected=bridge_detected,
+            supports_full_snapshots=(
+                bridge_detected
+                and bridge_capabilities is not None
+                and bridge_capabilities.full_snapshots
+            ),
+            supports_set_company_name=company_name_writable,
+            bridge_read_resources=(
+                () if bridge_capabilities is None else bridge_capabilities.readable_resources
+            ),
+            bridge_actions=bridge_actions,
         )
 
     async def initialize(self) -> None:
         await self.client.connect()
         try:
             self._pending_state = await self.client.collect_state()
+            if self.bridge is not None:
+                self._pending_bridge_health = await self.bridge.synchronize()
         except Exception:
             await self.client.close()
             raise
@@ -114,13 +174,23 @@ class OpenTTDAdapter:
         game_state = self._pending_state or await self.client.collect_state()
         self._pending_state = None
         self._last_observed_state = game_state
-        state = OpenTTDObservationState.from_game_state(game_state).model_copy(
-            update={
-                "adapter": OpenTTDObservationState.from_game_state(game_state).adapter.model_copy(
-                    update={"capabilities": self.capabilities}
-                )
-            }
-        )
+        bridge_health = self._pending_bridge_health
+        self._pending_bridge_health = None
+        if self.bridge is not None and bridge_health is None:
+            await self.bridge.refresh_snapshot()
+            bridge_health = self.bridge.health
+        self._last_bridge_health = bridge_health
+        if bridge_health is None:
+            basic = OpenTTDObservationState.from_game_state(game_state)
+            state = basic.model_copy(
+                update={
+                    "adapter": basic.adapter.model_copy(update={"capabilities": self.capabilities})
+                }
+            )
+        else:
+            state = OpenTTDObservationState.from_combined_state(
+                game_state, bridge_health, self.capabilities
+            )
         self._observation_sequence += 1
         company = game_state.company
         summary = (
@@ -129,6 +199,13 @@ class OpenTTDAdapter:
             f"profit={company.net_income_current_year} vehicles={company.vehicles.total} "
             f"facilities={company.station_facilities.total}"
         )
+        if bridge_health is not None and bridge_health.snapshot is not None:
+            summary += (
+                f" towns={bridge_health.snapshot.town_count}"
+                f" industries={bridge_health.snapshot.industry_count}"
+                f" paused={bridge_health.snapshot.paused}"
+                f" bridge={bridge_health.synchronization_state.value}"
+            )
         return Observation(
             sequence=self._observation_sequence,
             timestamp=datetime.now(UTC),
@@ -139,26 +216,45 @@ class OpenTTDAdapter:
 
     async def available_actions(self) -> list[ActionDefinition]:
         self._require_initialized()
-        if not self.capabilities.supports_set_server_name:
-            return []
-        return [
-            ActionDefinition(
-                type=SET_SERVER_NAME,
-                parameters=(
-                    ActionParameterDefinition(
-                        name="name",
-                        type=ActionParameterType.STRING,
+        actions: list[ActionDefinition] = []
+        if self.capabilities.supports_set_server_name:
+            actions.append(
+                ActionDefinition(
+                    type=SET_SERVER_NAME,
+                    parameters=(
+                        ActionParameterDefinition(
+                            name="name",
+                            type=ActionParameterType.STRING,
+                        ),
                     ),
-                ),
-                description=(
-                    "Set the dedicated server name through Admin Network RCON; "
-                    "verified after reconnecting to SERVER_WELCOME."
-                ),
+                    description=(
+                        "Set the dedicated server name through Admin Network RCON; "
+                        "verified after reconnecting to SERVER_WELCOME."
+                    ),
+                )
             )
-        ]
+        if self.capabilities.supports_set_company_name:
+            actions.append(
+                ActionDefinition(
+                    type=SET_COMPANY_NAME,
+                    parameters=(
+                        ActionParameterDefinition(
+                            name="name",
+                            type=ActionParameterType.STRING,
+                        ),
+                    ),
+                    description=(
+                        "Set the selected existing company's name through GameScript; "
+                        "test-mode checked and verified by a fresh bridge snapshot."
+                    ),
+                )
+            )
+        return actions
 
     async def validate(self, action: Action) -> OpenTTDValidation:
         self._require_initialized()
+        if action.type == SET_COMPANY_NAME:
+            return await self._validate_company_name(action)
         if not self.allow_writes:
             return self._invalid("writes_disabled", "OpenTTD writes require explicit opt-in")
         try:
@@ -185,6 +281,8 @@ class OpenTTDAdapter:
 
     async def execute(self, action: Action) -> ExecutionResult:
         self._require_initialized()
+        if action.type == SET_COMPANY_NAME:
+            return await self._execute_company_name(action)
         if not self.allow_writes:
             return ExecutionResult(
                 success=False,
@@ -222,9 +320,94 @@ class OpenTTDAdapter:
         )
 
     async def shutdown(self) -> None:
-        await self.client.close()
+        if self.bridge is None:
+            await self.client.close()
+        else:
+            await self.bridge.close()
         self._initialized = False
         self._pending_state = None
+        self._pending_bridge_health = None
+
+    async def _validate_company_name(self, action: Action) -> OpenTTDValidation:
+        if not self.allow_gamescript_writes:
+            return self._invalid("writes_disabled", "GameScript writes require explicit opt-in")
+        if self.bridge is None or not self.capabilities.supports_set_company_name:
+            return self._invalid(
+                "unsupported_action", "running bridge does not support set_company_name"
+            )
+        try:
+            typed = SetCompanyNameOpenTTDAction.from_action(action)
+        except ValueError as error:
+            return self._invalid("invalid_action", str(error))
+        before = self._last_bridge_health
+        if before is None or before.snapshot is None:
+            return self._invalid(
+                "missing_observation", "a bridge observation is required before execution"
+            )
+        await self.bridge.refresh_snapshot()
+        fresh = self.bridge.health
+        self._pending_bridge_health = fresh
+        if fresh.snapshot is None or fresh.snapshot.company is None:
+            return self._invalid("invalid_company", "selected company is unavailable")
+        if before.script_instance_id != fresh.script_instance_id:
+            return self._invalid(
+                "stale_observation",
+                "GameScript identity changed after observation",
+                state_stale=True,
+            )
+        if before.snapshot.company is None or (
+            before.snapshot.company.name != fresh.snapshot.company.name
+        ):
+            return self._invalid(
+                "stale_observation", "company name changed after observation", state_stale=True
+            )
+        if fresh.snapshot.company.name == typed.name:
+            return self._invalid("already_satisfied", "company name already has requested value")
+        return OpenTTDValidation(
+            valid=True,
+            message="OpenTTD company-name change is valid",
+            code="valid",
+        )
+
+    async def _execute_company_name(self, action: Action) -> ExecutionResult:
+        if not self.allow_gamescript_writes or self.bridge is None:
+            return ExecutionResult(
+                success=False,
+                state_changed=False,
+                cost=0.0,
+                message="GameScript write was not sent because write opt-in is disabled.",
+            )
+        typed = SetCompanyNameOpenTTDAction.from_action(action)
+        health = self._pending_bridge_health or self.bridge.health
+        if health.snapshot is None:
+            return ExecutionResult(
+                success=False,
+                state_changed=False,
+                cost=0.0,
+                message="GameScript write was not sent because no synchronized snapshot exists.",
+            )
+        try:
+            completed, _ = await self.bridge.execute_set_company_name(
+                name=typed.name,
+                prior_snapshot_id=health.snapshot.snapshot_id,
+            )
+        except BridgeCommandError as error:
+            return ExecutionResult(
+                success=False,
+                state_changed=False,
+                cost=0.0,
+                message=str(error),
+            )
+        self._pending_bridge_health = self.bridge.health
+        return ExecutionResult(
+            success=True,
+            state_changed=completed.state_changed,
+            cost=float(completed.cost),
+            message=(
+                f"GameScript command {completed.command_id} completed and a fresh snapshot "
+                f"verified company name {completed.after_name!r}."
+            ),
+        )
 
     def _drift_reason(self, before: OpenTTDState, current: OpenTTDState) -> str | None:
         if before.connection != current.connection or before.map != current.map:

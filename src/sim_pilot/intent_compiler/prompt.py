@@ -39,7 +39,7 @@ REFERENCE_CAPABILITIES = CompilerCapabilityCatalog(
 )
 
 OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
-    name="openttd_admin_network_v3",
+    name="openttd_admin_network_v3_gamescript_v1",
     adapter_type="openttd",
     resources=(
         "cash",
@@ -50,9 +50,13 @@ OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
         "station_count",
         "date_raw",
         "server_name",
+        "paused",
+        "town_count",
+        "industry_count",
+        "company_name",
     ),
-    actions=("set_server_name",),
-    string_resources=("server_name",),
+    actions=("set_server_name", "set_company_name"),
+    string_resources=("server_name", "company_name"),
 )
 
 INTENT_COMPILER_PROMPT = f"""

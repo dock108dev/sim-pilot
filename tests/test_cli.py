@@ -13,7 +13,10 @@ from sim_pilot.domain import Observation
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from sim_pilot.openttd.config import OpenTTDConfiguration
+from sim_pilot.openttd.gamescript.models import BridgeHealth, SynchronizationState
+from sim_pilot.openttd.models import OpenTTDAdapterCapabilities, OpenTTDObservationState
 from tests.intent_compiler.helpers import response, valid_specification
+from tests.openttd.gamescript.helpers import capabilities, snapshot
 from tests.openttd.helpers import FakeOpenTTDClient, state
 
 
@@ -302,6 +305,54 @@ def test_openttd_observe_uses_local_observation_path(
 
     assert result.exit_code == 0, result.output
     assert "Local fixture observation." in result.output
+
+
+def test_openttd_bridge_doctor_reports_negotiated_health(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    health = BridgeHealth(
+        connected=True,
+        authenticated=True,
+        openttd_version="15.3",
+        bridge_detected=True,
+        bridge_protocol_version=1,
+        script_version=1,
+        script_instance_id="cli-bridge",
+        last_sequence=4,
+        last_snapshot_at=datetime.now(UTC),
+        synchronization_state=SynchronizationState.SYNCHRONIZED,
+        active_company_context=0,
+        capability_fingerprint=capabilities().fingerprint,
+        capabilities=capabilities(),
+        snapshot=snapshot(),
+    )
+    combined = OpenTTDObservationState.from_combined_state(
+        state(),
+        health,
+        OpenTTDAdapterCapabilities(
+            bridge_detected=True,
+            supports_full_snapshots=True,
+            bridge_read_resources=capabilities().readable_resources,
+            bridge_actions=capabilities().supported_actions,
+        ),
+    )
+    observation = Observation(
+        sequence=1,
+        timestamp=datetime.now(UTC),
+        tick=712223,
+        summary="Combined fixture.",
+        state=combined.model_dump(mode="json"),
+    )
+
+    async def capture() -> tuple[Observation, BridgeHealth]:
+        return observation, health
+
+    monkeypatch.setattr("sim_pilot.cli._bridge_observation", capture)
+    result = CliRunner().invoke(app, ["openttd", "bridge", "doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert '"script_instance_id": "cli-bridge"' in result.output
+    assert '"synchronization_state": "synchronized"' in result.output
 
 
 def test_openttd_watch_is_bounded_and_emits_changes(

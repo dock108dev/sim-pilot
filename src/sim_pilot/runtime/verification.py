@@ -63,6 +63,13 @@ class ActionVerifier:
                 and self._resource(before, "server_name") != requested
                 and self._resource(after, "server_name") == requested
             )
+        elif action.type == "set_company_name":
+            requested = action.parameters.get("name")
+            effect = (
+                isinstance(requested, str)
+                and self._resource(before, "company_name") != requested
+                and self._resource(after, "company_name") == requested
+            )
         if not effect:
             reasons.append(f"expected effect was not observed for action: {action.type}")
         return VerificationResult(verified=not reasons, reasons=tuple(reasons))

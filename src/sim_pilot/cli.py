@@ -62,6 +62,8 @@ from sim_pilot.openttd import (
     OpenTTDObservationState,
     openttd_configuration,
 )
+from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
+from sim_pilot.openttd.gamescript.models import BridgeHealth
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
     SQLiteUnitOfWork,
@@ -98,10 +100,14 @@ task_app = typer.Typer(help="Create and operate structured tasks.")
 recovery_app = typer.Typer(help="Inspect and resolve interrupted action attempts.")
 openttd_app = typer.Typer(help="Observe a local OpenTTD 15.3 game through its admin port.")
 openttd_action_app = typer.Typer(help="Run a directly validated and verified OpenTTD action.")
+openttd_bridge_app = typer.Typer(help="Operate the versioned OpenTTD GameScript bridge.")
+openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled bridge action.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
 openttd_app.add_typer(openttd_action_app, name="action")
+openttd_app.add_typer(openttd_bridge_app, name="bridge")
+openttd_bridge_app.add_typer(openttd_bridge_action_app, name="action")
 task_app.add_typer(recovery_app, name="recovery")
 
 
@@ -167,7 +173,15 @@ def _intent_compiler(
 
 def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
     if _is_openttd_specification(context.task.specification):
-        return _openttd_adapter()
+        prior_health: BridgeHealth | None = None
+        if context.checkpoint is not None:
+            raw = context.checkpoint.state.get("bridge")
+            if isinstance(raw, dict):
+                prior_health = BridgeHealth.model_validate(raw, strict=True)
+        return _openttd_adapter(
+            prior_bridge_health=prior_health,
+            reject_bridge_identity_change=prior_health is not None,
+        )
     if context.checkpoint is None:
         return ReferenceSimulationAdapter()
     return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
@@ -178,13 +192,18 @@ class ReferenceDemoDecisionProvider:
         action_type = "advance_time"
         parameters: dict[str, JsonValue] = {"ticks": 1}
         expected_effect = "Advance one simulation tick."
-        if any(action.type == "set_server_name" for action in context.available_actions):
+        resource = context.specification.objective.parameters.get("resource")
+        if resource in {"server_name", "company_name"}:
             target = context.specification.objective.parameters.get("target")
             if not isinstance(target, str):
                 raise DecisionProviderNotConfiguredError(
-                    "scripted OpenTTD decision requires a string server_name target"
+                    f"scripted OpenTTD decision requires a string {resource} target"
                 )
-            action_type = "set_server_name"
+            action_type = "set_company_name" if resource == "company_name" else "set_server_name"
+            if not any(action.type == action_type for action in context.available_actions):
+                raise DecisionProviderNotConfiguredError(
+                    f"scripted OpenTTD decision requires advertised {action_type}"
+                )
             parameters = {"name": target}
             expected_effect = f"Set the observed OpenTTD server name to {target!r}."
         return DecisionProviderResult(
@@ -249,14 +268,35 @@ def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
     raise typer.Exit(code)
 
 
-def _openttd_adapter() -> OpenTTDAdapter:
+def _openttd_adapter(
+    *,
+    enable_bridge: bool | None = None,
+    prior_bridge_health: BridgeHealth | None = None,
+    reject_bridge_identity_change: bool = False,
+) -> OpenTTDAdapter:
     """Compose only the local adapter; never initialize a hosted provider."""
     configuration = openttd_configuration()
+    client = OpenTTDAdminClient(configuration)
+    bridge_enabled = configuration.gamescript_enabled if enable_bridge is None else enable_bridge
+    bridge = (
+        GameScriptBridgeClient(
+            client,
+            company_id=configuration.company_id,
+            allow_writes=configuration.allow_gamescript_writes,
+            timeout_seconds=configuration.observation_timeout_seconds,
+            prior_health=prior_bridge_health,
+            reject_instance_change=reject_bridge_identity_change,
+        )
+        if bridge_enabled
+        else None
+    )
     return OpenTTDAdapter(
-        OpenTTDAdminClient(configuration),
+        client,
         allow_writes=configuration.allow_writes,
         stale_days=configuration.stale_observation_threshold_days,
         action_timeout_seconds=configuration.action_timeout_seconds,
+        bridge=bridge,
+        allow_gamescript_writes=configuration.allow_gamescript_writes,
     )
 
 
@@ -360,7 +400,7 @@ def openttd_watch(
         try:
             for index in range(count):
                 observation = await adapter.observe()
-                state = OpenTTDObservationState.model_validate(observation.state, strict=True)
+                state = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
                 current = {
                     "date": state.resources.date,
                     "cash": state.resources.cash,
@@ -386,6 +426,162 @@ def openttd_watch(
 
     try:
         asyncio.run(watch())
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+async def _bridge_observation() -> tuple[Observation, BridgeHealth]:
+    adapter = _openttd_adapter(enable_bridge=True)
+    await adapter.initialize()
+    try:
+        observation = await adapter.observe()
+        if adapter.bridge is None:
+            raise ValueError("GameScript bridge composition is unavailable")
+        return observation, adapter.bridge.health
+    finally:
+        await adapter.shutdown()
+
+
+@openttd_bridge_app.command("doctor")
+def openttd_bridge_doctor() -> None:
+    """Connect, negotiate, synchronize, and display bridge health."""
+    try:
+        observation, health = asyncio.run(_bridge_observation())
+        state = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
+        _emit(
+            {
+                "admin_protocol_version": state.game.connection.protocol_version,
+                "openttd_version": state.game.connection.openttd_version,
+                "selected_company": state.game.company.company_id,
+                "bridge": health.model_dump(mode="json"),
+                "snapshot_age_seconds": (
+                    None
+                    if health.last_snapshot_at is None
+                    else max(
+                        0.0,
+                        (datetime.now(UTC) - health.last_snapshot_at).total_seconds(),
+                    )
+                ),
+            }
+        )
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_bridge_app.command("capabilities")
+def openttd_bridge_capabilities() -> None:
+    """Display capabilities negotiated from the running GameScript."""
+    try:
+        _, health = asyncio.run(_bridge_observation())
+        _emit(
+            {
+                "capability_fingerprint": health.capability_fingerprint,
+                "capabilities": (
+                    None
+                    if health.capabilities is None
+                    else health.capabilities.model_dump(mode="json")
+                ),
+            }
+        )
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_bridge_app.command("observe")
+def openttd_bridge_observe() -> None:
+    """Capture one combined Admin Network and GameScript observation."""
+    try:
+        observation, _ = asyncio.run(_bridge_observation())
+        _emit(observation)
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_bridge_app.command("sync")
+def openttd_bridge_sync() -> None:
+    """Force a full bridge resynchronization and display its identity."""
+    try:
+        _, health = asyncio.run(_bridge_observation())
+        _emit(health)
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_bridge_app.command("watch")
+def openttd_bridge_watch(
+    count: Annotated[int, typer.Option(min=1, help="Bounded snapshot count.")] = 10,
+) -> None:
+    """Print a bounded stream of synchronized full snapshots."""
+
+    async def watch() -> None:
+        configuration = openttd_configuration()
+        adapter = _openttd_adapter(enable_bridge=True)
+        await adapter.initialize()
+        try:
+            for index in range(count):
+                observation = await adapter.observe()
+                state = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
+                _emit(
+                    {
+                        "observation_sequence": observation.sequence,
+                        "game_date": observation.tick,
+                        "bridge_sequence": (
+                            None if state.bridge is None else state.bridge.last_sequence
+                        ),
+                        "snapshot": (
+                            None
+                            if state.bridge is None or state.bridge.snapshot is None
+                            else state.bridge.snapshot.model_dump(mode="json")
+                        ),
+                    }
+                )
+                if index + 1 < count:
+                    await asyncio.sleep(configuration.polling_interval_seconds)
+        finally:
+            await adapter.shutdown()
+
+    try:
+        asyncio.run(watch())
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_bridge_action_app.command("set-company-name")
+def openttd_bridge_set_company_name(name: str) -> None:
+    """Run the sole verified GameScript mutation with fresh-snapshot verification."""
+
+    async def run() -> dict[str, object]:
+        adapter = _openttd_adapter(enable_bridge=True)
+        verifier = ActionVerifier()
+        action = Action(
+            type="set_company_name",
+            parameters={"name": name},
+            expected_effect=f"Set the selected OpenTTD company name to {name!r}.",
+        )
+        await adapter.initialize()
+        try:
+            before = await adapter.observe()
+            validation = await adapter.validate(action)
+            if not validation.valid:
+                raise ValueError(validation.message)
+            result = await adapter.execute(action)
+            after = await adapter.observe()
+            verification = verifier.verify(before, action, result, after, validation.estimated_cost)
+            if not verification.verified:
+                raise ValueError("; ".join(verification.reasons))
+            return {
+                "action": action.model_dump(mode="json"),
+                "validation": validation.model_dump(mode="json"),
+                "result": result.model_dump(mode="json"),
+                "verification": verification.model_dump(mode="json"),
+                "before": before.model_dump(mode="json"),
+                "after": after.model_dump(mode="json"),
+            }
+        finally:
+            await adapter.shutdown()
+
+    try:
+        _emit(asyncio.run(run()))
     except (OpenTTDError, ValidationError, ValueError) as error:
         _fail(error, OPENTTD_FAILURE)
 
