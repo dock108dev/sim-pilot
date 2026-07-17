@@ -37,9 +37,10 @@ state concurrently.
 1. Download the official OpenTTD 15.3 macOS package from the
    [15.3 download page](https://www.openttd.org/downloads/openttd-releases/15.3), verify its published
    checksum, and place `OpenTTD.app` in `/Applications`.
-2. Create a dedicated local configuration directory outside the repository. OpenTTD 15.3 stores
-   ordinary settings in `openttd.cfg`, private bind lists in `private.cfg`, and secrets in
-   `secrets.cfg`.
+2. Use OpenTTD's normal macOS profile at `$HOME/Documents/OpenTTD`. OpenTTD 15.3 stores ordinary
+   settings in `openttd.cfg`, private bind lists in `private.cfg`, and secrets in `secrets.cfg`.
+   A custom `-c` path does not relocate the companion files to the custom file's directory; when
+   using `-c`, first change the working directory to the directory containing all three files.
 3. Configure the following local-only values:
 
 `openttd.cfg`:
@@ -67,14 +68,25 @@ admin_password = replace-with-a-local-secret
 Launch a dedicated game or deterministic test save:
 
 ```bash
+cd "$HOME/Documents/OpenTTD"
 /Applications/OpenTTD.app/Contents/MacOS/openttd \
   -D 127.0.0.1:3979 \
-  -c "$HOME/.config/sim-pilot-openttd/openttd.cfg" \
   -g "$HOME/Documents/OpenTTD/save/sim-pilot-test.sav"
 ```
 
 The `-g` value can be omitted to start a new game. The map generation seed is included in every
 observation; Task 6B does not claim deterministic live execution or restore the test save.
+
+On the validated development machine, the same profile contains mode-`0700` convenience scripts:
+
+```bash
+$HOME/Documents/OpenTTD/start-sim-pilot-server.sh
+$HOME/Documents/OpenTTD/stop-sim-pilot-server.sh
+source $HOME/Documents/OpenTTD/sim-pilot.env
+```
+
+The start script launches a detached loopback-only server with seed `12345` and creates a SimpleAI
+company for observation. The environment file and `secrets.cfg` are mode `0600`.
 
 Configure Sim Pilot in a separate shell:
 
