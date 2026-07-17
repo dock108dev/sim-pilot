@@ -8,6 +8,8 @@ from sim_pilot.runtime.action_attempts import (
     ReconciliationClassification,
     RecoveryResolution,
 )
+from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
+from sim_pilot.runtime.decision_errors import DecisionProviderError
 from sim_pilot.runtime.errors import DurablePersistenceError, ReconstructionConsistencyError
 from sim_pilot.runtime.models import (
     RuntimeConfiguration,
@@ -31,6 +33,9 @@ __all__ = [
     "ActionAttemptStatus",
     "CrashPoint",
     "DurablePersistenceError",
+    "DecisionContext",
+    "DecisionProviderError",
+    "DecisionProviderResult",
     "EventStore",
     "InMemoryEventStore",
     "ReconstructedRuntimeContext",

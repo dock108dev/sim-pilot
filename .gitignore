@@ -9,3 +9,4 @@ data/*.db-journal
 data/*.db-shm
 data/*.db-wal
 data/compiler-recordings/
+data/decision-recordings/

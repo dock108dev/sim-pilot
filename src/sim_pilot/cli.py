@@ -15,7 +15,16 @@ from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
-from sim_pilot.config import compiler_model, database_url
+from sim_pilot.config import (
+    compiler_model,
+    database_url,
+    decision_model,
+    decision_timeout_seconds,
+)
+from sim_pilot.decision_provider import (
+    OpenAIDecisionProvider,
+    RecordingDecisionProvider,
+)
 from sim_pilot.domain import (
     Action,
     AuthorityPolicy,
@@ -23,7 +32,6 @@ from sim_pilot.domain import (
     DecisionType,
     Objective,
     ObjectiveType,
-    Observation,
     Task,
     TaskSpecification,
     TaskStatus,
@@ -45,9 +53,16 @@ from sim_pilot.persistence.sqlite import (
     create_sqlite_engine,
     upgrade_database,
 )
+from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
+from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
+from sim_pilot.runtime.decision_errors import (
+    DecisionProviderError,
+    DecisionProviderNotConfiguredError,
+)
 from sim_pilot.runtime.errors import DurablePersistenceError, ReconstructionConsistencyError
+from sim_pilot.runtime.interfaces import DecisionProvider
 from sim_pilot.runtime.reconstruction import ReconstructedRuntimeContext
 
 SUCCESS = 0
@@ -76,6 +91,12 @@ class CLIContext:
 
 class CompilerProviderName(StrEnum):
     NONE = "none"
+    OPENAI = "openai"
+
+
+class DecisionProviderName(StrEnum):
+    NONE = "none"
+    SCRIPTED = "scripted"
     OPENAI = "openai"
 
 
@@ -120,17 +141,45 @@ def _restore(context: ReconstructedRuntimeContext) -> ReferenceSimulationAdapter
 
 
 class ReferenceDemoDecisionProvider:
-    async def decide(self, task: Task, observation: Observation) -> Decision:
-        del task, observation
-        return Decision(
-            type=DecisionType.EXECUTE,
-            reason="Advance the deterministic reference simulation.",
-            action=Action(
-                type="advance_time",
-                parameters={"ticks": 1},
-                expected_effect="Advance one simulation tick.",
+    async def decide(self, context: DecisionContext) -> DecisionProviderResult:
+        del context
+        return DecisionProviderResult(
+            decision=Decision(
+                type=DecisionType.EXECUTE,
+                reason="Advance the deterministic reference simulation.",
+                action=Action(
+                    type="advance_time",
+                    parameters={"ticks": 1},
+                    expected_effect="Advance one simulation tick.",
+                ),
+            ),
+            metadata=ProviderMetadata(
+                provider="scripted",
+                prompt_version="decision-provider-v1",
+                validation_result="scripted",
             ),
         )
+
+
+def _decision_provider(
+    provider_name: DecisionProviderName,
+    recording_directory: Path | None,
+) -> DecisionProvider:
+    provider: DecisionProvider
+    if provider_name is DecisionProviderName.NONE:
+        raise DecisionProviderNotConfiguredError(
+            "no decision provider configured; select --decision-provider openai or scripted"
+        )
+    if provider_name is DecisionProviderName.OPENAI:
+        provider = OpenAIDecisionProvider(
+            model=decision_model(),
+            timeout_seconds=decision_timeout_seconds(),
+        )
+    else:
+        provider = ReferenceDemoDecisionProvider()
+    if recording_directory is not None:
+        provider = RecordingDecisionProvider(provider, recording_directory)
+    return provider
 
 
 def _exit_for(status: TaskStatus, recovery: bool = False) -> int:
@@ -259,17 +308,46 @@ def task_compile(
         raise typer.Exit(INVALID_INPUT)
 
 
-async def _run_task(ctx: typer.Context, task_id: UUID, iterations: int | None) -> int:
+async def _run_task(
+    ctx: typer.Context,
+    task_id: UUID,
+    iterations: int | None,
+    decision_provider_name: DecisionProviderName,
+    recording_directory: Path | None,
+) -> int:
+    decision_provider = _decision_provider(decision_provider_name, recording_directory)
     engine, runtime = _runtime(ctx)
     try:
         outcome = await runtime.resume(
             task_id,
             _restore,
-            ReferenceDemoDecisionProvider(),
+            decision_provider,
             iteration_budget=iterations,
         )
         context = runtime.reconstruct(task_id)
         _emit(outcome)
+        decision_event = next(
+            (
+                event
+                for event in reversed(context.events)
+                if event.event_type.value == "decision_generated"
+            ),
+            None,
+        )
+        if decision_event is not None:
+            metadata = decision_event.payload.get("provider_metadata")
+            action = decision_event.payload.get("action")
+            _emit(
+                {
+                    "decision_metadata": {
+                        "decision_type": decision_event.payload.get("type"),
+                        "selected_action": (
+                            action.get("type") if isinstance(action, dict) else None
+                        ),
+                        "provider": metadata,
+                    }
+                }
+            )
         return _exit_for(outcome.status, context.unresolved_attempt is not None)
     finally:
         engine.dispose()
@@ -280,9 +358,26 @@ def task_run(
     ctx: typer.Context,
     task_id: UUID,
     iterations: Annotated[int | None, typer.Option(min=1)] = None,
+    decision_provider: Annotated[
+        DecisionProviderName,
+        typer.Option(
+            "--decision-provider",
+            help="Runtime decision provider; hosted access is always explicit.",
+        ),
+    ] = DecisionProviderName.NONE,
+    record_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--record-dir",
+            file_okay=False,
+            help="Opt in to local decision context and response recordings.",
+        ),
+    ] = None,
 ) -> None:
     try:
-        code = asyncio.run(_run_task(ctx, task_id, iterations))
+        code = asyncio.run(_run_task(ctx, task_id, iterations, decision_provider, record_dir))
+    except DecisionProviderError as error:
+        _fail(error, INVALID_INPUT)
     except (PersistenceError, DurablePersistenceError, ReconstructionConsistencyError) as error:
         _fail(error)
     raise typer.Exit(code)
@@ -293,8 +388,19 @@ def task_resume(
     ctx: typer.Context,
     task_id: UUID,
     iterations: Annotated[int | None, typer.Option(min=1)] = None,
+    decision_provider: Annotated[
+        DecisionProviderName,
+        typer.Option(
+            "--decision-provider",
+            help="Runtime decision provider; hosted access is always explicit.",
+        ),
+    ] = DecisionProviderName.NONE,
+    record_dir: Annotated[
+        Path | None,
+        typer.Option("--record-dir", file_okay=False),
+    ] = None,
 ) -> None:
-    task_run(ctx, task_id, iterations)
+    task_run(ctx, task_id, iterations, decision_provider, record_dir)
 
 
 @task_app.command("show")

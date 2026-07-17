@@ -166,6 +166,10 @@ def test_repositories_do_not_import_runtime_policy_or_execution() -> None:
 
 def test_openai_sdk_is_isolated_to_openai_provider() -> None:
     files = (PACKAGE_ROOT).rglob("*.py")
+    provider_modules = {
+        PACKAGE_ROOT / "intent_compiler" / "providers" / "openai.py",
+        PACKAGE_ROOT / "decision_provider" / "providers" / "openai.py",
+    }
     violations = {
         str(path.relative_to(PACKAGE_ROOT)): sorted(
             module
@@ -173,7 +177,7 @@ def test_openai_sdk_is_isolated_to_openai_provider() -> None:
             if module == "openai" or module.startswith("openai.")
         )
         for path in files
-        if path != PACKAGE_ROOT / "intent_compiler" / "providers" / "openai.py"
+        if path not in provider_modules
     }
     assert not {path: modules for path, modules in violations.items() if modules}
 
@@ -181,6 +185,21 @@ def test_openai_sdk_is_isolated_to_openai_provider() -> None:
 def test_runtime_does_not_import_intent_compiler_or_provider_sdk() -> None:
     files = (PACKAGE_ROOT / "runtime").rglob("*.py")
     forbidden = ("sim_pilot.intent_compiler", "openai")
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_decision_providers_do_not_import_adapters_or_sqlite() -> None:
+    files = (PACKAGE_ROOT / "decision_provider").rglob("*.py")
+    forbidden = (
+        "sim_pilot.adapters.reference",
+        "sim_pilot.persistence.sqlite",
+    )
     violations = {
         str(path.relative_to(PACKAGE_ROOT)): sorted(
             module for module in imported_modules(path) if module.startswith(forbidden)

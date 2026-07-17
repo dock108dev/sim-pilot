@@ -1,1 +1,17 @@
-"""Simulation adapter interfaces and implementations."""
+"""Generic simulation adapter contracts and capability schemas."""
+
+from sim_pilot.adapters.base import (
+    ActionDefinition,
+    ActionParameterDefinition,
+    ActionParameterType,
+    AdapterSnapshot,
+    SimulationAdapter,
+)
+
+__all__ = [
+    "ActionDefinition",
+    "ActionParameterDefinition",
+    "ActionParameterType",
+    "AdapterSnapshot",
+    "SimulationAdapter",
+]

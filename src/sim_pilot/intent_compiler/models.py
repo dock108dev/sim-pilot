@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from sim_pilot.domain import TaskSpecification
+from sim_pilot.provider_metadata import ProviderMetadata, ProviderTokenUsage
 
 
 class CompilerModel(BaseModel):
@@ -38,16 +39,8 @@ class CompilerResponse(CompilerModel):
     ambiguities: tuple[str, ...]
 
 
-class CompilerTokenUsage(CompilerModel):
-    input_tokens: int = Field(ge=0)
-    output_tokens: int = Field(ge=0)
-    total_tokens: int = Field(ge=0)
-
-
-class CompilerProviderMetadata(CompilerModel):
-    provider: str = Field(min_length=1)
-    model: str | None = None
-    token_usage: CompilerTokenUsage | None = None
+CompilerTokenUsage = ProviderTokenUsage
+CompilerProviderMetadata = ProviderMetadata
 
 
 class CompilerProviderResult(CompilerModel):

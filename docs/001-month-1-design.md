@@ -242,12 +242,50 @@ TaskSpecification
 
 ## Decision Engine
 
-Produces the next runtime decision using:
+Produces the next runtime decision through a provider-independent boundary. The contract is:
 
-- task specification
-- current observation
-- available actions
-- execution history
+```text
+DecisionProvider.decide(DecisionContext) -> DecisionProviderResult
+```
+
+`DecisionProviderResult` contains exactly one strict `Decision` plus shared provider metadata. The
+provider never executes actions, queries persistence, contacts an adapter, evaluates policy,
+approves actions, or determines final completion.
+
+`DecisionContext` contains:
+
+- task identifier and complete task specification
+- current and previous observation
+- exact advertised action and parameter schemas
+- bounded recent relevant event summaries
+- accumulated spend and remaining authority
+- forbidden, allowed, rejected, and denied action summaries
+- previous action, execution result, and verification when available
+- durable safeguard counters
+- deterministic evaluator progress
+
+The runtime constructs this context through a pure projector. It retains at most 20 relevant events
+and 65,536 serialized bytes by default, removes oldest relevant events first, and rejects an
+oversized base context. Canonical JSON uses sorted keys and compact separators, so identical inputs
+serialize identically. Providers do not receive raw repository rows or unbounded event streams.
+
+The model-backed prompt is versioned as `decision-provider-v1`. It permits only one decision and
+only advertised actions. Provider output is validated for decision/action consistency, action
+existence, exact parameter names, parameter types and bounds, finite non-negative estimated cost,
+action fingerprinting, and evaluator-confirmed completion. Invalid output is never materially
+repaired.
+
+Decision provider failures are typed as authentication, timeout, rate limit, unavailable,
+malformed structured output, semantic validation, context too large, refusal, empty response,
+unconfigured provider, or recording failure. OpenAI transient failures retry once; semantic
+invalidity does not retry. Exhausted hosted failures atomically record `DecisionProviderFailed` and
+`TaskFailed`, then follow normal adapter shutdown. Scripted exhaustion retains its existing blocked
+behavior.
+
+CLI composition defaults to no decision provider. Hosted execution requires explicit
+`--decision-provider openai`; environment variables configure a selected provider but never select
+one. Provider metadata in `DecisionGenerated` includes provider, model, request ID when available,
+token usage, latency, prompt version, and validation result. Full prompts are not persisted.
 
 Returns
 
@@ -534,9 +572,9 @@ class SimulationAdapter(Protocol):
 14. Repeat until terminal or suspended.
 15. Shut down the adapter on every exit path.
 
-The runtime depends on a decision-provider interface. Task 3 supplies a scripted implementation
-that returns one decision per request and fails deterministically when exhausted. LLM providers are
-out of scope.
+The runtime depends only on the decision-provider interface. The scripted implementation returns
+one decision per request and fails deterministically when exhausted. Task 6A adds an OpenAI
+implementation behind the same interface without changing the execution sequence.
 
 Policy evaluation and adapter validation do not mutate state. The adapter owns simulation-specific
 validity; the policy engine owns constraints and authority. `maximum_single_spend` is the autonomous
@@ -736,6 +774,7 @@ resolved_at
 - TaskStarted
 - ObservationRecorded
 - DecisionGenerated
+- DecisionProviderFailed
 - PolicyValidated
 - ActionExecuted
 - ActionRejected
@@ -956,3 +995,5 @@ Validate
 | OQ-007 | Safeguard recovery | Resolved: minimal counters/fingerprints stored on task snapshot |
 | OQ-008 | Default compiler provider | Resolved: none; hosted access requires `--provider openai` |
 | OQ-009 | Compiler request telemetry | Resolved: typed result envelope plus opt-in atomic JSON recorder |
+| OQ-010 | Runtime decision provider | Resolved: bounded context plus explicit scripted/OpenAI/unconfigured providers |
+| OQ-011 | Decision provider recording | Resolved: opt-in redacted atomic JSON; recording failure blocks execution |

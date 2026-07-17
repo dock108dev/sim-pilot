@@ -26,6 +26,8 @@ from sim_pilot.runtime.action_attempts import (
     action_fingerprint,
     observation_fingerprint,
 )
+from sim_pilot.runtime.decision_context import DecisionContextProjector
+from sim_pilot.runtime.decision_errors import DecisionProviderError
 from sim_pilot.runtime.decisions import ScriptedDecisionExhaustedError
 from sim_pilot.runtime.errors import DurablePersistenceError
 from sim_pilot.runtime.evaluator import ProgressEvaluator
@@ -83,6 +85,10 @@ class RuntimeEngine:
         self.reconstructor = RuntimeReconstructor(unit_of_work_factory)
         self.event_store = RepositoryEventView(unit_of_work_factory)
         self.configuration = configuration or RuntimeConfiguration()
+        self.decision_context_projector = DecisionContextProjector(
+            max_recent_events=self.configuration.decision_context_event_limit,
+            max_serialized_bytes=self.configuration.decision_context_max_bytes,
+        )
         self.cancellation_check = cancellation_check or never_cancel
         self.crash_hook = crash_hook
         self.evaluator = ProgressEvaluator()
@@ -475,7 +481,17 @@ class RuntimeEngine:
                 decision = None
                 if approved_action is None:
                     try:
-                        decision = await decision_provider.decide(current.task, observation)
+                        available_actions = await adapter.available_actions()
+                        decision_context = self.decision_context_projector.project(
+                            task=current.task,
+                            observation=observation,
+                            available_actions=available_actions,
+                            events=self.event_store.list_events(current.task.id),
+                            runtime_state=runtime_state,
+                            progress=evaluation,
+                        )
+                        provider_result = await decision_provider.decide(decision_context)
+                        decision = provider_result.decision
                     except ScriptedDecisionExhaustedError as error:
                         reason = str(error)
                         drafts.append(EventDraft(RuntimeEventType.TASK_BLOCKED, {"reason": reason}))
@@ -487,10 +503,41 @@ class RuntimeEngine:
                             self._snapshot(adapter, observation),
                         )
                         break
+                    except DecisionProviderError as error:
+                        reason = str(error)
+                        drafts.extend(
+                            (
+                                EventDraft(
+                                    RuntimeEventType.DECISION_PROVIDER_FAILED,
+                                    {
+                                        "error_type": type(error).__name__,
+                                        "reason": reason,
+                                    },
+                                ),
+                                EventDraft(RuntimeEventType.TASK_FAILED, {"reason": reason}),
+                            )
+                        )
+                        current = self._commit_with_drafts(
+                            current,
+                            self._with_status(current.task, TaskStatus.FAILED),
+                            runtime_state,
+                            tuple(drafts),
+                            self._snapshot(adapter, observation),
+                        )
+                        break
                     drafts.append(
                         EventDraft(
                             RuntimeEventType.DECISION_GENERATED,
-                            cast("dict[str, JsonValue]", decision.model_dump(mode="json")),
+                            {
+                                **cast(
+                                    "dict[str, JsonValue]",
+                                    decision.model_dump(mode="json"),
+                                ),
+                                "provider_metadata": cast(
+                                    "dict[str, JsonValue]",
+                                    provider_result.metadata.model_dump(mode="json"),
+                                ),
+                            },
                         )
                     )
                     if decision.type is DecisionType.COMPLETE:
@@ -614,7 +661,16 @@ class RuntimeEngine:
                 )
                 if not policy.allowed:
                     reason = "; ".join(policy.reasons)
-                    drafts.append(EventDraft(RuntimeEventType.ACTION_REJECTED, {"reason": reason}))
+                    drafts.append(
+                        EventDraft(
+                            RuntimeEventType.ACTION_REJECTED,
+                            {
+                                "reason": reason,
+                                "action_type": action.type,
+                                "action_fingerprint": action_fingerprint(action),
+                            },
+                        )
+                    )
                     runtime_state = runtime_state.model_copy(
                         update={
                             "consecutive_failures": runtime_state.consecutive_failures + 1,

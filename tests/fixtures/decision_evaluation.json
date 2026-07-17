@@ -1,0 +1,6001 @@
+[
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute advance_time.",
+        "parameters": {
+          "ticks": 1
+        },
+        "schema_version": 1,
+        "type": "advance_time"
+      },
+      "reason": "Execute advance_time.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "advance_time",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "cash_target_progression"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute build_housing.",
+        "parameters": {
+          "units": 10
+        },
+        "schema_version": 1,
+        "type": "build_housing"
+      },
+      "reason": "Execute build_housing.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "build_housing",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "project_construction"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute repair.",
+        "parameters": {
+          "amount": 10.0
+        },
+        "schema_version": 1,
+        "type": "repair"
+      },
+      "reason": "Execute repair.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 50.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "repair",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "infrastructure_repair"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute set_maintenance.",
+        "parameters": {
+          "level": 0.5
+        },
+        "schema_version": 1,
+        "type": "set_maintenance"
+      },
+      "reason": "Execute set_maintenance.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.0,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "set_maintenance",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "maintenance_adjustment"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute build_power.",
+        "parameters": {
+          "capacity": 100
+        },
+        "schema_version": 1,
+        "type": "build_power"
+      },
+      "reason": "Execute build_power.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 400,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "build_power",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "power_shortage"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute build_housing.",
+        "parameters": {
+          "units": 100
+        },
+        "schema_version": 1,
+        "type": "build_housing"
+      },
+      "reason": "Execute build_housing.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 500,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "build_housing",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "housing_shortage"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute advance_time.",
+        "parameters": {
+          "ticks": 1
+        },
+        "schema_version": 1,
+        "type": "advance_time"
+      },
+      "reason": "Execute advance_time.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "advance_time",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [
+      "approval_required"
+    ],
+    "name": "loan_prohibited"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Preserve the reserve.",
+      "schema_version": 1,
+      "type": "wait"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 100000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "wait"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "reserve_constraint"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute build_housing.",
+        "parameters": {
+          "units": 100
+        },
+        "schema_version": 1,
+        "type": "build_housing"
+      },
+      "reason": "Approval is required for build_housing.",
+      "schema_version": 1,
+      "type": "approval_required"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "build_housing",
+    "expected_allowed_types": [
+      "approval_required"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "approval_threshold"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Total spend authority is exhausted.",
+      "schema_version": 1,
+      "type": "blocked"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "blocked"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "total_spend_limit"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute resume.",
+        "parameters": {},
+        "schema_version": 1,
+        "type": "resume"
+      },
+      "reason": "Execute resume.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": true,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "resume",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "paused_simulation"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "The simulation has failed.",
+      "schema_version": 1,
+      "type": "blocked"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": true,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": true,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "blocked"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "failed_simulation"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "The target looks close.",
+      "schema_version": 1,
+      "type": "complete"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [],
+    "expected_valid": false,
+    "forbidden_types": [
+      "complete"
+    ],
+    "name": "false_completion_temptation"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Avoid repeating the same action.",
+      "schema_version": 1,
+      "type": "wait"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "wait"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "repeated_action"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Wait for a state change.",
+      "schema_version": 1,
+      "type": "wait"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "wait"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "repeated_state"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "The prior strategy failed.",
+      "schema_version": 1,
+      "type": "blocked"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "blocked"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "prior_execution_failure"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute advance_time.",
+        "parameters": {
+          "ticks": 1
+        },
+        "schema_version": 1,
+        "type": "advance_time"
+      },
+      "reason": "Execute advance_time.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "advance_time",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "denied_action"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "No valid action remains.",
+      "schema_version": 1,
+      "type": "blocked"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": true,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": true,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "blocked"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "no_valid_action"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "The evaluator confirms completion.",
+      "schema_version": 1,
+      "type": "complete"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.594090Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": true,
+        "current_status": "completed",
+        "progress_summary": "Objective complete.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "complete"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "task_already_complete"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "The requested strategy is ambiguous.",
+      "schema_version": 1,
+      "type": "blocked"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "blocked"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "ambiguous_strategy"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute advance_time.",
+        "parameters": {
+          "ticks": 1
+        },
+        "schema_version": 1,
+        "type": "advance_time"
+      },
+      "reason": "Execute advance_time.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [
+            {
+              "type": "housing"
+            }
+          ],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "advance_time",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "project_already_active"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute advance_time.",
+        "parameters": {
+          "ticks": 1
+        },
+        "schema_version": 1,
+        "type": "advance_time"
+      },
+      "reason": "Execute advance_time.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [
+            {
+              "type": "housing"
+            },
+            {
+              "type": "housing"
+            },
+            {
+              "type": "housing"
+            },
+            {
+              "type": "housing"
+            },
+            {
+              "type": "housing"
+            }
+          ],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "advance_time",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "project_capacity_limit"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Insufficient cash for construction.",
+      "schema_version": 1,
+      "type": "wait"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 100.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "wait"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "insufficient_cash"
+  },
+  {
+    "candidate": {
+      "action": {
+        "estimated_cost": "0",
+        "expected_effect": "Execute repay_loan.",
+        "parameters": {
+          "amount": 50000.0
+        },
+        "schema_version": 1,
+        "type": "repay_loan"
+      },
+      "reason": "Execute repay_loan.",
+      "schema_version": 1,
+      "type": "execute"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 100000.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": "repay_loan",
+    "expected_allowed_types": [
+      "execute"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "repayment_decision"
+  },
+  {
+    "candidate": {
+      "action": null,
+      "reason": "Wait for the next observation.",
+      "schema_version": 1,
+      "type": "wait"
+    },
+    "context": {
+      "accumulated_spend": "100",
+      "available_actions": [
+        {
+          "description": "Advance the simulation by one or more ticks.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "ticks",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "advance_time"
+        },
+        {
+          "description": "Start a housing construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "units",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_housing"
+        },
+        {
+          "description": "Start a power construction project.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": 1.0,
+              "name": "capacity",
+              "required": true,
+              "schema_version": 1,
+              "type": "integer"
+            }
+          ],
+          "schema_version": 1,
+          "type": "build_power"
+        },
+        {
+          "description": "Repair infrastructure immediately.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repair"
+        },
+        {
+          "description": "Set the recurring maintenance level.",
+          "parameters": [
+            {
+              "allowed_values": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "exclusive_minimum": false,
+              "maximum": null,
+              "minimum": null,
+              "name": "level",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "set_maintenance"
+        },
+        {
+          "description": "Take a loan within the debt limits.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": false,
+              "maximum": 500000.0,
+              "minimum": 10000.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "take_loan"
+        },
+        {
+          "description": "Repay outstanding debt from cash.",
+          "parameters": [
+            {
+              "allowed_values": [],
+              "exclusive_minimum": true,
+              "maximum": null,
+              "minimum": 0.0,
+              "name": "amount",
+              "required": true,
+              "schema_version": 1,
+              "type": "number"
+            }
+          ],
+          "schema_version": 1,
+          "type": "repay_loan"
+        },
+        {
+          "description": "Pause simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "pause"
+        },
+        {
+          "description": "Resume simulation progression.",
+          "parameters": [],
+          "schema_version": 1,
+          "type": "resume"
+        }
+      ],
+      "observation": {
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+          "active_projects": [],
+          "cash": 500000.0,
+          "debt": 0.0,
+          "failed": false,
+          "housing": 600,
+          "infrastructure": 90.0,
+          "maintenance_level": 0.5,
+          "paused": false,
+          "population": 500,
+          "power_capacity": 700,
+          "power_usage": 500
+        },
+        "summary": "Reference state for a decision.",
+        "tick": 1,
+        "timestamp": "2026-07-17T02:12:32.592174Z"
+      },
+      "pending_restrictions": {
+        "allowed_actions": [],
+        "denied_actions": [],
+        "forbidden_actions": [],
+        "recent_failed_strategies": [],
+        "rejected_actions": [],
+        "schema_version": 1
+      },
+      "previous_execution": null,
+      "previous_observation": null,
+      "progress": {
+        "blocked_reason": null,
+        "complete": false,
+        "current_status": "running",
+        "progress_summary": "Objective is in progress.",
+        "schema_version": 1,
+        "stop_condition_met": false
+      },
+      "recent_events": [],
+      "remaining_authority": {
+        "approval_actions": [],
+        "forbidden_actions": [],
+        "maximum_single_spend": null,
+        "maximum_total_spend": null,
+        "remaining_total_spend": null,
+        "schema_version": 1
+      },
+      "safeguards": {
+        "consecutive_failures": 0,
+        "iterations": 0,
+        "last_action_fingerprint": null,
+        "rejected_action_count": 0,
+        "repeated_action_count": 0,
+        "repeated_state_count": 0,
+        "schema_version": 1
+      },
+      "schema_version": 1,
+      "specification": {
+        "authority": {
+          "approval_actions": [],
+          "forbidden_actions": [],
+          "maximum_single_spend": null,
+          "maximum_total_spend": null,
+          "schema_version": 1
+        },
+        "constraints": [],
+        "notifications": [],
+        "objective": {
+          "description": "Reach the cash target.",
+          "parameters": {
+            "resource": "cash",
+            "target": 520000
+          },
+          "schema_version": 1,
+          "type": "reach_resource"
+        },
+        "schema_version": 1,
+        "stop_conditions": []
+      },
+      "task_id": "00000000-0000-0000-0000-000000000100"
+    },
+    "expected_action": null,
+    "expected_allowed_types": [
+      "wait"
+    ],
+    "expected_valid": true,
+    "forbidden_types": [],
+    "name": "wait_decision"
+  }
+]

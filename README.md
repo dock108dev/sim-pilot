@@ -306,6 +306,9 @@ SIM_PILOT_LIVE_COMPILER=1 uv run pytest -m live \
 
 ### Persistence and runtime
 
+Runtime decision providers are also explicit. The default is `none`, which exits before task state
+changes or hosted access. Use the deterministic scripted provider for offline development:
+
 All commands accept `--database PATH` before the command group. The same value may be supplied as
 `SIM_PILOT_DATABASE`.
 
@@ -314,13 +317,49 @@ uv run sim-pilot --database /tmp/sim-pilot-demo.db db upgrade
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task create \
   --task-id 00000000-0000-0000-0000-000000000123 --target-cash 520000
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
-  00000000-0000-0000-0000-000000000123 --iterations 1
+  00000000-0000-0000-0000-000000000123 --decision-provider scripted --iterations 1
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task show \
   00000000-0000-0000-0000-000000000123
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task events \
   00000000-0000-0000-0000-000000000123
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task resume \
-  00000000-0000-0000-0000-000000000123
+  00000000-0000-0000-0000-000000000123 --decision-provider scripted
+```
+
+For hosted runtime decisions, configure credentials and provider settings, then select OpenAI
+explicitly:
+
+```bash
+export OPENAI_API_KEY="..."
+export SIM_PILOT_DECISION_MODEL="gpt-5.6"
+export SIM_PILOT_DECISION_TIMEOUT_SECONDS="30"
+
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
+  00000000-0000-0000-0000-000000000123 --decision-provider openai
+```
+
+Codex CLI's ChatGPT login is not a runtime API credential. No hosted fallback occurs from `none`.
+Decision events and CLI output include model, prompt version, latency, validation result, request ID,
+and token usage when available. Provider failures are recorded and fail the task after the single
+configured transient retry; semantic invalidity is not retried.
+
+Recording is explicit and contains a redacted context plus the structured response:
+
+```bash
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
+  00000000-0000-0000-0000-000000000123 --decision-provider openai \
+  --record-dir ./data/decision-recordings
+```
+
+Recordings use atomic replacement and mode `0600`. If an explicitly requested recording cannot be
+written, the provider call fails before the action reaches adapter execution.
+
+The offline evaluation harness covers at least 25 decision contexts. The live decision evaluation
+is opt-in and is never part of normal CI:
+
+```bash
+SIM_PILOT_LIVE_DECISION=1 uv run pytest -m live \
+  tests/decision_provider/test_live_openai.py -s
 ```
 
 `task create --spec task.json` accepts a serialized `TaskSpecification`. Without `--spec`, the

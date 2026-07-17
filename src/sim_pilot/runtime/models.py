@@ -65,6 +65,8 @@ class RuntimeConfiguration(RuntimeModel):
     repeated_action_limit: int = Field(default=3, gt=1)
     repeated_state_limit: int = Field(default=3, gt=1)
     block_on_false_completion: bool = False
+    decision_context_event_limit: int = Field(default=20, ge=0)
+    decision_context_max_bytes: int = Field(default=65_536, gt=0)
 
 
 class RuntimeSafeguardState(RuntimeModel):
@@ -87,6 +89,7 @@ class RuntimeEventType(StrEnum):
     OBSERVATION_RECORDED = "observation_recorded"
     EVALUATION_RECORDED = "evaluation_recorded"
     DECISION_GENERATED = "decision_generated"
+    DECISION_PROVIDER_FAILED = "decision_provider_failed"
     POLICY_VALIDATED = "policy_validated"
     ACTION_PREPARED = "action_prepared"
     ACTION_EXECUTION_STARTED = "action_execution_started"

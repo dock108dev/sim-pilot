@@ -1,62 +1,88 @@
 """Adapter boundary between the runtime and reference simulation."""
 
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import cast
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from sim_pilot.adapters.base import AdapterSnapshot
+from sim_pilot.adapters.base import (
+    ActionDefinition,
+    ActionParameterDefinition,
+    ActionParameterType,
+    AdapterSnapshot,
+)
 from sim_pilot.domain import Action, ExecutionResult, Observation
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.reference_simulation import ReferenceSimulation, SimulationAction, ValidationResult
 from sim_pilot.reference_simulation.validation import invalid
 
-
-class ActionDefinition(BaseModel):
-    """A runtime-facing description of one supported action."""
-
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-
-    schema_version: Literal[1] = 1
-    type: str = Field(min_length=1)
-    parameter_names: tuple[str, ...] = ()
-    description: str = Field(min_length=1)
-
-
 ACTION_DEFINITIONS = (
     ActionDefinition(
         type="advance_time",
-        parameter_names=("ticks",),
+        parameters=(
+            ActionParameterDefinition(name="ticks", type=ActionParameterType.INTEGER, minimum=1),
+        ),
         description="Advance the simulation by one or more ticks.",
     ),
     ActionDefinition(
         type="build_housing",
-        parameter_names=("units",),
+        parameters=(
+            ActionParameterDefinition(name="units", type=ActionParameterType.INTEGER, minimum=1),
+        ),
         description="Start a housing construction project.",
     ),
     ActionDefinition(
         type="build_power",
-        parameter_names=("capacity",),
+        parameters=(
+            ActionParameterDefinition(name="capacity", type=ActionParameterType.INTEGER, minimum=1),
+        ),
         description="Start a power construction project.",
     ),
     ActionDefinition(
         type="repair",
-        parameter_names=("amount",),
+        parameters=(
+            ActionParameterDefinition(
+                name="amount",
+                type=ActionParameterType.NUMBER,
+                minimum=0,
+                exclusive_minimum=True,
+            ),
+        ),
         description="Repair infrastructure immediately.",
     ),
     ActionDefinition(
         type="set_maintenance",
-        parameter_names=("level",),
+        parameters=(
+            ActionParameterDefinition(
+                name="level",
+                type=ActionParameterType.NUMBER,
+                allowed_values=(0.0, 0.5, 1.0),
+            ),
+        ),
         description="Set the recurring maintenance level.",
     ),
     ActionDefinition(
         type="take_loan",
-        parameter_names=("amount",),
+        parameters=(
+            ActionParameterDefinition(
+                name="amount",
+                type=ActionParameterType.NUMBER,
+                minimum=10_000,
+                maximum=500_000,
+            ),
+        ),
         description="Take a loan within the debt limits.",
     ),
     ActionDefinition(
         type="repay_loan",
-        parameter_names=("amount",),
+        parameters=(
+            ActionParameterDefinition(
+                name="amount",
+                type=ActionParameterType.NUMBER,
+                minimum=0,
+                exclusive_minimum=True,
+            ),
+        ),
         description="Repay outstanding debt from cash.",
     ),
     ActionDefinition(type="pause", description="Pause simulation progression."),

@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from typer.testing import CliRunner
 
-from sim_pilot.cli import CompilerProviderName, app
+from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from tests.intent_compiler.helpers import response, valid_specification
@@ -25,7 +25,19 @@ def test_database_create_run_show_events_and_cancel(tmp_path: Path) -> None:
         [*prefix, "task", "create", "--task-id", str(task_id), "--target-cash", "1000000"],
     )
     assert created.exit_code == 0, created.output
-    sliced = runner.invoke(app, [*prefix, "task", "run", str(task_id), "--iterations", "1"])
+    sliced = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "run",
+            str(task_id),
+            "--iterations",
+            "1",
+            "--decision-provider",
+            "scripted",
+        ],
+    )
     assert sliced.exit_code == 0, sliced.output
     shown = runner.invoke(app, [*prefix, "task", "show", str(task_id)])
     assert shown.exit_code == 0
@@ -137,3 +149,97 @@ def test_compiler_provider_must_be_selected_explicitly() -> None:
     assert result.exit_code == 20
     assert "no compiler provider configured" in result.output
     assert "--provider openai" in result.output
+
+
+def test_runtime_decision_provider_defaults_to_none_without_hosted_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_hosted_provider(**kwargs: object) -> None:
+        del kwargs
+        raise AssertionError("hosted provider must not be constructed by default")
+
+    monkeypatch.setattr("sim_pilot.cli.OpenAIDecisionProvider", unexpected_hosted_provider)
+    result = CliRunner().invoke(
+        app,
+        ["task", "run", str(UUID(int=999))],
+    )
+    assert result.exit_code == 20
+    assert "no decision provider configured" in result.output
+
+
+def test_scripted_runtime_recording_is_opt_in_and_atomic(tmp_path: Path) -> None:
+    runner = CliRunner()
+    database = str(tmp_path / "recording-cli.db")
+    recordings = tmp_path / "decision-recordings"
+    task_id = UUID(int=903)
+    prefix = ["--database", database]
+    assert runner.invoke(app, [*prefix, "db", "upgrade"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [*prefix, "task", "create", "--task-id", str(task_id), "--target-cash", "510000"],
+        ).exit_code
+        == 0
+    )
+    result = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "run",
+            str(task_id),
+            "--decision-provider",
+            "scripted",
+            "--record-dir",
+            str(recordings),
+            "--iterations",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    paths = tuple(recordings.iterdir())
+    assert len(paths) == 1
+    assert paths[0].suffix == ".json"
+    assert paths[0].stat().st_mode & 0o077 == 0
+    assert '"provider": "scripted"' in paths[0].read_text()
+
+
+def test_openai_runtime_provider_requires_explicit_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    constructed: list[dict[str, object]] = []
+
+    def fake_openai_provider(**kwargs: object) -> ReferenceDemoDecisionProvider:
+        constructed.append(kwargs)
+        return ReferenceDemoDecisionProvider()
+
+    monkeypatch.setattr("sim_pilot.cli.OpenAIDecisionProvider", fake_openai_provider)
+    runner = CliRunner()
+    database = str(tmp_path / "openai-selection.db")
+    task_id = UUID(int=904)
+    prefix = ["--database", database]
+    assert runner.invoke(app, [*prefix, "db", "upgrade"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [*prefix, "task", "create", "--task-id", str(task_id), "--target-cash", "510000"],
+        ).exit_code
+        == 0
+    )
+    result = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "run",
+            str(task_id),
+            "--decision-provider",
+            "openai",
+            "--iterations",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert len(constructed) == 1
+    assert constructed[0]["model"]
+    assert constructed[0]["timeout_seconds"] == 30

@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
+from sim_pilot.adapters.base import ActionDefinition
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.domain import (
     Action,
@@ -73,6 +74,9 @@ class FalseSuccessAdapter:
             summary="Unchanged state.",
             state={"cash": 500_000, "failed": False},
         )
+
+    async def available_actions(self) -> list[ActionDefinition]:
+        return []
 
     async def validate(self, action: Action) -> ValidationResult:
         del action

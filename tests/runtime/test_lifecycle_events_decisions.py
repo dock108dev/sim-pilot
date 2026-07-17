@@ -7,13 +7,20 @@ from uuid import UUID
 import pytest
 
 from sim_pilot.domain import Decision, DecisionType, Observation, TaskStatus
+from sim_pilot.runtime.decision_context import DecisionContextProjector
 from sim_pilot.runtime.decisions import (
     ScriptedDecisionExhaustedError,
     ScriptedDecisionProvider,
 )
 from sim_pilot.runtime.events import InMemoryEventStore
 from sim_pilot.runtime.lifecycle import TRANSITIONS, transition
-from sim_pilot.runtime.models import RuntimeEvent, RuntimeEventType
+from sim_pilot.runtime.models import (
+    EvaluationStatus,
+    RuntimeEvaluation,
+    RuntimeEvent,
+    RuntimeEventType,
+    RuntimeSafeguardState,
+)
 from tests.runtime.helpers import make_task
 
 
@@ -78,9 +85,22 @@ def test_scripted_provider_returns_one_decision_and_counts_requests() -> None:
             state={},
         )
 
-        assert await provider.decide(make_task(), observation) == decision
+        task = make_task()
+        context = DecisionContextProjector().project(
+            task=task,
+            observation=observation,
+            available_actions=[],
+            events=(),
+            runtime_state=RuntimeSafeguardState(),
+            progress=RuntimeEvaluation(
+                current_status=EvaluationStatus.RUNNING,
+                complete=False,
+                progress_summary="Still running.",
+            ),
+        )
+        assert (await provider.decide(context)).decision == decision
         assert provider.request_count == 1
         with pytest.raises(ScriptedDecisionExhaustedError, match="exhausted"):
-            await provider.decide(make_task(), observation)
+            await provider.decide(context)
 
     asyncio.run(scenario())
