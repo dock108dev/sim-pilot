@@ -1,0 +1,1 @@
+"""Isolated engineering discovery artifacts."""

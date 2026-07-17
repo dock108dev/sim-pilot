@@ -1,0 +1,41 @@
+{
+  "company_probe": {
+    "before_cash": 99220,
+    "before_loan": 100000,
+    "before_name": "Narnbury Transport",
+    "company_id": 0,
+    "company_mode_valid": true,
+    "company_was_ai": true,
+    "restored_name": "Narnbury Transport",
+    "reversible_name_change": true,
+    "test_mode_cost": 0,
+    "test_mode_success": true,
+    "unchanged_after_test": true
+  },
+  "environment": {
+    "admin_host": "127.0.0.1",
+    "admin_port": 3977,
+    "api_version": "15",
+    "disposable_profile": true,
+    "openttd_version": "15.3",
+    "password_redacted": true
+  },
+  "latency_ms": {
+    "first_run_maximum": 48.230542000965215,
+    "first_run_median": 25.335999998787884,
+    "first_run_minimum": 8.354417004738934,
+    "first_run_samples": 9,
+    "write_run_maximum": 80.90391700534383
+  },
+  "results": {
+    "admin_to_gamescript": "passed",
+    "client_reconnect": "passed",
+    "duplicate_rejection": "passed",
+    "gamescript_to_admin": "passed",
+    "human_company_runtime": "inconclusive_environment",
+    "open_ttd_restart": "passed",
+    "save_load": "passed",
+    "server_restart_from_save": "passed",
+    "unsupported_command_rejection": "passed"
+  }
+}

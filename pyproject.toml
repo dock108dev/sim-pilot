@@ -29,6 +29,7 @@ dev = [
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "live: requires explicitly enabled hosted provider access",
 ]
