@@ -6,6 +6,7 @@ from sim_pilot.domain import Action, Decision, Observation, TaskSpecification
 def test_task_specification_contract() -> None:
     assert tuple(TaskSpecification.model_fields) == (
         "schema_version",
+        "adapter_type",
         "objective",
         "constraints",
         "authority",

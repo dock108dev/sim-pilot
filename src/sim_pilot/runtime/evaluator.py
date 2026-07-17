@@ -21,8 +21,17 @@ CONDITION = re.compile(
 )
 
 
-def numeric_resource(observation: Observation, name: str) -> float | None:
+def resource_value(observation: Observation, name: str) -> object:
     value = observation.state.get(name)
+    if value is None:
+        resources = observation.state.get("resources")
+        if isinstance(resources, dict):
+            value = cast("dict[object, object]", resources).get(name)
+    return value
+
+
+def numeric_resource(observation: Observation, name: str) -> float | None:
+    value = resource_value(observation, name)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value)
@@ -84,11 +93,19 @@ class ProgressEvaluator:
 
         resource = parameters.get("resource")
         target = parameters.get("target")
-        if (
-            not isinstance(resource, str)
-            or isinstance(target, bool)
-            or not isinstance(target, (int, float))
-        ):
+        if not isinstance(resource, str):
+            return self._blocked("objective requires a resource")
+        if objective.type is ObjectiveType.RUN_UNTIL and parameters.get("direction") == "equal":
+            if not isinstance(target, (str, int, float)) or isinstance(target, bool):
+                return self._blocked("equal objective requires a scalar target")
+            value = resource_value(observation, resource)
+            if value is None:
+                return self._blocked(f"resource is missing: {resource}")
+            return self._result(
+                value == target,
+                f"{resource}={value!r}; target={target!r}.",
+            )
+        if isinstance(target, bool) or not isinstance(target, (int, float)):
             return self._blocked("objective requires numeric target and resource")
         value = numeric_resource(observation, resource)
         if value is None:

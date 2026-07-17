@@ -23,6 +23,17 @@ class ValidationStatus(StrEnum):
     INVALID = "invalid"
 
 
+class CompilerCapabilityCatalog(CompilerModel):
+    """Environment-specific names accepted by deterministic compiler validation."""
+
+    name: str = Field(min_length=1)
+    adapter_type: str = Field(min_length=1)
+    resources: tuple[str, ...]
+    actions: tuple[str, ...]
+    string_resources: tuple[str, ...] = ()
+    project_types: tuple[str, ...] = ()
+
+
 class CompilerValidationError(CompilerModel):
     code: str = Field(min_length=1)
     message: str = Field(min_length=1)

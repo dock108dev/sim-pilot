@@ -9,6 +9,7 @@ from sim_pilot.intent_compiler.errors import (
 from sim_pilot.intent_compiler.interfaces import CompilerProvider
 from sim_pilot.intent_compiler.models import (
     CompilationResult,
+    CompilerCapabilityCatalog,
     CompilerProviderMetadata,
     CompilerProviderResult,
     CompilerRecording,
@@ -23,6 +24,7 @@ from sim_pilot.intent_compiler.prompt import PROMPT_VERSION
 __all__ = [
     "CompilationResult",
     "CompilerError",
+    "CompilerCapabilityCatalog",
     "CompilerProvider",
     "CompilerProviderMetadata",
     "CompilerProviderError",

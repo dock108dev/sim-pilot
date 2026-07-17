@@ -56,9 +56,23 @@ class ActionVerifier:
             effect = after.state.get("paused") is True
         elif action.type == "resume":
             effect = before.state.get("paused") is True and after.state.get("paused") is False
+        elif action.type == "set_server_name":
+            requested = action.parameters.get("name")
+            effect = (
+                isinstance(requested, str)
+                and self._resource(before, "server_name") != requested
+                and self._resource(after, "server_name") == requested
+            )
         if not effect:
             reasons.append(f"expected effect was not observed for action: {action.type}")
         return VerificationResult(verified=not reasons, reasons=tuple(reasons))
+
+    @staticmethod
+    def _resource(observation: Observation, name: str) -> object:
+        resources = observation.state.get("resources")
+        if isinstance(resources, dict):
+            return cast("dict[object, object]", resources).get(name)
+        return observation.state.get(name)
 
     def _numeric_increased(self, before: Observation, after: Observation, key: str) -> bool:
         left, right = before.state.get(key), after.state.get(key)

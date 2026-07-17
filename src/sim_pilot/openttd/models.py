@@ -101,6 +101,7 @@ class OpenTTDResourceMapping(OpenTTDModel):
     station_count: int = Field(ge=0)
     date: str
     date_raw: int = Field(ge=0)
+    server_name: str = Field(min_length=1)
 
     @classmethod
     def from_state(cls, state: OpenTTDState) -> OpenTTDResourceMapping:
@@ -114,16 +115,18 @@ class OpenTTDResourceMapping(OpenTTDModel):
             station_count=company.station_facilities.total,
             date=state.game_date,
             date_raw=state.game_date_raw,
+            server_name=state.connection.server_name,
         )
 
 
 class OpenTTDAdapterCapabilities(OpenTTDModel):
     read_state: Literal[True] = True
-    execute_actions: Literal[False] = False
+    execute_actions: bool = False
     supports_restore: Literal[False] = False
-    supports_reconciliation: Literal[False] = False
+    supports_reconciliation: bool = False
     supports_pause: Literal[False] = False
     supports_events: Literal[False] = False
+    supports_set_server_name: bool = False
 
 
 class OpenTTDAdapterMetadata(OpenTTDModel):
@@ -133,13 +136,18 @@ class OpenTTDAdapterMetadata(OpenTTDModel):
 
 
 class OpenTTDObservationState(OpenTTDModel):
+    tick: int = Field(ge=0)
     game: OpenTTDState
     resources: OpenTTDResourceMapping
     adapter: OpenTTDAdapterMetadata = OpenTTDAdapterMetadata()
 
     @classmethod
     def from_game_state(cls, state: OpenTTDState) -> OpenTTDObservationState:
-        return cls(game=state, resources=OpenTTDResourceMapping.from_state(state))
+        return cls(
+            tick=state.game_date_raw,
+            game=state,
+            resources=OpenTTDResourceMapping.from_state(state),
+        )
 
 
 class OpenTTDClient(Protocol):
@@ -151,5 +159,9 @@ class OpenTTDClient(Protocol):
     async def connect(self) -> None: ...
 
     async def collect_state(self) -> OpenTTDState: ...
+
+    async def execute_rcon(self, command: str) -> tuple[str, ...]: ...
+
+    async def reconnect(self) -> None: ...
 
     async def close(self) -> None: ...

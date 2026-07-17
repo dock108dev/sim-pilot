@@ -1,6 +1,8 @@
-"""Versioned prompt contract for the reference-simulation Intent Compiler."""
+"""Versioned, environment-specific prompt contract for the Intent Compiler."""
 
-PROMPT_VERSION = "intent-compiler-v1"
+from sim_pilot.intent_compiler.models import CompilerCapabilityCatalog
+
+PROMPT_VERSION = "intent-compiler-v2"
 
 SUPPORTED_RESOURCES = (
     "tick",
@@ -26,6 +28,31 @@ SUPPORTED_ACTIONS = (
     "repay_loan",
     "pause",
     "resume",
+)
+
+REFERENCE_CAPABILITIES = CompilerCapabilityCatalog(
+    name="reference_simulation",
+    adapter_type="reference",
+    resources=SUPPORTED_RESOURCES,
+    actions=SUPPORTED_ACTIONS,
+    project_types=("housing", "power"),
+)
+
+OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
+    name="openttd_admin_network_v3",
+    adapter_type="openttd",
+    resources=(
+        "cash",
+        "debt",
+        "company_value",
+        "profit",
+        "vehicle_count",
+        "station_count",
+        "date_raw",
+        "server_name",
+    ),
+    actions=("set_server_name",),
+    string_resources=("server_name",),
 )
 
 INTENT_COMPILER_PROMPT = f"""
@@ -67,4 +94,29 @@ unsupported_requests. Report every minor interpretation in assumptions. Use warn
 but risky or surprising intent. Broad requests such as 'beat the game', 'win efficiently', or
 'make smart decisions' are unsupported. All tuple fields must be present, using empty arrays when
 there are no entries.
+""".strip()
+
+
+def compiler_prompt(catalog: CompilerCapabilityCatalog) -> str:
+    if catalog == REFERENCE_CAPABILITIES:
+        return INTENT_COMPILER_PROMPT
+    string_guidance = (
+        " String resources use run_until with direction equal and an exact string target."
+        if catalog.string_resources
+        else ""
+    )
+    return f"""
+You are the Sim Pilot Intent Compiler, prompt version {PROMPT_VERSION}.
+
+Translate one user instruction into structured CompilerResponse data only. The active environment
+is {catalog.name}. Supported resources: {", ".join(catalog.resources)}. Supported actions:
+{", ".join(catalog.actions)}.{string_guidance}
+
+Use only reach_resource, maintain_resource, run_until, and complete_project objectives and the
+existing TaskSpecification schema. Never invent capabilities. If a request requires any action or
+resource outside this catalog, return no specification and put the request in unsupported_requests.
+For an instruction to set a supported string resource, compile a run_until equality objective and
+use the matching action in allowed_action constraints when appropriate. Preserve explicit approval
+and forbidden-action language. Report material missing information in ambiguities. Return structured
+data only and include every tuple field, using empty arrays when needed.
 """.strip()

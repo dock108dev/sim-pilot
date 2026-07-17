@@ -32,6 +32,8 @@ class PacketType(IntEnum):
     SERVER_COMPANY_REMOVE = 116
     SERVER_COMPANY_ECONOMY = 117
     SERVER_COMPANY_STATS = 118
+    SERVER_RCON = 120
+    SERVER_RCON_END = 125
 
 
 class AdminUpdateType(IntEnum):
@@ -93,6 +95,12 @@ class CompanyStats:
     company_id: int
     vehicle_counts: tuple[int, int, int, int, int]
     station_counts: tuple[int, int, int, int, int]
+
+
+@dataclass(frozen=True)
+class RconResponse:
+    colour: int
+    message: str
 
 
 @dataclass(frozen=True)
@@ -172,6 +180,10 @@ def encode_poll(update_type: AdminUpdateType, identifier: int = ALL_COMPANIES) -
     return encode_packet(PacketType.ADMIN_POLL, struct.pack("<BI", update_type, identifier))
 
 
+def encode_rcon(command: str) -> bytes:
+    return encode_packet(PacketType.ADMIN_RCON, _string(command))
+
+
 def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
     reader = PacketReader(data)
     if packet_type == PacketType.SERVER_PROTOCOL:
@@ -227,6 +239,10 @@ def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
             vehicle_counts=tuple(reader.u16() for _ in range(5)),  # type: ignore[arg-type]
             station_counts=tuple(reader.u16() for _ in range(5)),  # type: ignore[arg-type]
         )
+    elif packet_type == PacketType.SERVER_RCON:
+        payload = RconResponse(colour=reader.u16(), message=reader.string())
+    elif packet_type == PacketType.SERVER_RCON_END:
+        payload = reader.string()
     elif packet_type == PacketType.SERVER_ERROR:
         payload = reader.u8()
     else:

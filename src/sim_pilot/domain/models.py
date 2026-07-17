@@ -71,6 +71,7 @@ class AuthorityPolicy(DomainModel):
 class TaskSpecification(DomainModel):
     """The compiled, structured definition of delegated work."""
 
+    adapter_type: NonEmptyString = "reference"
     objective: Objective
     constraints: tuple[Constraint, ...] = ()
     authority: AuthorityPolicy

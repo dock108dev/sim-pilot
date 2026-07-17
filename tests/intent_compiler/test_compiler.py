@@ -29,7 +29,7 @@ def test_valid_compilation_reports_prompt_assumptions_and_warnings() -> None:
         )
         result = await IntentCompiler(provider).compile("Reach one million cash.")
         assert result.report.validation_status is ValidationStatus.VALID
-        assert result.report.prompt_version == "intent-compiler-v1"
+        assert result.report.prompt_version == "intent-compiler-v2"
         assert result.specification == valid_specification()
         assert provider.request_count == 1
 

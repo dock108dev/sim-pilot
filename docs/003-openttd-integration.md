@@ -1,4 +1,4 @@
-# OpenTTD 15.3 Read-Only Integration
+# OpenTTD 15.3 Verified Admin Integration
 
 ## Supported boundary
 
@@ -9,9 +9,11 @@ against the official 15.3 tag at commit `14ec60f248547d4d062a1160f0fc26d74231988
 contracts. Other OpenTTD releases fail version validation instead of being assumed compatible.
 
 The selected integration is the official TCP Admin Network. It is external to the game simulation,
-requires no patch or script, and supports polling structured company/date state. Task 6B is strictly
-read-only: the adapter returns no actions and never sends chat, rcon, GameScript, or gameplay command
-packets.
+requires no patch or script, and supports polling structured company/date state. Task 6B was
+strictly read-only. Task 6C adds exactly one write, `set_server_name(name)`, through the documented
+Admin RCON packet. It waits for the matching RCON completion marker, reconnects, and independently
+verifies the value from a new `SERVER_WELCOME`. RCON text alone is not proof of mutation. Chat,
+GameScript, arbitrary RCON, and gameplay commands remain unavailable.
 
 ## Integration-path comparison
 
@@ -123,6 +125,9 @@ Provider and do not read `OPENAI_API_KEY`. Later natural-language demos must sti
 | `SIM_PILOT_OPENTTD_CONNECTION_TIMEOUT_SECONDS` | `5` | Connect/authentication timeout |
 | `SIM_PILOT_OPENTTD_OBSERVATION_TIMEOUT_SECONDS` | `5` | Per-state collection timeout |
 | `SIM_PILOT_OPENTTD_POLL_INTERVAL_SECONDS` | `1` | Watch interval |
+| `SIM_PILOT_OPENTTD_ACTION_TIMEOUT_SECONDS` | `5` | RCON and postcondition timeout |
+| `SIM_PILOT_OPENTTD_STALE_THRESHOLD_DAYS` | `3` | Allowed date drift before rejection |
+| `SIM_PILOT_OPENTTD_ALLOW_WRITES` | `0` | Explicit disposable-server write opt-in |
 | `SIM_PILOT_OPENTTD_EXECUTABLE` | none | Optional doctor-only local path |
 | `SIM_PILOT_OPENTTD_REQUIRED_SCRIPT` | none | Optional doctor path; no script is required by this method |
 | `SIM_PILOT_OPENTTD_SAVE_PATH` | none | Optional local setup metadata; never restored by the adapter |
@@ -136,11 +141,12 @@ and these capabilities:
 | Capability | Value |
 | --- | --- |
 | `read_state` | true |
-| `execute_actions` | false |
+| `execute_actions` | true only with write opt-in |
 | `supports_restore` | false |
-| `supports_reconciliation` | false |
+| `supports_reconciliation` | true only for the advertised server-name action |
 | `supports_pause` | false |
 | `supports_events` | false (the protocol has notifications, but 6B does not expose them) |
+| `supports_set_server_name` | true only with write opt-in |
 
 Resource mapping uses OpenTTD internal base money units; scale is 1 and no configured display-
 currency conversion is attempted.
@@ -156,6 +162,7 @@ currency conversion is attempted.
 | `vehicle_count` | sum of five vehicle categories | vehicles, 1:1, non-negative | never null; `vehicles=` |
 | `station_count` | sum of five station-facility categories | facilities, 1:1, non-negative | a multi-facility station can contribute more than once; `facilities=` |
 | `date` | raw calendar-date packet | OpenTTD day plus formatted proleptic Gregorian date | never null; summary prefix and `Observation.tick` |
+| `server_name` | welcome packet | UTF-8, maximum 79 bytes excluding NUL | refreshed after reconnect |
 
 Sequence increases once per successful adapter observation. Timestamp is capture time in UTC.
 `tick` is the raw calendar date and therefore may remain equal across successive observations.
@@ -180,10 +187,11 @@ Fixture tests require no game or credentials:
 uv run pytest tests/openttd
 ```
 
-Live read-only acceptance is explicit:
+Live acceptance is explicit; writes still require the separate write opt-in:
 
 ```bash
-SIM_PILOT_LIVE_OPENTTD=1 uv run pytest -m live tests/openttd/test_live_openttd.py -s
+SIM_PILOT_LIVE_OPENTTD=1 SIM_PILOT_OPENTTD_ALLOW_WRITES=1 \
+  uv run pytest -m live tests/openttd/test_live_openttd.py -s
 ```
 
 Common failures:
@@ -203,9 +211,38 @@ game date `1950-01-06`, company `0`, cash `93993`, loan `100000`, current-year n
 zero vehicles, and two station facilities. Protocol, adapter, CLI, persistence, and failure paths
 also remain covered by deterministic sanitized fixtures and a local fake TCP server.
 
-## Future write path
+## Task 6C write, drift, and recovery contract
 
-The Admin Network supports remote console commands, and a GameScript can exchange JSON through the
-Admin Port. Task 6C must select actions only after verifying the current 15.3 interface, preconditions,
-and independently observable postconditions. Route construction, vehicle purchasing, broad company
-control, screen automation, and unstable command-log replay are not implied by this adapter.
+Writes require `SIM_PILOT_OPENTTD_ALLOW_WRITES=1` and a disposable loopback-only dedicated game.
+The supported direct command is:
+
+```bash
+uv run sim-pilot openttd action set-server-name "Sim Pilot Test"
+```
+
+`set_server_name` accepts one non-empty name of at most 79 UTF-8 bytes. Quotes, backslashes,
+semicolons, and line breaks are rejected before RCON encoding. The action costs zero and is an
+idempotent set operation, although an already-satisfied action is rejected because it would not
+produce a verifiable transition.
+
+Before execution the adapter polls fresh date, cash, loan, map, server, and company identity. The
+full comparison is available as evidence; for the server-name action, economic drift is unrelated
+and does not invalidate the action. Identity changes, backwards date movement, or movement beyond
+`SIM_PILOT_OPENTTD_STALE_THRESHOLD_DAYS` (default `3`) rejects the stale decision and records the
+fresh observation for replanning. RCON and postcondition polling are bounded by
+`SIM_PILOT_OPENTTD_ACTION_TIMEOUT_SECONDS` (default `5`).
+
+OpenTTD checkpoints are observational records, not authoritative saves. Resume reconnects and
+records fresh state before evaluation. For an interrupted server-name attempt, the requested name
+means definitely executed, the prior name means definitely not executed, and a third value is
+ambiguous. Unavailable and ambiguous outcomes block automatic retry and retain the existing manual
+recovery boundary.
+
+Pause/resume and speed remain unsupported because Admin Network v3 does not expose those
+postconditions. Loans remain unsupported because the Admin Network does not provide a
+company-authorized loan action. Route construction, vehicle purchasing, broad company control,
+screen automation, and unstable command-log replay remain excluded.
+
+The Intent Compiler receives an OpenTTD-specific capability catalog when `--adapter openttd` is
+selected; the reference-simulation prompt is not globally expanded. Compiler and runtime decision
+providers are selected independently. Live writes and hosted calls have separate opt-ins.

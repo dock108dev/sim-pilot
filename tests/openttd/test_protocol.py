@@ -12,6 +12,7 @@ from sim_pilot.openttd.protocol import (
     decode_packet,
     encode_join,
     encode_poll,
+    encode_rcon,
     format_game_date,
 )
 
@@ -24,6 +25,9 @@ def test_join_and_poll_use_little_endian_size_prefixed_packets() -> None:
     assert join[2] == PacketType.ADMIN_JOIN
     assert join[3:] == b"secret\x00sim-pilot\x006b\x00"
     assert poll == struct.pack("<HBBI", 8, PacketType.ADMIN_POLL, 2, 3)
+    assert encode_rcon('server_name "Sim Pilot"') == (
+        struct.pack("<HB", 27, PacketType.ADMIN_RCON) + b'server_name "Sim Pilot"\x00'
+    )
 
 
 def test_economy_money_bit_patterns_are_signed() -> None:

@@ -3,9 +3,13 @@
 import asyncio
 from datetime import UTC
 
-from sim_pilot.adapters.base import SimulationAdapter
-from sim_pilot.adapters.openttd import OpenTTDReadOnlyAdapter
-from sim_pilot.domain import Action, Observation
+from sim_pilot.adapters.base import ActionDefinition, SimulationAdapter
+from sim_pilot.adapters.openttd import (
+    OpenTTDAdapter,
+    OpenTTDReadOnlyAdapter,
+    OpenTTDValidation,
+)
+from sim_pilot.domain import Action, ExecutionResult, Observation
 from tests.openttd.helpers import FakeOpenTTDClient, state
 
 
@@ -52,3 +56,63 @@ def test_adapter_advertises_no_actions_and_rejects_without_client_interaction() 
     assert client.collect_calls == 1
     assert client.closed is True
     assert adapter.capabilities.supports_restore is False
+
+
+def test_write_opt_in_advertises_and_verifies_server_name_action() -> None:
+    async def scenario() -> tuple[
+        list[ActionDefinition],
+        OpenTTDValidation,
+        ExecutionResult,
+        Observation,
+        Observation,
+        FakeOpenTTDClient,
+    ]:
+        client = FakeOpenTTDClient()
+        adapter = OpenTTDAdapter(client, allow_writes=True)
+        action = Action(
+            type="set_server_name",
+            parameters={"name": "Sim Pilot Test"},
+            expected_effect="Set the server name.",
+        )
+        await adapter.initialize()
+        before = await adapter.observe()
+        definitions = await adapter.available_actions()
+        validation = await adapter.validate(action)
+        result = await adapter.execute(action)
+        after = await adapter.observe()
+        await adapter.shutdown()
+        return (definitions, validation, result, after, before, client)
+
+    definitions, validation, result, after, before, client = asyncio.run(scenario())
+
+    assert [definition.type for definition in definitions] == ["set_server_name"]
+    assert validation.valid is True
+    assert result.success is True
+    assert result.state_changed is True
+    assert before.state["resources"]["server_name"] == "Fixture Server"  # type: ignore[index]
+    assert after.state["resources"]["server_name"] == "Sim Pilot Test"  # type: ignore[index]
+    assert client.rcon_commands == ['server_name "Sim Pilot Test"']
+    assert client.reconnect_calls == 1
+
+
+def test_stale_economy_rejects_action_without_rcon() -> None:
+    async def scenario() -> tuple[OpenTTDValidation, FakeOpenTTDClient]:
+        client = FakeOpenTTDClient([state("initial_company"), state("profitable_company")])
+        adapter = OpenTTDAdapter(client, allow_writes=True)
+        action = Action(
+            type="set_server_name",
+            parameters={"name": "Sim Pilot Test"},
+            expected_effect="Set the server name.",
+        )
+        await adapter.initialize()
+        await adapter.observe()
+        validation = await adapter.validate(action)
+        await adapter.shutdown()
+        return validation, client
+
+    validation, client = asyncio.run(scenario())
+
+    assert validation.valid is False
+    assert validation.state_stale is True
+    assert validation.code == "stale_observation"
+    assert client.rcon_commands == []

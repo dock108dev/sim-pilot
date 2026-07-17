@@ -65,9 +65,11 @@ def test_compile_and_create_from_instruction(
     compiler = IntentCompiler(ScriptedCompilerProvider(responses))
 
     def compiler_factory(
-        provider_name: CompilerProviderName, recording_directory: Path | None
+        provider_name: CompilerProviderName,
+        recording_directory: Path | None,
+        adapter_name: object,
     ) -> IntentCompiler:
-        del provider_name, recording_directory
+        del provider_name, recording_directory, adapter_name
         return compiler
 
     monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)
@@ -121,9 +123,11 @@ def test_instruction_creation_requires_valid_compilation(
     )
 
     def compiler_factory(
-        provider_name: CompilerProviderName, recording_directory: Path | None
+        provider_name: CompilerProviderName,
+        recording_directory: Path | None,
+        adapter_name: object,
     ) -> IntentCompiler:
-        del provider_name, recording_directory
+        del provider_name, recording_directory, adapter_name
         return compiler
 
     monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)

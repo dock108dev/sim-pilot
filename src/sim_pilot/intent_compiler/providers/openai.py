@@ -24,10 +24,12 @@ class OpenAICompilerProvider:
         *,
         model: str,
         api_key: str | None = None,
+        prompt: str = INTENT_COMPILER_PROMPT,
     ) -> None:
         if not model.strip():
             raise ValueError("compiler model must not be empty")
         self._model = model
+        self._prompt = prompt
         try:
             self._client = AsyncOpenAI(api_key=api_key)
         except OpenAIError as error:
@@ -40,7 +42,7 @@ class OpenAICompilerProvider:
             response = await self._client.responses.parse(
                 model=self._model,
                 input=[
-                    {"role": "developer", "content": INTENT_COMPILER_PROMPT},
+                    {"role": "developer", "content": self._prompt},
                     {"role": "user", "content": instruction},
                 ],
                 text_format=CompilerResponse,

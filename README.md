@@ -4,7 +4,8 @@ Sim Pilot is a local runtime for translating natural-language objectives into va
 against deterministic simulations. The repository contains typed domain models, the standalone
 deterministic reference simulation, a deterministic runtime, durable SQLite checkpointing,
 process-level resume, crash-window reconciliation, a versioned natural-language Intent Compiler,
-a model-backed runtime Decision Provider, a read-only OpenTTD 15.3 adapter, and a durable CLI.
+a model-backed runtime Decision Provider, a narrowly writable OpenTTD 15.3 adapter, and a durable
+CLI.
 Hosted providers and live-game integration are always explicit; deterministic tests remain offline.
 
 Every serialized domain model carries `schema_version`, currently `1`. Changes to
@@ -58,14 +59,15 @@ simulation types, but must not import runtime modules. The reference simulation 
 adapters or runtime modules.
 
 The OpenTTD protocol client lives in `sim_pilot.openttd` below the adapter boundary. Its runtime-
-facing read-only wrapper lives in `sim_pilot.adapters.openttd`. Runtime never imports the OpenTTD
+facing wrapper lives in `sim_pilot.adapters.openttd`. Runtime never imports the OpenTTD
 client, and the client never imports runtime, persistence, adapters, or provider SDKs.
 
-## Read-only OpenTTD observation
+## Verified OpenTTD integration
 
-Task 6B supports the official OpenTTD 15.3 Admin Network protocol v3 on a loopback-bound dedicated
-server. It observes date, company economy, fleet counts, and station-facility counts. It does not
-execute actions or restore the game. Full setup and limitations are in
+Task 6C supports the official OpenTTD 15.3 Admin Network protocol v3 on a loopback-bound dedicated
+server. It observes date, company economy, fleet counts, station-facility counts, and server name.
+The only writable action is `set_server_name`; it is verified from fresh welcome metadata after
+reconnecting. It does not restore the game. Full setup and limitations are in
 [`docs/003-openttd-integration.md`](docs/003-openttd-integration.md).
 
 After configuring the local OpenTTD admin port and exporting
@@ -77,6 +79,30 @@ uv run sim-pilot openttd capabilities
 uv run sim-pilot openttd observe
 uv run sim-pilot openttd watch --count 5
 ```
+
+Live writes are independently disabled unless explicitly enabled on the disposable test server:
+
+```bash
+export SIM_PILOT_OPENTTD_ALLOW_WRITES=1
+uv run sim-pilot openttd action set-server-name "Sim Pilot Local Test"
+```
+
+Compiler and decision providers are selected independently for a natural-language durable task:
+
+```bash
+uv run sim-pilot task create \
+  --instruction "Set the OpenTTD server name to Sim Pilot Local Test" \
+  --adapter openttd \
+  --provider openai \
+  --yes
+
+uv run sim-pilot task run TASK_ID \
+  --decision-provider openai \
+  --record-dir ./data/decision-recordings
+```
+
+The compiler recording directory, if selected during `task create`, is separate from the decision
+recording directory. Neither hosted provider is initialized by direct `openttd` commands.
 
 These commands do not initialize OpenAI clients and work without `OPENAI_API_KEY`. A natural-
 language compiler remains separately gated by explicit `--provider openai` selection.

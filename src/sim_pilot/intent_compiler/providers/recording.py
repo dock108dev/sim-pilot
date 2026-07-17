@@ -13,9 +13,16 @@ from sim_pilot.intent_compiler.prompt import INTENT_COMPILER_PROMPT, PROMPT_VERS
 class RecordingCompilerProvider:
     """Record successful structured provider exchanges without changing semantics."""
 
-    def __init__(self, provider: CompilerProvider, directory: Path) -> None:
+    def __init__(
+        self,
+        provider: CompilerProvider,
+        directory: Path,
+        *,
+        prompt: str = INTENT_COMPILER_PROMPT,
+    ) -> None:
         self._provider = provider
         self._directory = directory
+        self._prompt = prompt
 
     async def compile(self, instruction: str) -> CompilerProviderResult:
         started = perf_counter()
@@ -24,7 +31,7 @@ class RecordingCompilerProvider:
             id=uuid4(),
             captured_at=datetime.now(UTC),
             prompt_version=PROMPT_VERSION,
-            prompt=INTENT_COMPILER_PROMPT,
+            prompt=self._prompt,
             instruction=instruction,
             latency_ms=(perf_counter() - started) * 1000,
             provider_metadata=result.metadata,

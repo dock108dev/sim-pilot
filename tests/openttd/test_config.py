@@ -37,12 +37,14 @@ def test_environment_configuration_loads_all_supported_settings(
     monkeypatch.setenv("SIM_PILOT_OPENTTD_PORT", "4977")
     monkeypatch.setenv("SIM_PILOT_OPENTTD_COMPANY_ID", "2")
     monkeypatch.setenv("SIM_PILOT_OPENTTD_EXECUTABLE", "/Applications/OpenTTD.app")
+    monkeypatch.setenv("SIM_PILOT_OPENTTD_ALLOW_WRITES", "1")
 
     configuration = openttd_configuration()
 
     assert configuration.port == 4977
     assert configuration.company_id == 2
     assert configuration.executable == Path("/Applications/OpenTTD.app")
+    assert configuration.allow_writes is True
 
 
 def test_configuration_rejects_invalid_company_and_timeout() -> None:

@@ -7,7 +7,7 @@ from sim_pilot.adapters.base import (
     AdapterSnapshot,
     SimulationAdapter,
 )
-from sim_pilot.adapters.openttd import OpenTTDReadOnlyAdapter, ReadOnlyValidation
+from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter, OpenTTDValidation
 
 __all__ = [
     "ActionDefinition",
@@ -16,5 +16,6 @@ __all__ = [
     "AdapterSnapshot",
     "SimulationAdapter",
     "OpenTTDReadOnlyAdapter",
-    "ReadOnlyValidation",
+    "OpenTTDAdapter",
+    "OpenTTDValidation",
 ]

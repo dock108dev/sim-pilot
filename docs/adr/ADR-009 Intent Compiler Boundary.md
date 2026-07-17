@@ -24,10 +24,16 @@ Keep the OpenAI SDK import inside `intent_compiler/providers/openai.py`; runtime
 persistence, and the compiler core remain provider-independent. Keep the scripted runtime decision
 provider unchanged.
 
-Version the complete prompt contract as `intent-compiler-v1` and record that version in every
-report. Material ambiguity never receives a guessed value. Unsupported intent is reported rather
+The initial complete prompt contract was `intent-compiler-v1`. Task 6C advances it to
+`intent-compiler-v2` and supplies an explicit environment capability catalog, keeping OpenTTD
+resources and actions out of the global reference-simulation prompt. Record the selected prompt
+version in every report. Material ambiguity never receives a guessed value. Unsupported intent is reported rather
 than converted into an approximate objective. CLI task creation displays the report and requires
 confirmation before persisting the validated specification.
+
+The selected capability catalog stamps `TaskSpecification.adapter_type`; this is composition
+metadata supplied by the caller, not a provider guess. It persists with the specification so
+restart selects the same adapter even when resources such as `cash` exist in multiple environments.
 
 Automated tests use a scripted compiler provider and at least twenty golden examples. Hosted tests
 run only when explicitly enabled with credentials.

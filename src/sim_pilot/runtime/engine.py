@@ -56,7 +56,7 @@ from sim_pilot.runtime.reconstruction import (
 from sim_pilot.runtime.recovery import (
     CrashPoint,
     ReconciliationReport,
-    reconcile_reference_action,
+    reconcile_action,
 )
 from sim_pilot.runtime.verification import ActionVerifier
 
@@ -123,9 +123,7 @@ class RuntimeEngine:
         attempt = context.unresolved_attempt
         if attempt is None:
             return None
-        return await reconcile_reference_action(
-            attempt, context.adapter_snapshot(), current_snapshot
-        )
+        return await reconcile_action(attempt, context.adapter_snapshot(), current_snapshot)
 
     async def resolve_recovery(
         self,
@@ -139,9 +137,7 @@ class RuntimeEngine:
         attempt = context.unresolved_attempt
         if attempt is None:
             raise ValueError("task has no unresolved action attempt")
-        report = await reconcile_reference_action(
-            attempt, context.adapter_snapshot(), current_snapshot
-        )
+        report = await reconcile_action(attempt, context.adapter_snapshot(), current_snapshot)
         payload: dict[str, JsonValue] = {
             "action_id": str(attempt.action_id),
             "classification": report.classification.value,
@@ -377,8 +373,28 @@ class RuntimeEngine:
                         event_drafts=(EventDraft(RuntimeEventType.TASK_STARTED, {}),),
                     )
                     current = commit.task_record
+                    if getattr(adapter, "requires_fresh_observation_on_resume", False):
+                        observation = await adapter.observe()
+                        commit = self.persistence.commit_iteration(
+                            current,
+                            task=current.task,
+                            runtime_state=runtime_state,
+                            event_drafts=(self._observation_draft(observation),),
+                            adapter_snapshot=self._snapshot(adapter, observation),
+                        )
+                        current = commit.task_record
                 elif context.task.status is not TaskStatus.RUNNING:
                     raise ValueError(f"task cannot run from {context.task.status.value}")
+                elif getattr(adapter, "requires_fresh_observation_on_resume", False):
+                    observation = await adapter.observe()
+                    commit = self.persistence.commit_iteration(
+                        current,
+                        task=current.task,
+                        runtime_state=runtime_state,
+                        event_drafts=(self._observation_draft(observation),),
+                        adapter_snapshot=self._snapshot(adapter, observation),
+                    )
+                    current = commit.task_record
                 if observation is None:
                     raise ValueError("running task has no reconstructed observation")
             except DurablePersistenceError:
@@ -585,9 +601,25 @@ class RuntimeEngine:
                         )
                         break
                     if decision.type is DecisionType.WAIT:
-                        repeated = runtime_state.repeated_state_count + 1
+                        external_refresh = bool(
+                            getattr(adapter, "requires_fresh_observation_on_resume", False)
+                        )
+                        if external_refresh:
+                            observation = await adapter.observe()
+                            drafts.append(self._observation_draft(observation))
+                        state_fingerprint = json.dumps(
+                            observation.state, sort_keys=True, separators=(",", ":")
+                        )
+                        repeated = (
+                            runtime_state.repeated_state_count + 1
+                            if state_fingerprint == runtime_state.last_state_fingerprint
+                            else 1
+                        )
                         runtime_state = runtime_state.model_copy(
-                            update={"repeated_state_count": repeated}
+                            update={
+                                "repeated_state_count": repeated,
+                                "last_state_fingerprint": state_fingerprint,
+                            }
                         )
                         if repeated >= self.configuration.repeated_state_limit:
                             reason = "repeated state detected"
@@ -598,7 +630,9 @@ class RuntimeEngine:
                             snapshot = self._snapshot(adapter, observation)
                         else:
                             task_next = current.task
-                            snapshot = None
+                            snapshot = (
+                                self._snapshot(adapter, observation) if external_refresh else None
+                            )
                         current = self._commit_with_drafts(
                             current, task_next, runtime_state, tuple(drafts), snapshot
                         )
@@ -623,7 +657,9 @@ class RuntimeEngine:
 
                 fingerprint = self._action_fingerprint(action, observation)
                 repeated_action = (
-                    runtime_state.repeated_action_count + 1
+                    runtime_state.repeated_action_count
+                    if approved_action is not None
+                    else runtime_state.repeated_action_count + 1
                     if fingerprint == runtime_state.last_action_fingerprint
                     else 1
                 )
@@ -633,7 +669,10 @@ class RuntimeEngine:
                         "repeated_action_count": repeated_action,
                     }
                 )
-                if repeated_action >= self.configuration.repeated_action_limit:
+                if (
+                    approved_action is None
+                    and repeated_action >= self.configuration.repeated_action_limit
+                ):
                     reason = "repeated action detected"
                     drafts.append(EventDraft(RuntimeEventType.TASK_BLOCKED, {"reason": reason}))
                     current = self._commit_with_drafts(
@@ -677,6 +716,10 @@ class RuntimeEngine:
                             "rejected_action_count": runtime_state.rejected_action_count + 1,
                         }
                     )
+                    stale = bool(getattr(adapter_validation, "state_stale", False))
+                    if stale:
+                        observation = await adapter.observe()
+                        drafts.append(self._observation_draft(observation))
                     if (
                         runtime_state.consecutive_failures
                         >= self.configuration.max_consecutive_failures
@@ -686,7 +729,7 @@ class RuntimeEngine:
                         snapshot = self._snapshot(adapter, observation)
                     else:
                         task_next = current.task
-                        snapshot = None
+                        snapshot = self._snapshot(adapter, observation) if stale else None
                     current = self._commit_with_drafts(
                         current, task_next, runtime_state, tuple(drafts), snapshot
                     )

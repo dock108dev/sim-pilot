@@ -1,4 +1,4 @@
-"""Async read-only client for OpenTTD 15.3 Admin Network protocol v3."""
+"""Async client for observed state and narrow RCON on OpenTTD 15.3 Admin Network v3."""
 
 from __future__ import annotations
 
@@ -35,11 +35,13 @@ from sim_pilot.openttd.protocol import (
     DecodedPacket,
     PacketType,
     ProtocolDescription,
+    RconResponse,
     Welcome,
     decode_packet,
     encode_join,
     encode_packet,
     encode_poll,
+    encode_rcon,
     format_game_date,
 )
 
@@ -176,6 +178,31 @@ class OpenTTDAdminClient:
             game_date=format_game_date(game_date_raw),
             company=_company_state(info, economy, stats),
         )
+
+    async def execute_rcon(self, command: str) -> tuple[str, ...]:
+        """Execute one bounded Admin Network rcon command and await its matching end marker."""
+        timeout = self.configuration.action_timeout_seconds
+        await self._send(encode_rcon(command), timeout)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        output: list[str] = []
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise OpenTTDTimeoutError("timed out waiting for OpenTTD rcon completion")
+            packet = await self._read_packet(remaining)
+            if packet.type == PacketType.SERVER_RCON:
+                if not isinstance(packet.payload, RconResponse):
+                    raise OpenTTDInvalidResponseError("invalid OpenTTD rcon response")
+                output.append(packet.payload.message)
+            elif packet.type == PacketType.SERVER_RCON_END:
+                if packet.payload != command:
+                    raise OpenTTDInvalidResponseError("OpenTTD rcon completion command mismatch")
+                return tuple(output)
+
+    async def reconnect(self) -> None:
+        await self.close()
+        await self.connect()
 
     async def close(self) -> None:
         writer = self._writer

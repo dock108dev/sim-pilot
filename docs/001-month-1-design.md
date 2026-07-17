@@ -206,10 +206,17 @@ version, structured response, latency, provider, model, and token usage when ava
 instructions and prompts may contain sensitive data, recording is disabled by default and requires
 an explicit local output directory.
 
-Prompt version `intent-compiler-v1` defines all supported objective and constraint contracts,
-reference-simulation resources and actions, authority fields, and unsupported behavior. A semantic
-prompt change requires a new version and golden-fixture review. The compiler never invents a
-missing threshold or runtime capability.
+Prompt version `intent-compiler-v2` defines all supported objective and constraint contracts,
+authority fields, and unsupported behavior. The compiler receives an environment capability
+catalog: reference-simulation capabilities remain the default, while OpenTTD capabilities are
+selected explicitly and are never added globally to the reference prompt. A semantic prompt change
+requires a new version and golden-fixture review. The compiler never invents a missing threshold or
+runtime capability.
+
+`run_until` normally compares numeric resources with `above` or `below`. An environment catalog may
+declare a string resource and allow `direction="equal"` with an exact string target. Task 6C uses
+this only for the observed OpenTTD `server_name` resource. The evaluator resolves resources from
+either the canonical top-level reference state or an adapter's typed `resources` projection.
 
 Supported compiler resources are `tick`, `cash`, `debt`, `population`, `housing`,
 `power_capacity`, `power_usage`, `infrastructure`, `maintenance_level`, `income_per_tick`, and
@@ -423,6 +430,7 @@ Terminal statuses do not transition.
 
 Contains
 
+- adapter_type (`reference` by default; persisted so restart composition is unambiguous)
 - objective
 - constraints
 - authority

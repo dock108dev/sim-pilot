@@ -1,4 +1,4 @@
-"""Configuration for the local, read-only OpenTTD integration."""
+"""Configuration for the loopback-only OpenTTD integration."""
 
 from __future__ import annotations
 
@@ -27,6 +27,9 @@ class OpenTTDConfiguration(BaseModel):
     connection_timeout_seconds: float = Field(default=5.0, gt=0)
     observation_timeout_seconds: float = Field(default=5.0, gt=0)
     polling_interval_seconds: float = Field(default=1.0, ge=0.1)
+    action_timeout_seconds: float = Field(default=5.0, gt=0)
+    stale_observation_threshold_days: int = Field(default=3, ge=0)
+    allow_writes: bool = False
     executable: Path | None = None
     required_script_path: Path | None = None
     save_path: Path | None = None
@@ -61,6 +64,13 @@ def _optional_path(name: str) -> Path | None:
     return Path(raw).expanduser() if raw else None
 
 
+def _enabled(name: str) -> bool:
+    value = os.getenv(name, "0")
+    if value not in {"0", "1"}:
+        raise ValueError(f"{name} must be 0 or 1")
+    return value == "1"
+
+
 def openttd_configuration() -> OpenTTDConfiguration:
     """Load OpenTTD settings without initializing any hosted provider."""
     password = os.getenv("SIM_PILOT_OPENTTD_ADMIN_PASSWORD")
@@ -85,6 +95,11 @@ def openttd_configuration() -> OpenTTDConfiguration:
             "SIM_PILOT_OPENTTD_OBSERVATION_TIMEOUT_SECONDS", "5"
         ),
         polling_interval_seconds=_positive_float("SIM_PILOT_OPENTTD_POLL_INTERVAL_SECONDS", "1"),
+        action_timeout_seconds=_positive_float("SIM_PILOT_OPENTTD_ACTION_TIMEOUT_SECONDS", "5"),
+        stale_observation_threshold_days=int(
+            os.getenv("SIM_PILOT_OPENTTD_STALE_THRESHOLD_DAYS", "3")
+        ),
+        allow_writes=_enabled("SIM_PILOT_OPENTTD_ALLOW_WRITES"),
         executable=_optional_path("SIM_PILOT_OPENTTD_EXECUTABLE"),
         required_script_path=_optional_path("SIM_PILOT_OPENTTD_REQUIRED_SCRIPT"),
         save_path=_optional_path("SIM_PILOT_OPENTTD_SAVE_PATH"),

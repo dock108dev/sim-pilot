@@ -137,6 +137,35 @@ def test_client_connects_authenticates_and_collects_selected_company() -> None:
     asyncio.run(scenario())
 
 
+def test_client_executes_bounded_rcon_and_matches_completion_command() -> None:
+    command = 'server_name "Sim Pilot"'
+
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await _read_request(reader)
+        writer.write(_protocol() + _welcome())
+        await writer.drain()
+        request = await _read_request(reader)
+        assert request == bytes([PacketType.ADMIN_RCON]) + _text(command)
+        writer.write(
+            encode_packet(PacketType.SERVER_RCON, struct.pack("<H", 1) + _text("changed"))
+            + encode_packet(PacketType.SERVER_RCON_END, _text(command))
+        )
+        await writer.drain()
+        with suppress(asyncio.IncompleteReadError):
+            await _read_request(reader)
+        writer.close()
+        await writer.wait_closed()
+
+    async def scenario() -> None:
+        client, server = await _run_client(handler)
+        async with server:
+            await client.connect()
+            assert await client.execute_rcon(command) == ("changed",)
+            await client.close()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     ("protocol", "version", "error_type"),
     [

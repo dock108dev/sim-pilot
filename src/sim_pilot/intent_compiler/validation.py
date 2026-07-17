@@ -6,17 +6,14 @@ from typing import cast
 
 from sim_pilot.domain import ConstraintType, ObjectiveType, TaskSpecification
 from sim_pilot.domain.models import JsonValue
-from sim_pilot.intent_compiler.models import CompilerValidationError
-from sim_pilot.intent_compiler.prompt import SUPPORTED_ACTIONS, SUPPORTED_RESOURCES
+from sim_pilot.intent_compiler.models import CompilerCapabilityCatalog, CompilerValidationError
+from sim_pilot.intent_compiler.prompt import REFERENCE_CAPABILITIES
 
 STOP_CONDITION = re.compile(
     r"^\s*(?P<resource>[A-Za-z_][A-Za-z0-9_]*)\s*"
     r"(?P<operator>>=|<=|==|>|<)\s*"
     r"(?P<target>-?\d+(?:\.\d+)?)\s*$"
 )
-PROJECT_TYPES = frozenset({"housing", "power"})
-ACTION_NAMES = frozenset(SUPPORTED_ACTIONS)
-RESOURCE_NAMES = frozenset(SUPPORTED_RESOURCES)
 PERCENT_RESOURCES = frozenset({"infrastructure"})
 UNIT_INTERVAL_RESOURCES = frozenset({"maintenance_level"})
 
@@ -44,9 +41,10 @@ def _validate_resource_threshold(
     value: JsonValue | None,
     *,
     path: str,
+    catalog: CompilerCapabilityCatalog,
 ) -> list[CompilerValidationError]:
     errors: list[CompilerValidationError] = []
-    if not isinstance(resource, str) or resource not in RESOURCE_NAMES:
+    if not isinstance(resource, str) or resource not in catalog.resources:
         errors.append(
             _error("invalid_resource", f"unsupported resource: {resource!r}", f"{path}.resource")
         )
@@ -95,18 +93,20 @@ def _extra_parameter_errors(
     ]
 
 
-def _validate_objective(specification: TaskSpecification) -> list[CompilerValidationError]:
+def _validate_objective(
+    specification: TaskSpecification, catalog: CompilerCapabilityCatalog
+) -> list[CompilerValidationError]:
     objective = specification.objective
     parameters = objective.parameters
     path = "specification.objective.parameters"
     if objective.type is ObjectiveType.COMPLETE_PROJECT:
         errors = _extra_parameter_errors(parameters, {"project_type"}, path)
         project_type = parameters.get("project_type")
-        if not isinstance(project_type, str) or project_type not in PROJECT_TYPES:
+        if not isinstance(project_type, str) or project_type not in catalog.project_types:
             errors.append(
                 _error(
                     "invalid_project_type",
-                    f"project_type must be one of {sorted(PROJECT_TYPES)}",
+                    f"project_type must be one of {sorted(catalog.project_types)}",
                     f"{path}.project_type",
                 )
             )
@@ -116,16 +116,33 @@ def _validate_objective(specification: TaskSpecification) -> list[CompilerValida
     if objective.type in {ObjectiveType.MAINTAIN_RESOURCE, ObjectiveType.RUN_UNTIL}:
         expected.add("direction")
     errors = _extra_parameter_errors(parameters, expected, path)
-    errors.extend(
-        _validate_resource_threshold(
-            parameters.get("resource"), parameters.get("target"), path=path
+    resource = parameters.get("resource")
+    if not isinstance(resource, str) or resource not in catalog.resources:
+        errors.append(
+            _error("invalid_resource", f"unsupported resource: {resource!r}", f"{path}.resource")
         )
+        return errors
+    is_string_equality = (
+        resource in catalog.string_resources
+        and objective.type is ObjectiveType.RUN_UNTIL
+        and parameters.get("direction") == "equal"
+        and isinstance(parameters.get("target"), str)
     )
-    if "direction" in expected and parameters.get("direction") not in {"above", "below"}:
+    if not is_string_equality:
+        errors.extend(
+            _validate_resource_threshold(
+                resource, parameters.get("target"), path=path, catalog=catalog
+            )
+        )
+    if "direction" in expected and parameters.get("direction") not in {
+        "above",
+        "below",
+        "equal",
+    }:
         errors.append(
             _error(
                 "invalid_direction",
-                "direction must be 'above' or 'below'",
+                "direction must be 'above', 'below', or 'equal'",
                 f"{path}.direction",
             )
         )
@@ -140,12 +157,13 @@ def _action_values(value: JsonValue | None) -> set[str] | None:
     return None
 
 
-def _invalid_actions(actions: Iterable[str]) -> set[str]:
-    return set(actions) - ACTION_NAMES
+def _invalid_actions(actions: Iterable[str], catalog: CompilerCapabilityCatalog) -> set[str]:
+    return set(actions) - set(catalog.actions)
 
 
 def _validate_constraints(
     specification: TaskSpecification,
+    catalog: CompilerCapabilityCatalog,
 ) -> tuple[list[CompilerValidationError], list[set[str]], set[str], list[tuple[str, float]]]:
     errors: list[CompilerValidationError] = []
     allowed_sets: list[set[str]] = []
@@ -165,7 +183,7 @@ def _validate_constraints(
                 )
             else:
                 forbidden.update(actions)
-                for action in sorted(_invalid_actions(actions)):
+                for action in sorted(_invalid_actions(actions, catalog)):
                     errors.append(
                         _error("invalid_action", f"unsupported action: {action}", f"{path}.action")
                     )
@@ -179,7 +197,7 @@ def _validate_constraints(
                 )
             else:
                 allowed_sets.append(actions)
-                for action in sorted(_invalid_actions(actions)):
+                for action in sorted(_invalid_actions(actions, catalog)):
                     errors.append(
                         _error("invalid_action", f"unsupported action: {action}", f"{path}.actions")
                     )
@@ -194,7 +212,9 @@ def _validate_constraints(
             errors.extend(_extra_parameter_errors(parameters, {"resource", "floor"}, path))
             resource = parameters.get("resource")
             errors.extend(
-                _validate_resource_threshold(resource, parameters.get("floor"), path=path)
+                _validate_resource_threshold(
+                    resource, parameters.get("floor"), path=path, catalog=catalog
+                )
             )
             floor = _numeric(parameters.get("floor"))
             if isinstance(resource, str) and floor is not None:
@@ -204,11 +224,14 @@ def _validate_constraints(
 
 def validate_specification(
     specification: TaskSpecification | None,
+    catalog: CompilerCapabilityCatalog = REFERENCE_CAPABILITIES,
 ) -> tuple[CompilerValidationError, ...]:
     if specification is None:
         return ()
-    errors = _validate_objective(specification)
-    constraint_errors, allowed_sets, forbidden, floors = _validate_constraints(specification)
+    errors = _validate_objective(specification, catalog)
+    constraint_errors, allowed_sets, forbidden, floors = _validate_constraints(
+        specification, catalog
+    )
     errors.extend(constraint_errors)
 
     authority = specification.authority
@@ -216,7 +239,7 @@ def validate_specification(
         ("specification.authority.forbidden_actions", authority.forbidden_actions),
         ("specification.authority.approval_actions", authority.approval_actions),
     ):
-        for action in sorted(_invalid_actions(actions)):
+        for action in sorted(_invalid_actions(actions, catalog)):
             errors.append(_error("invalid_action", f"unsupported action: {action}", path))
     approval_forbidden = set(authority.approval_actions) & forbidden
     if approval_forbidden:
@@ -274,7 +297,7 @@ def validate_specification(
                     f"specification.stop_conditions.{index}",
                 )
             )
-        elif match.group("resource") not in RESOURCE_NAMES:
+        elif match.group("resource") not in catalog.resources:
             errors.append(
                 _error(
                     "invalid_resource",

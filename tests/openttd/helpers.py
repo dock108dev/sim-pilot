@@ -90,6 +90,8 @@ class FakeOpenTTDClient:
         self.connected = False
         self.closed = False
         self.collect_calls = 0
+        self.rcon_commands: list[str] = []
+        self.reconnect_calls = 0
 
     @property
     def metadata(self) -> OpenTTDConnectionMetadata:
@@ -102,6 +104,24 @@ class FakeOpenTTDClient:
         value = self.states[min(self.collect_calls, len(self.states) - 1)]
         self.collect_calls += 1
         return value
+
+    async def execute_rcon(self, command: str) -> tuple[str, ...]:
+        self.rcon_commands.append(command)
+        prefix = 'server_name "'
+        if not command.startswith(prefix) or not command.endswith('"'):
+            return ("Unknown command",)
+        name = command[len(prefix) : -1]
+        self.states = [
+            item.model_copy(
+                update={"connection": item.connection.model_copy(update={"server_name": name})}
+            )
+            for item in self.states
+        ]
+        return (f"server_name = {name}",)
+
+    async def reconnect(self) -> None:
+        self.reconnect_calls += 1
+        self.connected = True
 
     async def close(self) -> None:
         self.closed = True

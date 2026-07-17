@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "adapter_type": "openttd",
+  "objective": {
+    "schema_version": 1,
+    "type": "run_until",
+    "description": "Set the disposable OpenTTD server name.",
+    "parameters": {
+      "resource": "server_name",
+      "target": "Sim Pilot Durable 6C",
+      "direction": "equal"
+    }
+  },
+  "constraints": [
+    {
+      "schema_version": 1,
+      "type": "allowed_action",
+      "description": "Only change the server name.",
+      "parameters": {
+        "actions": [
+          "set_server_name"
+        ]
+      }
+    }
+  ],
+  "authority": {
+    "schema_version": 1,
+    "maximum_single_spend": null,
+    "maximum_total_spend": null,
+    "approval_actions": [],
+    "forbidden_actions": []
+  },
+  "notifications": [],
+  "stop_conditions": []
+}

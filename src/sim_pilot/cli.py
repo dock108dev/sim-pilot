@@ -13,8 +13,8 @@ import typer
 from pydantic import ValidationError
 from sqlalchemy import Engine
 
-from sim_pilot.adapters.base import AdapterSnapshot
-from sim_pilot.adapters.openttd import OpenTTDReadOnlyAdapter
+from sim_pilot.adapters.base import AdapterSnapshot, SimulationAdapter
+from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.config import (
     compiler_model,
@@ -38,11 +38,17 @@ from sim_pilot.domain import (
     TaskSpecification,
     TaskStatus,
 )
+from sim_pilot.domain.models import JsonValue
 from sim_pilot.intent_compiler import (
     CompilerError,
     CompilerProvider,
     IntentCompiler,
     ValidationStatus,
+)
+from sim_pilot.intent_compiler.prompt import (
+    OPENTTD_CAPABILITIES,
+    REFERENCE_CAPABILITIES,
+    compiler_prompt,
 )
 from sim_pilot.intent_compiler.providers import (
     NoProviderConfigured,
@@ -73,6 +79,7 @@ from sim_pilot.runtime.decision_errors import (
 from sim_pilot.runtime.errors import DurablePersistenceError, ReconstructionConsistencyError
 from sim_pilot.runtime.interfaces import DecisionProvider
 from sim_pilot.runtime.reconstruction import ReconstructedRuntimeContext
+from sim_pilot.runtime.verification import ActionVerifier
 
 SUCCESS = 0
 WAITING_APPROVAL = 10
@@ -90,9 +97,11 @@ db_app = typer.Typer(help="Manage durable schema state.")
 task_app = typer.Typer(help="Create and operate structured tasks.")
 recovery_app = typer.Typer(help="Inspect and resolve interrupted action attempts.")
 openttd_app = typer.Typer(help="Observe a local OpenTTD 15.3 game through its admin port.")
+openttd_action_app = typer.Typer(help="Run a directly validated and verified OpenTTD action.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
+openttd_app.add_typer(openttd_action_app, name="action")
 task_app.add_typer(recovery_app, name="recovery")
 
 
@@ -110,6 +119,11 @@ class DecisionProviderName(StrEnum):
     NONE = "none"
     SCRIPTED = "scripted"
     OPENAI = "openai"
+
+
+class AdapterName(StrEnum):
+    REFERENCE = "reference"
+    OPENTTD = "openttd"
 
 
 @app.callback()
@@ -135,18 +149,25 @@ def _runtime(ctx: typer.Context) -> tuple[Engine, RuntimeEngine]:
 def _intent_compiler(
     provider_name: CompilerProviderName,
     recording_directory: Path | None,
+    adapter_name: AdapterName = AdapterName.REFERENCE,
 ) -> IntentCompiler:
+    catalog = (
+        OPENTTD_CAPABILITIES if adapter_name is AdapterName.OPENTTD else REFERENCE_CAPABILITIES
+    )
+    prompt = compiler_prompt(catalog)
     provider: CompilerProvider
     if provider_name is CompilerProviderName.OPENAI:
-        provider = OpenAICompilerProvider(model=compiler_model())
+        provider = OpenAICompilerProvider(model=compiler_model(), prompt=prompt)
     else:
         provider = NoProviderConfigured()
     if recording_directory is not None:
-        provider = RecordingCompilerProvider(provider, recording_directory)
-    return IntentCompiler(provider)
+        provider = RecordingCompilerProvider(provider, recording_directory, prompt=prompt)
+    return IntentCompiler(provider, catalog)
 
 
-def _restore(context: ReconstructedRuntimeContext) -> ReferenceSimulationAdapter:
+def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
+    if _is_openttd_specification(context.task.specification):
+        return _openttd_adapter()
     if context.checkpoint is None:
         return ReferenceSimulationAdapter()
     return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
@@ -154,15 +175,26 @@ def _restore(context: ReconstructedRuntimeContext) -> ReferenceSimulationAdapter
 
 class ReferenceDemoDecisionProvider:
     async def decide(self, context: DecisionContext) -> DecisionProviderResult:
-        del context
+        action_type = "advance_time"
+        parameters: dict[str, JsonValue] = {"ticks": 1}
+        expected_effect = "Advance one simulation tick."
+        if any(action.type == "set_server_name" for action in context.available_actions):
+            target = context.specification.objective.parameters.get("target")
+            if not isinstance(target, str):
+                raise DecisionProviderNotConfiguredError(
+                    "scripted OpenTTD decision requires a string server_name target"
+                )
+            action_type = "set_server_name"
+            parameters = {"name": target}
+            expected_effect = f"Set the observed OpenTTD server name to {target!r}."
         return DecisionProviderResult(
             decision=Decision(
                 type=DecisionType.EXECUTE,
-                reason="Advance the deterministic reference simulation.",
+                reason=f"Execute the advertised {action_type} action.",
                 action=Action(
-                    type="advance_time",
-                    parameters={"ticks": 1},
-                    expected_effect="Advance one simulation tick.",
+                    type=action_type,
+                    parameters=parameters,
+                    expected_effect=expected_effect,
                 ),
             ),
             metadata=ProviderMetadata(
@@ -217,9 +249,19 @@ def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
     raise typer.Exit(code)
 
 
-def _openttd_adapter() -> OpenTTDReadOnlyAdapter:
+def _openttd_adapter() -> OpenTTDAdapter:
     """Compose only the local adapter; never initialize a hosted provider."""
-    return OpenTTDReadOnlyAdapter(OpenTTDAdminClient(openttd_configuration()))
+    configuration = openttd_configuration()
+    return OpenTTDAdapter(
+        OpenTTDAdminClient(configuration),
+        allow_writes=configuration.allow_writes,
+        stale_days=configuration.stale_observation_threshold_days,
+        action_timeout_seconds=configuration.action_timeout_seconds,
+    )
+
+
+def _is_openttd_specification(specification: TaskSpecification) -> bool:
+    return specification.adapter_type == "openttd"
 
 
 async def _capture_openttd_observation() -> Observation:
@@ -233,13 +275,13 @@ async def _capture_openttd_observation() -> Observation:
 
 @openttd_app.command("capabilities")
 def openttd_capabilities() -> None:
-    """Display static Task 6B capabilities without configuration or network access."""
+    """Display safe default capabilities without configuration or network access."""
     _emit(OpenTTDAdapterCapabilities())
 
 
 @openttd_app.command("doctor")
 def openttd_doctor() -> None:
-    """Check local configuration and the read-only Admin Network connection."""
+    """Check local configuration and the Admin Network connection."""
 
     async def check() -> dict[str, object]:
         try:
@@ -348,6 +390,46 @@ def openttd_watch(
         _fail(error, OPENTTD_FAILURE)
 
 
+@openttd_action_app.command("set-server-name")
+def openttd_set_server_name(name: str) -> None:
+    """Set and independently verify the server name without initializing hosted providers."""
+
+    async def run() -> dict[str, object]:
+        adapter = _openttd_adapter()
+        verifier = ActionVerifier()
+        action = Action(
+            type="set_server_name",
+            parameters={"name": name},
+            expected_effect=f"Set the observed OpenTTD server name to {name!r}.",
+        )
+        await adapter.initialize()
+        try:
+            before = await adapter.observe()
+            validation = await adapter.validate(action)
+            if not validation.valid:
+                raise ValueError(validation.message)
+            result = await adapter.execute(action)
+            after = await adapter.observe()
+            verification = verifier.verify(before, action, result, after, validation.estimated_cost)
+            if not verification.verified:
+                raise ValueError("; ".join(verification.reasons))
+            return {
+                "action": action.model_dump(mode="json"),
+                "validation": validation.model_dump(mode="json"),
+                "result": result.model_dump(mode="json"),
+                "verification": verification.model_dump(mode="json"),
+                "before": before.model_dump(mode="json"),
+                "after": after.model_dump(mode="json"),
+            }
+        finally:
+            await adapter.shutdown()
+
+    try:
+        _emit(asyncio.run(run()))
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
 @db_app.command("upgrade")
 def db_upgrade(ctx: typer.Context) -> None:
     try:
@@ -379,12 +461,15 @@ def task_create(
         ),
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    adapter: Annotated[AdapterName, typer.Option("--adapter")] = AdapterName.REFERENCE,
 ) -> None:
     try:
         if specification is not None and instruction is not None:
             raise ValueError("--spec and --instruction are mutually exclusive")
         if instruction is not None:
-            result = asyncio.run(_intent_compiler(provider, record_dir).compile(instruction))
+            result = asyncio.run(
+                _intent_compiler(provider, record_dir, adapter).compile(instruction)
+            )
             _emit(result)
             if result.report.validation_status is not ValidationStatus.VALID:
                 raise ValueError(
@@ -407,6 +492,7 @@ def task_create(
             )
         else:
             spec = TaskSpecification.model_validate_json(specification.read_text())
+        spec = spec.model_copy(update={"adapter_type": adapter.value})
         now = datetime.now(UTC)
         task = Task(
             id=task_id or uuid4(),
@@ -440,10 +526,11 @@ def task_compile(
             help="Opt in to local JSON recordings containing the instruction and full prompt.",
         ),
     ] = None,
+    adapter: Annotated[AdapterName, typer.Option("--adapter")] = AdapterName.REFERENCE,
 ) -> None:
     text = instruction if instruction is not None else typer.prompt("Prompt")
     try:
-        result = asyncio.run(_intent_compiler(provider, record_dir).compile(text))
+        result = asyncio.run(_intent_compiler(provider, record_dir, adapter).compile(text))
         _emit(result)
     except (OSError, CompilerError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)
