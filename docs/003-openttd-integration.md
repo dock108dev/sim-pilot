@@ -183,9 +183,13 @@ Common failures:
 - Timeout: ensure the game is running and the selected company exists; then increase the observation
   timeout if local load is unusually high.
 
-The current development machine did not have an OpenTTD executable or application installed during
-Task 6B validation, so the live test was skipped. Protocol, adapter, CLI, persistence, and failure
-paths use deterministic sanitized fixtures and a local fake TCP server.
+The development machine was subsequently validated against the official OpenTTD 15.3 macOS
+application on 2026-07-16. A disposable loopback-only dedicated server using map seed `12345` and a
+SimpleAI company passed `doctor`, one structured CLI observation, a bounded two-observation watch,
+clean shutdown, and the opt-in live pytest acceptance test. The first captured live observation was
+game date `1950-01-06`, company `0`, cash `93993`, loan `100000`, current-year net income `-6007`,
+zero vehicles, and two station facilities. Protocol, adapter, CLI, persistence, and failure paths
+also remain covered by deterministic sanitized fixtures and a local fake TCP server.
 
 ## Future write path
 
