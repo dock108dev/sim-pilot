@@ -28,6 +28,7 @@ from sim_pilot.openttd.models import (
 )
 from sim_pilot.openttd.protocol import (
     MAX_PACKET_SIZE,
+    AdminUpdateFrequency,
     AdminUpdateType,
     CompanyEconomy,
     CompanyInfo,
@@ -38,10 +39,12 @@ from sim_pilot.openttd.protocol import (
     RconResponse,
     Welcome,
     decode_packet,
+    encode_gamescript,
     encode_join,
     encode_packet,
     encode_poll,
     encode_rcon,
+    encode_update_frequency,
     format_game_date,
 )
 
@@ -57,6 +60,7 @@ class OpenTTDAdminClient:
         self._writer: asyncio.StreamWriter | None = None
         self._metadata: OpenTTDConnectionMetadata | None = None
         self._map: OpenTTDMapMetadata | None = None
+        self._protocol: ProtocolDescription | None = None
 
     @property
     def metadata(self) -> OpenTTDConnectionMetadata:
@@ -109,6 +113,7 @@ class OpenTTDAdminClient:
                 raise OpenTTDProtocolMismatchError(
                     "admin protocol does not advertise polling for: " + ", ".join(unsupported)
                 )
+            self._protocol = protocol
             welcome = await self._receive_payload(
                 PacketType.SERVER_WELCOME,
                 Welcome,
@@ -200,6 +205,40 @@ class OpenTTDAdminClient:
                     raise OpenTTDInvalidResponseError("OpenTTD rcon completion command mismatch")
                 return tuple(output)
 
+    async def subscribe_gamescript(self) -> None:
+        """Subscribe the single Admin connection to official GameScript broadcasts."""
+        self._require_connected()
+        protocol = self._protocol
+        if protocol is None:
+            raise OpenTTDInvalidResponseError("admin protocol description is unavailable")
+        supported = protocol.update_frequencies.get(AdminUpdateType.GAMESCRIPT, 0)
+        if supported & AdminUpdateFrequency.AUTOMATIC == 0:
+            raise OpenTTDProtocolMismatchError(
+                "admin protocol does not advertise automatic GameScript updates"
+            )
+        await self._send(
+            encode_update_frequency(AdminUpdateType.GAMESCRIPT, AdminUpdateFrequency.AUTOMATIC),
+            self.configuration.connection_timeout_seconds,
+        )
+
+    async def send_gamescript(self, value: str) -> None:
+        await self._send(encode_gamescript(value), self.configuration.observation_timeout_seconds)
+
+    async def receive_gamescript(self, timeout: float | None = None) -> str:
+        deadline = asyncio.get_running_loop().time() + (
+            timeout or self.configuration.observation_timeout_seconds
+        )
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise OpenTTDTimeoutError("timed out waiting for a GameScript bridge message")
+            packet = await self._read_packet(remaining)
+            if packet.type != PacketType.SERVER_GAMESCRIPT:
+                continue
+            if not isinstance(packet.payload, str):
+                raise OpenTTDInvalidResponseError("invalid GameScript packet payload")
+            return packet.payload
+
     async def reconnect(self) -> None:
         await self.close()
         await self.connect()
@@ -210,6 +249,7 @@ class OpenTTDAdminClient:
         self._writer = None
         self._metadata = None
         self._map = None
+        self._protocol = None
         if writer is None:
             return
         with suppress(ConnectionError, OSError):

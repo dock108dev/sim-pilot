@@ -30,7 +30,8 @@ def _text(value: str) -> bytes:
 def _protocol(version: int = 3, update_types: tuple[int, ...] = (0, 2, 3, 4)) -> bytes:
     payload = bytes([version])
     for update_type in update_types:
-        payload += bytes([1]) + struct.pack("<HH", update_type, 1)
+        frequency = 64 if update_type == 9 else 1
+        payload += bytes([1]) + struct.pack("<HH", update_type, frequency)
     payload += bytes([0])
     return encode_packet(PacketType.SERVER_PROTOCOL, payload)
 
@@ -161,6 +162,36 @@ def test_client_executes_bounded_rcon_and_matches_completion_command() -> None:
         async with server:
             await client.connect()
             assert await client.execute_rcon(command) == ("changed",)
+            await client.close()
+
+    asyncio.run(scenario())
+
+
+def test_client_routes_gamescript_json_on_the_single_admin_stream() -> None:
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await _read_request(reader)
+        writer.write(_protocol(update_types=(0, 2, 3, 4, 9)) + _welcome())
+        await writer.drain()
+        subscription = await _read_request(reader)
+        assert subscription == bytes([PacketType.ADMIN_UPDATE_FREQUENCY]) + struct.pack(
+            "<HH", 9, 64
+        )
+        request = await _read_request(reader)
+        assert request == bytes([PacketType.ADMIN_GAMESCRIPT]) + _text('{"ping":true}')
+        writer.write(encode_packet(PacketType.SERVER_GAMESCRIPT, _text('{"pong":true}')))
+        await writer.drain()
+        with suppress(asyncio.IncompleteReadError):
+            await _read_request(reader)
+        writer.close()
+        await writer.wait_closed()
+
+    async def scenario() -> None:
+        client, server = await _run_client(handler)
+        async with server:
+            await client.connect()
+            await client.subscribe_gamescript()
+            await client.send_gamescript('{"ping":true}')
+            assert await client.receive_gamescript() == '{"pong":true}'
             await client.close()
 
     asyncio.run(scenario())

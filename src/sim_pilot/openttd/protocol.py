@@ -18,6 +18,7 @@ class PacketType(IntEnum):
     ADMIN_UPDATE_FREQUENCY = 2
     ADMIN_POLL = 3
     ADMIN_RCON = 5
+    ADMIN_GAMESCRIPT = 6
     SERVER_FULL = 100
     SERVER_BANNED = 101
     SERVER_ERROR = 102
@@ -33,6 +34,7 @@ class PacketType(IntEnum):
     SERVER_COMPANY_ECONOMY = 117
     SERVER_COMPANY_STATS = 118
     SERVER_RCON = 120
+    SERVER_GAMESCRIPT = 124
     SERVER_RCON_END = 125
 
 
@@ -42,6 +44,12 @@ class AdminUpdateType(IntEnum):
     COMPANY_INFO = 2
     COMPANY_ECONOMY = 3
     COMPANY_STATS = 4
+    GAMESCRIPT = 9
+
+
+class AdminUpdateFrequency(IntEnum):
+    POLL = 1 << 0
+    AUTOMATIC = 1 << 6
 
 
 @dataclass(frozen=True)
@@ -162,7 +170,7 @@ def _string(value: str) -> bytes:
     return value.encode("utf-8") + b"\x00"
 
 
-def encode_packet(packet_type: PacketType, payload: bytes = b"") -> bytes:
+def encode_packet(packet_type: int, payload: bytes = b"") -> bytes:
     body = bytes([packet_type]) + payload
     size = len(body) + 2
     if size > MAX_PACKET_SIZE:
@@ -182,6 +190,17 @@ def encode_poll(update_type: AdminUpdateType, identifier: int = ALL_COMPANIES) -
 
 def encode_rcon(command: str) -> bytes:
     return encode_packet(PacketType.ADMIN_RCON, _string(command))
+
+
+def encode_update_frequency(update_type: AdminUpdateType, frequency: AdminUpdateFrequency) -> bytes:
+    return encode_packet(
+        PacketType.ADMIN_UPDATE_FREQUENCY,
+        struct.pack("<HH", update_type, frequency),
+    )
+
+
+def encode_gamescript(value: str) -> bytes:
+    return encode_packet(PacketType.ADMIN_GAMESCRIPT, _string(value))
 
 
 def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
@@ -241,7 +260,7 @@ def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
         )
     elif packet_type == PacketType.SERVER_RCON:
         payload = RconResponse(colour=reader.u16(), message=reader.string())
-    elif packet_type == PacketType.SERVER_RCON_END:
+    elif packet_type in (PacketType.SERVER_RCON_END, PacketType.SERVER_GAMESCRIPT):
         payload = reader.string()
     elif packet_type == PacketType.SERVER_ERROR:
         payload = reader.u8()

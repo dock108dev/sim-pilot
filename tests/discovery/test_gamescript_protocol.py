@@ -89,6 +89,10 @@ def test_sequence_must_be_positive(sequence: int) -> None:
         envelope(sequence=sequence)
 
 
-def test_discovery_support_does_not_enter_production_package() -> None:
+def test_production_bridge_does_not_import_discovery_support() -> None:
     production = Path(__file__).parents[2] / "src" / "sim_pilot"
-    assert not list(production.rglob("*gamescript*"))
+    bridge_files = tuple((production / "openttd" / "gamescript").glob("*.py"))
+
+    assert bridge_files
+    for path in bridge_files:
+        assert "discovery" not in path.read_text(encoding="utf-8")
