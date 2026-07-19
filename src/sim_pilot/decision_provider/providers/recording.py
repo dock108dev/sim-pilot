@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import cast
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from sim_pilot.decision_provider.models import DecisionRecording, utc_timestamp
 from sim_pilot.domain.models import JsonValue
@@ -25,6 +25,7 @@ class RecordingDecisionProvider:
         self._directory = directory
 
     async def decide(self, context: DecisionContext) -> DecisionProviderResult:
+        recording_invocation_id = str(uuid4())
         result = await self._provider.decide(context)
         raw_context = cast("dict[str, JsonValue]", context.model_dump(mode="json"))
         recording_id = uuid5(
@@ -35,6 +36,7 @@ class RecordingDecisionProvider:
         )
         recording = DecisionRecording(
             id=recording_id,
+            invocation_id=result.metadata.invocation_id or recording_invocation_id,
             captured_at=utc_timestamp(),
             context=cast("dict[str, JsonValue]", _redact(raw_context)),
             response=result.decision,

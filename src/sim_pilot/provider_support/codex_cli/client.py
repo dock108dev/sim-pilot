@@ -9,11 +9,13 @@ import re
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Literal, Protocol, TypeVar, cast
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
@@ -89,6 +91,7 @@ class ProcessResult:
     exit_code: int
     stdout: bytes
     stderr: bytes
+    process_id: int | None = None
 
 
 class ProcessRunner(Protocol):
@@ -96,6 +99,7 @@ class ProcessRunner(Protocol):
         self,
         command: Sequence[str],
         *,
+        stdin: bytes,
         cwd: Path,
         environment: Mapping[str, str],
         timeout_seconds: float,
@@ -109,6 +113,7 @@ class AsyncioProcessRunner:
         self,
         command: Sequence[str],
         *,
+        stdin: bytes,
         cwd: Path,
         environment: Mapping[str, str],
         timeout_seconds: float,
@@ -120,15 +125,16 @@ class AsyncioProcessRunner:
                 *command,
                 cwd=cwd,
                 env=dict(environment),
-                stdin=asyncio.subprocess.DEVNULL,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
         except OSError as error:
             raise CodexCLIProcessStartError(f"could not start Codex CLI: {error}") from error
-        if process.stdout is None or process.stderr is None:
+        if process.stdin is None or process.stdout is None or process.stderr is None:
             await self._terminate(process)
             raise CodexCLIProcessStartError("Codex CLI subprocess pipes were unavailable")
+        process_stdin = process.stdin
 
         async def read_bounded(stream: asyncio.StreamReader, limit: int, label: str) -> bytes:
             chunks: list[bytes] = []
@@ -140,28 +146,42 @@ class AsyncioProcessRunner:
                 chunks.append(chunk)
             return b"".join(chunks)
 
+        async def write_prompt() -> None:
+            try:
+                process_stdin.write(stdin)
+                await process_stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                process_stdin.close()
+                with suppress(BrokenPipeError, ConnectionResetError):
+                    await process_stdin.wait_closed()
+
         tasks = (
             asyncio.create_task(process.wait()),
             asyncio.create_task(read_bounded(process.stdout, maximum_stdout_bytes, "stdout")),
             asyncio.create_task(read_bounded(process.stderr, maximum_stderr_bytes, "stderr")),
+            asyncio.create_task(write_prompt()),
         )
         try:
-            _, stdout, stderr = await asyncio.wait_for(
+            _, stdout, stderr, _ = await asyncio.wait_for(
                 asyncio.gather(*tasks), timeout=timeout_seconds
             )
         except TimeoutError as error:
             for task in tasks:
                 task.cancel()
             await self._terminate(process)
-            raise CodexCLITimeoutError(
+            timeout_error = CodexCLITimeoutError(
                 f"Codex CLI exceeded the {timeout_seconds:g}-second timeout"
-            ) from error
+            )
+            timeout_error.process_id = process.pid  # type: ignore[attr-defined]
+            raise timeout_error from error
         except CodexCLIOutputLimitError:
             for task in tasks:
                 task.cancel()
             await self._terminate(process)
             raise
-        return ProcessResult(process.returncode or 0, stdout, stderr)
+        return ProcessResult(process.returncode or 0, stdout, stderr, process.pid)
 
     @staticmethod
     async def _terminate(process: asyncio.subprocess.Process) -> None:
@@ -227,25 +247,58 @@ class CodexCLIClient:
     ) -> tuple[OutputT, ProviderMetadata, ParsedCodexEvents]:
         if not prompt.strip():
             raise ValueError("Codex CLI prompt must not be empty")
+        invocation_id = str(uuid4())
         directory = self._create_directory()
         schema_path = directory / "output-schema.json"
         output_path = directory / "structured-output.json"
+        diagnostics: dict[str, object] = {
+            "schema_version": 1,
+            "invocation_id": invocation_id,
+            "codex_version": self._capabilities.version,
+            "temporary_directory": str(directory),
+            "timeout_seconds": self._timeout_seconds,
+            "parser_state": "not_started",
+            "termination_reason": "not_started",
+            "request_id": None,
+            "process_id": None,
+            "elapsed_ms": None,
+        }
         try:
             self._write_schema(schema_path, output_type)
-            command = self._command(directory, schema_path, output_path, prompt)
+            command = self._command(directory, schema_path, output_path)
+            diagnostics["command"] = list(command)
             started_at = datetime.now(UTC)
             started = perf_counter()
-            result = await self._runner.run(
-                command,
-                cwd=directory,
-                environment=self._environment(),
-                timeout_seconds=self._timeout_seconds,
-                maximum_stdout_bytes=self._maximum_stdout_bytes,
-                maximum_stderr_bytes=self._maximum_stderr_bytes,
-            )
+            try:
+                result = await self._runner.run(
+                    command,
+                    stdin=prompt.encode("utf-8"),
+                    cwd=directory,
+                    environment=self._environment(),
+                    timeout_seconds=self._timeout_seconds,
+                    maximum_stdout_bytes=self._maximum_stdout_bytes,
+                    maximum_stderr_bytes=self._maximum_stderr_bytes,
+                )
+            except Exception as error:
+                diagnostics["elapsed_ms"] = (perf_counter() - started) * 1000
+                diagnostics["process_id"] = getattr(error, "process_id", None)
+                diagnostics["termination_reason"] = type(error).__name__
+                raise
             latency_ms = (perf_counter() - started) * 1000
+            diagnostics["elapsed_ms"] = latency_ms
+            diagnostics["process_id"] = result.process_id
             completed_at = datetime.now(UTC)
-            events = parse_codex_jsonl(result.stdout)
+            try:
+                events = parse_codex_jsonl(result.stdout)
+            except Exception as error:
+                diagnostics["parser_state"] = "failed"
+                diagnostics["termination_reason"] = type(error).__name__
+                raise
+            diagnostics["parser_state"] = "parsed"
+            diagnostics["request_id"] = events.thread_id
+            diagnostics["termination_reason"] = (
+                "completed" if events.terminal_completed and result.exit_code == 0 else "failed"
+            )
             if self._record_raw_events:
                 self._write_sanitized_events(directory / "codex-events.jsonl", result.stdout)
             self._raise_terminal_failure(result, events)
@@ -257,6 +310,7 @@ class CodexCLIClient:
                 raise CodexCLIMissingFinalResponseError(
                     "Codex CLI produced no structured final-output file"
                 )
+            output_path.chmod(0o600)
             try:
                 output = output_type.model_validate_json(
                     output_path.read_text(encoding="utf-8"), strict=True
@@ -288,6 +342,7 @@ class CodexCLIClient:
             )
             metadata = ProviderMetadata(
                 provider="codex",
+                invocation_id=invocation_id,
                 provider_surface="Codex CLI using authenticated ChatGPT access",
                 provider_version=self._capabilities.version,
                 model=self._model,
@@ -302,8 +357,14 @@ class CodexCLIClient:
                 subprocess_exit_code=result.exit_code,
             )
             return output, metadata, events
+        except Exception as error:
+            if diagnostics["termination_reason"] in {"not_started", "completed"}:
+                diagnostics["termination_reason"] = type(error).__name__
+            raise
         finally:
-            if not self._preserve_debug_directory:
+            if self._preserve_debug_directory:
+                self._write_diagnostics(directory / "codex-diagnostics.json", diagnostics)
+            else:
                 try:
                     shutil.rmtree(directory)
                 except OSError as error:
@@ -416,12 +477,26 @@ class CodexCLIClient:
         finally:
             temporary.unlink(missing_ok=True)
 
+    @staticmethod
+    def _write_diagnostics(path: Path, diagnostics: Mapping[str, object]) -> None:
+        temporary = path.with_name(f".{path.name}.tmp")
+        try:
+            temporary.write_text(json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+            temporary.chmod(0o600)
+            temporary.replace(path)
+            path.chmod(0o600)
+        except OSError as error:
+            raise CodexCLISchemaFileError(
+                f"could not preserve Codex diagnostics: {error}"
+            ) from error
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _command(
         self,
         directory: Path,
         schema_path: Path,
         output_path: Path,
-        prompt: str,
     ) -> tuple[str, ...]:
         return (
             str(self._capabilities.executable_path),
@@ -443,7 +518,7 @@ class CodexCLIClient:
             "--cd",
             str(directory),
             "--skip-git-repo-check",
-            prompt,
+            "-",
         )
 
     @staticmethod
@@ -479,6 +554,9 @@ class CodexCLIClient:
         if "refus" in combined:
             raise CodexCLIRefusalError("Codex CLI refused the structured provider request")
         if events.terminal_failed or result.exit_code != 0:
+            event_error = "; ".join(events.error_messages)
+            stderr_detail = stderr.replace("Reading additional input from stdin...", "").strip()
             raise CodexCLINonzeroExitError(
-                f"Codex CLI exited with status {result.exit_code}: {stderr or 'turn failed'}"
+                f"Codex CLI exited with status {result.exit_code}: "
+                f"{event_error or stderr_detail or 'turn failed'}"
             )

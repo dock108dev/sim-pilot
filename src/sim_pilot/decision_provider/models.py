@@ -19,6 +19,7 @@ class DecisionProviderModel(BaseModel):
 
 class DecisionRecording(DecisionProviderModel):
     id: UUID
+    invocation_id: str = Field(min_length=1)
     captured_at: AwareDatetime
     context: dict[str, JsonValue]
     response: Decision

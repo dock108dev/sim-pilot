@@ -25,10 +25,12 @@ class RecordingCompilerProvider:
         self._prompt = prompt
 
     async def compile(self, instruction: str) -> CompilerProviderResult:
+        recording_invocation_id = str(uuid4())
         started = perf_counter()
         result = await self._provider.compile(instruction)
         recording = CompilerRecording(
             id=uuid4(),
+            invocation_id=result.metadata.invocation_id or recording_invocation_id,
             captured_at=datetime.now(UTC),
             prompt_version=PROMPT_VERSION,
             prompt=self._prompt,

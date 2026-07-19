@@ -52,6 +52,7 @@ class FakeProcessRunner:
         self,
         command: Sequence[str],
         *,
+        stdin: bytes,
         cwd: Path,
         environment: Mapping[str, str],
         timeout_seconds: float,
@@ -63,14 +64,17 @@ class FakeProcessRunner:
         self.commands.append(materialized)
         self.working_directories.append(cwd)
         self.environments.append(dict(environment))
+        self.stdin = getattr(self, "stdin", [])
+        self.stdin.append(stdin)
         if self.write_output:
             output_path = Path(materialized[materialized.index("--output-last-message") + 1])
             output_path.write_text(self.output, encoding="utf-8")
             output_path.chmod(0o600)
         stdout = self.stdout
         if stdout is None:
+            request_id = f"thread_test_{len(self.commands)}"
             events = (
-                {"type": "thread.started", "thread_id": "thread_test"},
+                {"type": "thread.started", "thread_id": request_id},
                 {"type": "turn.started"},
                 {"type": "future.telemetry", "safe": True},
                 {

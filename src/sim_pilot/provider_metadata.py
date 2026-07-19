@@ -21,6 +21,7 @@ class ProviderTokenUsage(ProviderModel):
 
 class ProviderMetadata(ProviderModel):
     provider: str = Field(min_length=1)
+    invocation_id: str | None = None
     provider_surface: str | None = None
     provider_version: str | None = None
     model: str | None = None

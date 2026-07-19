@@ -22,6 +22,7 @@ from sim_pilot.provider_support.codex_cli.errors import (
     CodexCLIInvalidStructuredOutputError,
     CodexCLIMalformedJSONLError,
     CodexCLIMissingFinalResponseError,
+    CodexCLINonzeroExitError,
     CodexCLIOutputLimitError,
     CodexCLIProcessStartError,
     CodexCLIRefusalError,
@@ -55,7 +56,7 @@ def test_client_builds_isolated_non_shell_command_and_cleans_directory(tmp_path:
     assert output == ExampleOutput(value="ok")
     assert metadata.provider == "codex"
     assert metadata.provider_version == "codex-cli 0.141.0"
-    assert metadata.request_id == "thread_test"
+    assert metadata.request_id == "thread_test_1"
     assert metadata.started_at is not None
     assert metadata.completed_at is not None
     assert metadata.subprocess_exit_code == 0
@@ -72,6 +73,8 @@ def test_client_builds_isolated_non_shell_command_and_cleans_directory(tmp_path:
     assert command[command.index("-c") + 1] == 'approval_policy="never"'
     assert command[command.index("--model") + 1] == "gpt-5.6"
     assert "--add-dir" not in command
+    assert command[-1] == "-"
+    assert runner.stdin == [b"bounded prompt"]
     assert (
         runner.environments[0]
         .keys()
@@ -98,8 +101,9 @@ def test_client_transports_and_validates_canonical_json_payload(tmp_path: Path) 
     )
 
     assert output == ExampleOutput(value="ok")
-    assert "one field named payload" in runner.commands[0][-1]
-    assert '"properties":{"value"' in runner.commands[0][-1]
+    transported_prompt = runner.stdin[0].decode()
+    assert "one field named payload" in transported_prompt
+    assert '"properties":{"value"' in transported_prompt
 
 
 def test_client_rejects_invalid_canonical_json_payload(tmp_path: Path) -> None:
@@ -136,10 +140,20 @@ def test_client_preserves_owner_only_debug_directory_when_explicit(tmp_path: Pat
     assert directory.exists()
     assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     assert set(path.name for path in directory.iterdir()) == {
+        "codex-diagnostics.json",
         "output-schema.json",
         "structured-output.json",
     }
     assert stat.S_IMODE((directory / "output-schema.json").stat().st_mode) == 0o600
+    diagnostics_path = directory / "codex-diagnostics.json"
+    assert stat.S_IMODE(diagnostics_path.stat().st_mode) == 0o600
+    diagnostics = json.loads(diagnostics_path.read_text())
+    assert diagnostics["codex_version"] == "codex-cli 0.141.0"
+    assert diagnostics["request_id"] == "thread_test_1"
+    assert diagnostics["parser_state"] == "parsed"
+    assert diagnostics["termination_reason"] == "completed"
+    assert diagnostics["command"][-1] == "-"
+    assert "bounded prompt" not in diagnostics_path.read_text()
     shutil.rmtree(directory)
 
 
@@ -240,6 +254,50 @@ def test_client_rejects_malformed_jsonl_and_cleans_failed_directory(tmp_path: Pa
     assert not runner.working_directories[0].exists()
 
 
+def test_failed_parser_state_cannot_leak_into_next_invocation(tmp_path: Path) -> None:
+    runner = FakeProcessRunner('{"value":"ok"}', stdout=b'{"type":')
+    client = CodexCLIClient(
+        model="gpt-5.6",
+        temporary_directory_root=tmp_path,
+        runner=runner,
+        capabilities=capabilities(),
+    )
+    with pytest.raises(CodexCLIMalformedJSONLError):
+        asyncio.run(client.execute(prompt="first", output_type=ExampleOutput, prompt_version="v1"))
+
+    runner.stdout = None
+    output, metadata, _ = asyncio.run(
+        client.execute(prompt="second", output_type=ExampleOutput, prompt_version="v1")
+    )
+    assert output.value == "ok"
+    assert metadata.request_id == "thread_test_2"
+    assert runner.stdin == [b"first", b"second"]
+
+
+def test_nonzero_exit_reports_jsonl_error_not_informational_stdin_message(
+    tmp_path: Path,
+) -> None:
+    stdout = (
+        b'{"type":"thread.started","thread_id":"failed_request"}\n'
+        b'{"type":"turn.failed","error":"actual provider failure"}\n'
+    )
+    runner = FakeProcessRunner(
+        '{"value":"stale"}',
+        exit_code=1,
+        stdout=stdout,
+        stderr=b"Reading additional input from stdin...\n",
+    )
+    client = CodexCLIClient(
+        model="gpt-5.6",
+        temporary_directory_root=tmp_path,
+        runner=runner,
+        capabilities=capabilities(),
+    )
+    with pytest.raises(CodexCLINonzeroExitError, match="actual provider failure") as caught:
+        asyncio.run(client.execute(prompt="prompt", output_type=ExampleOutput, prompt_version="v1"))
+    assert "additional input" not in str(caught.value)
+
+
 def test_raw_event_debug_mode_is_explicit_sanitized_and_owner_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -271,6 +329,7 @@ def test_async_process_runner_enforces_timeout_and_output_bounds(tmp_path: Path)
         asyncio.run(
             runner.run(
                 (sys.executable, "-c", "print('x' * 1000)"),
+                stdin=b"",
                 cwd=tmp_path,
                 environment=environment,
                 timeout_seconds=2,
@@ -282,6 +341,7 @@ def test_async_process_runner_enforces_timeout_and_output_bounds(tmp_path: Path)
         asyncio.run(
             runner.run(
                 (sys.executable, "-c", "import sys; sys.stderr.write('x' * 1000)"),
+                stdin=b"",
                 cwd=tmp_path,
                 environment=environment,
                 timeout_seconds=2,
@@ -293,6 +353,7 @@ def test_async_process_runner_enforces_timeout_and_output_bounds(tmp_path: Path)
         asyncio.run(
             runner.run(
                 (sys.executable, "-c", "import time; time.sleep(5)"),
+                stdin=b"",
                 cwd=tmp_path,
                 environment=environment,
                 timeout_seconds=0.01,
@@ -305,6 +366,7 @@ def test_async_process_runner_enforces_timeout_and_output_bounds(tmp_path: Path)
         asyncio.run(
             runner.run(
                 ("/definitely/missing/codex",),
+                stdin=b"",
                 cwd=tmp_path,
                 environment=environment,
                 timeout_seconds=1,

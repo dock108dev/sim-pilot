@@ -20,6 +20,8 @@ from sim_pilot.provider_support.codex_cli.errors import (
     CodexCLIExecutableNotFoundError,
     CodexCLIUnauthenticatedError,
 )
+from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
+from sim_pilot.runtime.decision_errors import DecisionProviderUnavailableError
 from tests.intent_compiler.helpers import response, valid_specification
 from tests.openttd.gamescript.helpers import capabilities, snapshot
 from tests.openttd.helpers import FakeOpenTTDClient, state
@@ -329,6 +331,8 @@ def test_codex_decision_is_explicit_and_uses_selected_model_without_api_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("SIM_PILOT_CODEX_MODEL", "gpt-codex-test")
+    monkeypatch.setenv("SIM_PILOT_DECISION_MODEL", "gpt-api-test")
     constructed: list[dict[str, object]] = []
 
     def fake_codex_provider(**kwargs: object) -> ReferenceDemoDecisionProvider:
@@ -357,15 +361,70 @@ def test_codex_decision_is_explicit_and_uses_selected_model_without_api_key(
             str(task_id),
             "--decision-provider",
             "codex",
-            "--decision-model",
-            "gpt-test",
             "--iterations",
             "1",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert constructed[0]["model"] == "gpt-test"
+    assert constructed[0]["model"] == "gpt-codex-test"
+
+
+def test_failed_current_run_does_not_print_stale_decision_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FailingProvider:
+        async def decide(self, context: DecisionContext) -> DecisionProviderResult:
+            del context
+            raise DecisionProviderUnavailableError("current provider failed")
+
+    def failing_provider(**kwargs: object) -> FailingProvider:
+        del kwargs
+        return FailingProvider()
+
+    monkeypatch.setattr("sim_pilot.cli.CodexCLIDecisionProvider", failing_provider)
+    runner = CliRunner()
+    task_id = UUID(int=906)
+    prefix = ["--database", str(tmp_path / "metadata-correlation.db")]
+    assert runner.invoke(app, [*prefix, "db", "upgrade"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [*prefix, "task", "create", "--task-id", str(task_id), "--target-cash", "1000000"],
+        ).exit_code
+        == 0
+    )
+    first = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "run",
+            str(task_id),
+            "--decision-provider",
+            "scripted",
+            "--iterations",
+            "1",
+        ],
+    )
+    assert "decision_metadata" in first.output
+
+    failed = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "resume",
+            str(task_id),
+            "--decision-provider",
+            "codex",
+            "--iterations",
+            "1",
+        ],
+    )
+    assert failed.exit_code != 0
+    assert "current provider failed" in failed.output
+    assert "decision_metadata" not in failed.output
 
 
 def test_openttd_capabilities_is_offline_and_provider_independent(

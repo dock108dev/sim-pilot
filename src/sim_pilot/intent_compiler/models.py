@@ -65,6 +65,7 @@ class CompilerRecording(CompilerModel):
     """Local diagnostic record emitted only by an explicit recording wrapper."""
 
     id: UUID
+    invocation_id: str = Field(min_length=1)
     captured_at: AwareDatetime
     prompt_version: str = Field(min_length=1)
     prompt: str = Field(min_length=1)

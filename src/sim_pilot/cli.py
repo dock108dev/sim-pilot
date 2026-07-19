@@ -272,12 +272,12 @@ def _decision_provider(
         )
     if provider_name is DecisionProviderName.OPENAI:
         provider = OpenAIDecisionProvider(
-            model=codex_model(model_name),
+            model=decision_model(model_name),
             timeout_seconds=decision_timeout_seconds(),
         )
     elif provider_name is DecisionProviderName.CODEX:
         provider = CodexCLIDecisionProvider(
-            model=decision_model(model_name),
+            model=codex_model(model_name),
             timeout_seconds=codex_timeout_seconds(),
             executable=codex_executable(),
             temporary_directory_root=codex_temporary_directory_root(),
@@ -985,6 +985,7 @@ async def _run_task(
     )
     engine, runtime = _runtime(ctx)
     try:
+        starting_sequence = runtime.reconstruct(task_id).task.sequence
         outcome = await runtime.resume(
             task_id,
             _restore,
@@ -997,7 +998,8 @@ async def _run_task(
             (
                 event
                 for event in reversed(context.events)
-                if event.event_type.value == "decision_generated"
+                if event.sequence > starting_sequence
+                and event.event_type.value == "decision_generated"
             ),
             None,
         )
