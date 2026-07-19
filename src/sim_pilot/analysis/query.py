@@ -6,6 +6,7 @@ from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompiler
 from sim_pilot.analysis.contracts import AnalysisRequest, AnalysisResponse
 from sim_pilot.analysis.explanation import (
     ExplanationProvider,
+    ExplanationStyle,
     explanation_input,
     validate_explanation,
 )
@@ -25,7 +26,7 @@ class AnalysisQueryService:
         compiler: AnalysisCompiler,
         comparison: WorldSnapshot | None = None,
         explanation_provider: ExplanationProvider | None = None,
-        tone: str = "concise",
+        style: ExplanationStyle = ExplanationStyle.COMPACT,
     ) -> tuple[AnalysisCompilation, AnalysisResponse | None]:
         compilation = await compiler.compile(question)
         if compilation.request is None:
@@ -34,7 +35,9 @@ class AnalysisQueryService:
         if explanation_provider is None:
             return compilation, response
         try:
-            explanation = await explanation_provider.explain(explanation_input(response, tone=tone))
+            explanation = await explanation_provider.explain(
+                explanation_input(response, style=style)
+            )
             explanation = validate_explanation(explanation, response)
         except Exception as error:
             fallback = response.model_copy(
@@ -60,13 +63,15 @@ class AnalysisQueryService:
         *,
         comparison: WorldSnapshot | None = None,
         explanation_provider: ExplanationProvider | None = None,
-        tone: str = "concise",
+        style: ExplanationStyle = ExplanationStyle.COMPACT,
     ) -> AnalysisResponse:
         response = self._analysis_service.analyze(request, snapshot, comparison)
         if explanation_provider is None:
             return response
         try:
-            explanation = await explanation_provider.explain(explanation_input(response, tone=tone))
+            explanation = await explanation_provider.explain(
+                explanation_input(response, style=style)
+            )
             return response.model_copy(
                 update={"explanation": validate_explanation(explanation, response)}
             )

@@ -16,6 +16,8 @@ from sim_pilot.analysis.contracts import (
     EvidenceConfidence,
     FindingKind,
     FindingSeverity,
+    RankingDirection,
+    RankingMetric,
 )
 from sim_pilot.analysis.evidence import field_evidence, metric_evidence, observer_company
 from sim_pilot.domain.models import JsonValue
@@ -295,7 +297,7 @@ class RoutePerformanceAnalyzer:
                     limitations=("A single vehicle is not evidence of insufficient capacity.",),
                 )
                 findings.append(finding)
-        findings.sort(key=_route_sort_key)
+        findings.sort(key=lambda item: _route_sort_key(item, request))
         return AnalyzerResult(
             status=AnalysisStatus.COMPLETED if routes else AnalysisStatus.INSUFFICIENT_DATA,
             answer=f"Analyzed {len(routes)} inferred routes.",
@@ -305,7 +307,15 @@ class RoutePerformanceAnalyzer:
         )
 
 
-def _route_sort_key(item: AnalysisFinding) -> tuple[float, str]:
+def _route_sort_key(item: AnalysisFinding, request: AnalysisRequest) -> tuple[int, float, str]:
     value = item.metric_value
-    numeric = float(value) if isinstance(value, (int, float)) else 0.0
-    return numeric, item.finding_id
+    ranking = request.ranking
+    matched = bool(
+        (ranking is None or ranking.metric is RankingMetric.ROUTE_AGGREGATE_PROFIT)
+        and item.metric_name == "route_aggregate_profit"
+        and isinstance(value, (int, float))
+    )
+    numeric = float(value) if matched and isinstance(value, (int, float)) else 0.0
+    if ranking is not None and ranking.direction is RankingDirection.DESCENDING:
+        numeric = -numeric
+    return (0 if matched else 1, numeric, item.finding_id)

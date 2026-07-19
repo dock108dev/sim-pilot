@@ -30,8 +30,10 @@ from sim_pilot.analysis.evidence_view import (
     render_finding_evidence,
     render_session_summary,
 )
-from sim_pilot.analysis.explanation import ExplanationProvider
+from sim_pilot.analysis.explanation import ExplanationProvider, ExplanationStyle
+from sim_pilot.analysis.freshness import SnapshotCache
 from sim_pilot.analysis.output import render_analysis
+from sim_pilot.analysis.progress import AnalysisProgress
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
@@ -790,9 +792,9 @@ async def _analysis_snapshot(path: Path | None, live: bool) -> WorldSnapshot:
         raise ValueError("--snapshot and --live are mutually exclusive")
     if path is not None:
         return WorldSnapshot.model_validate_json(path.read_text(encoding="utf-8"), strict=True)
-    if not live:
-        raise ValueError("supply --snapshot or explicitly select --live")
-    return await capture_openttd_world_snapshot()
+    snapshot = await capture_openttd_world_snapshot()
+    SnapshotCache(analysis_session_directory() / "snapshot-cache.json").store(snapshot)
+    return snapshot
 
 
 def _analysis_session_store() -> AnalysisSessionStore:
@@ -810,7 +812,18 @@ def _emit_analysis(
         _emit(response)
         typer.echo(f"Analysis ID: {record.analysis_id}", err=True)
         return
-    typer.echo(render_analysis(response, detailed=detailed))
+    age = max(
+        0.0,
+        (datetime.now(UTC) - record.snapshot.metadata.captured_at).total_seconds(),
+    )
+    typer.echo(
+        render_analysis(
+            response,
+            detailed=detailed,
+            snapshot=record.snapshot,
+            snapshot_age_seconds=age,
+        )
+    )
     typer.echo("")
     typer.echo(f"Evidence available: sim-pilot analysis show {record.analysis_id}")
 
@@ -844,6 +857,9 @@ def analysis_ask(
     model: Annotated[str | None, typer.Option("--model")] = None,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    style: Annotated[ExplanationStyle, typer.Option("--style")] = ExplanationStyle.COMPACT,
 ) -> None:
     """Compile and answer a read-only gameplay question."""
     if adapter is not AdapterName.OPENTTD:
@@ -852,13 +868,41 @@ def analysis_ask(
             INVALID_INPUT,
         )
 
+    progress = AnalysisProgress(
+        quiet=quiet or json_output,
+        emit=lambda message: typer.echo(message, err=True),
+    )
+
     async def run() -> tuple[AnalysisCompilation, AnalysisResponse | None, WorldSnapshot]:
+        if snapshot_file is None:
+            progress.collecting()
         current = await _analysis_snapshot(snapshot_file, live)
         comparison = (
             None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
         )
         compiler = _analysis_compiler(compiler_provider, model)
+        if compiler_provider is not AnalysisProviderName.NONE:
+            progress.compiling()
         compilation = await compiler.compile(question)
+        normalized_question = " ".join(question.casefold().split())
+        if (
+            compilation.request is None
+            and compilation.clarification is not None
+            and comparison is not None
+            and any(term in normalized_question for term in ("compare", "changed", "unusual"))
+        ):
+            analysis_type = (
+                AnalysisType.ANOMALY_DETECTION
+                if "unusual" in normalized_question
+                else AnalysisType.WORLD_CHANGES
+            )
+            compilation = AnalysisCompilation(
+                request=AnalysisRequest(
+                    analysis_type=analysis_type,
+                    question=question.strip(),
+                    comparison_snapshot_id=comparison.metadata.snapshot_id,
+                )
+            )
         if compilation.request is None:
             return compilation, None, current
         request = compilation.request.model_copy(
@@ -871,6 +915,9 @@ def analysis_ask(
                 ),
             }
         )
+        progress.analyzing(current)
+        if explanation_provider is not AnalysisProviderName.NONE:
+            progress.explaining()
         response = await AnalysisQueryService(
             AnalysisService(default_analyzer_registry())
         ).analyze_request(
@@ -878,7 +925,7 @@ def analysis_ask(
             current,
             comparison=comparison,
             explanation_provider=_analysis_explainer(explanation_provider, model),
-            tone="detailed" if detailed else "concise",
+            style=style,
         )
         return compilation, response, current
 
@@ -913,8 +960,16 @@ def _direct_analysis(
     subject_type: AnalysisSubjectType | None,
     json_output: bool,
     detailed: bool,
+    quiet: bool,
 ) -> None:
+    progress = AnalysisProgress(
+        quiet=quiet or json_output,
+        emit=lambda message: typer.echo(message, err=True),
+    )
+
     async def run() -> tuple[AnalysisResponse, WorldSnapshot]:
+        if snapshot_file is None:
+            progress.collecting()
         current = await _analysis_snapshot(snapshot_file, live)
         comparison = (
             None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
@@ -929,6 +984,7 @@ def _direct_analysis(
             ),
             maximum_findings=maximum_findings,
         )
+        progress.analyzing(current)
         return (
             AnalysisService(default_analyzer_registry()).analyze(request, current, comparison),
             current,
@@ -952,6 +1008,7 @@ def _direct_options(
     subject_type: AnalysisSubjectType | None,
     json_output: bool,
     detailed: bool,
+    quiet: bool,
 ) -> None:
     _direct_analysis(
         analysis_type,
@@ -963,6 +1020,7 @@ def _direct_options(
         subject_type=subject_type,
         json_output=json_output,
         detailed=detailed,
+        quiet=quiet,
     )
 
 
@@ -974,6 +1032,8 @@ def analyze_company(
     maximum_findings: Annotated[int, typer.Option("--top", min=1, max=20)] = 5,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.COMPANY_HEALTH,
@@ -985,6 +1045,7 @@ def analyze_company(
         None,
         json_output,
         detailed,
+        quiet,
     )
 
 
@@ -997,6 +1058,8 @@ def analyze_vehicles(
     entity: Annotated[list[str] | None, typer.Option("--entity")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.VEHICLE_PERFORMANCE,
@@ -1008,6 +1071,7 @@ def analyze_vehicles(
         AnalysisSubjectType.VEHICLE,
         json_output,
         detailed,
+        quiet,
     )
 
 
@@ -1019,6 +1083,8 @@ def analyze_stations(
     entity: Annotated[list[str] | None, typer.Option("--entity")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.STATION_PERFORMANCE,
@@ -1030,6 +1096,7 @@ def analyze_stations(
         AnalysisSubjectType.STATION,
         json_output,
         detailed,
+        quiet,
     )
 
 
@@ -1041,6 +1108,8 @@ def analyze_routes(
     entity: Annotated[list[str] | None, typer.Option("--entity")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.ROUTE_PERFORMANCE,
@@ -1052,6 +1121,7 @@ def analyze_routes(
         AnalysisSubjectType.ROUTE,
         json_output,
         detailed,
+        quiet,
     )
 
 
@@ -1062,6 +1132,8 @@ def analyze_coverage(
     maximum_findings: Annotated[int, typer.Option("--top", min=1, max=20)] = 5,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.SERVICE_COVERAGE,
@@ -1073,6 +1145,7 @@ def analyze_coverage(
         None,
         json_output,
         detailed,
+        quiet,
     )
 
 
@@ -1084,6 +1157,8 @@ def analyze_changes(
     maximum_findings: Annotated[int, typer.Option("--top", min=1, max=20)] = 5,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet")] = False,
+    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
 ) -> None:
     _direct_options(
         AnalysisType.WORLD_CHANGES,
@@ -1095,6 +1170,7 @@ def analyze_changes(
         None,
         json_output,
         detailed,
+        quiet,
     )
 
 

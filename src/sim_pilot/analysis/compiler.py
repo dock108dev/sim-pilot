@@ -83,6 +83,12 @@ class DeterministicAnalysisCompiler:
             return AnalysisCompilation(
                 clarification="Name a route or ask for a ranked review of all observed routes."
             )
+        if normalized.rstrip("?") in {"what should i do", "is this okay"}:
+            return AnalysisCompilation(
+                clarification=(
+                    "Ask about company health, vehicles, stations, routes, coverage, or changes."
+                )
+            )
         if "compare" in normalized and "before" in normalized:
             return AnalysisCompilation(
                 clarification="Supply an explicit compatible comparison snapshot."
@@ -184,4 +190,15 @@ def _ranking(question: str, analysis_type: AnalysisType) -> RankingRequest | Non
             metric=RankingMetric.WAITING_CARGO,
             direction=RankingDirection.DESCENDING,
         )
+    if analysis_type is AnalysisType.ROUTE_PERFORMANCE:
+        if any(term in question for term in ("worst", "losing", "least", "bad")):
+            return RankingRequest(
+                metric=RankingMetric.ROUTE_AGGREGATE_PROFIT,
+                direction=RankingDirection.ASCENDING,
+            )
+        if any(term in question for term in ("best", "most money", "most profitable")):
+            return RankingRequest(
+                metric=RankingMetric.ROUTE_AGGREGATE_PROFIT,
+                direction=RankingDirection.DESCENDING,
+            )
     return None

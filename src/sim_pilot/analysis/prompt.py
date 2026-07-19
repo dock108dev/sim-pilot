@@ -12,7 +12,9 @@ ANALYSIS_EXPLANATION_PROMPT = """
 Explain only the supplied deterministic findings, evidence, recommendations, and limitations.
 Every factual claim must reference supplied identifiers. Preserve every metric name, value,
 severity, and confidence exactly. Do not add facts, evidence, causal certainty, or executable
-instructions.
+instructions. Label recommendations as recommendations, never facts. Preserve critical limitations
+with limitation statements that reference the affected finding IDs. Use the requested compact,
+coach, or technical style without adding generic strategy advice.
 Return only the structured AnalysisExplanation schema.
 """.strip()
 

@@ -25,6 +25,15 @@ def test_deterministic_compiler_maps_informal_vehicle_question() -> None:
     assert result.request.ranking.direction is RankingDirection.ASCENDING
 
 
+def test_deterministic_compiler_ranks_profitable_routes_descending() -> None:
+    result = compile_question("Which route makes the most money?")
+    assert result.request is not None
+    assert result.request.analysis_type is AnalysisType.ROUTE_PERFORMANCE
+    assert result.request.ranking is not None
+    assert result.request.ranking.metric is RankingMetric.ROUTE_AGGREGATE_PROFIT
+    assert result.request.ranking.direction is RankingDirection.DESCENDING
+
+
 @pytest.mark.parametrize(
     ("question", "outcome"),
     (
@@ -33,6 +42,8 @@ def test_deterministic_compiler_maps_informal_vehicle_question() -> None:
         ("Fix my worst route", "unsupported"),
         ("Which route is bad?", "clarification"),
         ("Are there unusual changes?", "clarification"),
+        ("What should I do?", "clarification"),
+        ("Is this okay?", "clarification"),
     ),
 )
 def test_compiler_is_honest_about_unsupported_and_ambiguous_questions(

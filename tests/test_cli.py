@@ -9,7 +9,7 @@ import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
-from sim_pilot.cli import INVALID_INPUT, CompilerProviderName, ReferenceDemoDecisionProvider, app
+from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
 from sim_pilot.domain import (
     CapabilityCoverage,
     Company,
@@ -30,6 +30,7 @@ from sim_pilot.provider_support.codex_cli.errors import (
 )
 from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
 from sim_pilot.runtime.decision_errors import DecisionProviderUnavailableError
+from tests.analysis.helpers import snapshot as analysis_snapshot
 from tests.intent_compiler.helpers import response, valid_specification
 from tests.openttd.gamescript.helpers import capabilities, snapshot
 from tests.openttd.helpers import FakeOpenTTDClient, state
@@ -619,10 +620,23 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
     assert "Fixture Transport" in entity.output
 
 
-def test_analysis_cli_requires_explicit_snapshot_or_live() -> None:
+def test_analysis_cli_defaults_to_live_with_progress_and_supports_quiet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def capture() -> WorldSnapshot:
+        return analysis_snapshot()
+
+    monkeypatch.setattr("sim_pilot.cli.capture_openttd_world_snapshot", capture)
+    monkeypatch.setattr(
+        "sim_pilot.cli.analysis_session_directory", lambda: tmp_path / "analysis-session"
+    )
     result = CliRunner().invoke(app, ["openttd", "analyze", "company"])
-    assert result.exit_code == INVALID_INPUT
-    assert "supply --snapshot or explicitly select --live" in result.output
+    quiet = CliRunner().invoke(app, ["openttd", "analyze", "company", "--fresh", "--quiet"])
+    assert result.exit_code == 0, result.output
+    assert "Collecting OpenTTD snapshot" in result.output
+    assert "Analyzing 0 vehicles and 0 stations" in result.output
+    assert quiet.exit_code == 0, quiet.output
+    assert "Collecting OpenTTD snapshot" not in quiet.output
 
 
 def test_openttd_bridge_doctor_reports_negotiated_health(

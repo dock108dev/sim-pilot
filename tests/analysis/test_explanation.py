@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from sim_pilot.analysis.compiler import AnalysisCompilation, ScriptedAnalysisCompiler
 from sim_pilot.analysis.contracts import (
     AnalysisExplanation,
@@ -8,8 +10,10 @@ from sim_pilot.analysis.contracts import (
     AnalysisType,
     ExplanationClaimType,
     ExplanationMetricReference,
+    FindingSeverity,
 )
-from sim_pilot.analysis.explanation import ScriptedExplanationProvider
+from sim_pilot.analysis.errors import AnalysisInputError
+from sim_pilot.analysis.explanation import ScriptedExplanationProvider, validate_explanation
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
@@ -85,3 +89,26 @@ def test_invented_metric_falls_back_to_deterministic_output() -> None:
     )
     assert response.explanation is None
     assert any("rejected" in item for item in response.limitations)
+
+
+def test_explanation_omitting_critical_finding_limitation_is_rejected() -> None:
+    deterministic = AnalysisService(default_analyzer_registry()).analyze(request(), snapshot())
+    cash = next(item for item in deterministic.findings if item.metric_name == "cash")
+    critical = cash.model_copy(
+        update={
+            "severity": FindingSeverity.CRITICAL,
+            "limitations": ("Cash excludes unobserved infrastructure liabilities.",),
+        }
+    )
+    response = deterministic.model_copy(update={"findings": (critical,)})
+    explanation = AnalysisExplanation(
+        statements=(
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.SUMMARY,
+                text="Cash is critical.",
+                finding_ids=(critical.finding_id,),
+            ),
+        )
+    )
+    with pytest.raises(AnalysisInputError, match="omits a critical"):
+        validate_explanation(explanation, response)

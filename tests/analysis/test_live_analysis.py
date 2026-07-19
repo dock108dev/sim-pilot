@@ -17,8 +17,8 @@ from sim_pilot.config import codex_model, codex_timeout_seconds
 
 @pytest.mark.live
 @pytest.mark.skipif(
-    os.getenv("SIM_PILOT_LIVE_OPENTTD_ANALYSIS") != "1",
-    reason="set SIM_PILOT_LIVE_OPENTTD_ANALYSIS=1 for read-only live analysis",
+    os.getenv("SIM_PILOT_LIVE_OPENTTD_INTELLIGENCE") != "1",
+    reason="set SIM_PILOT_LIVE_OPENTTD_INTELLIGENCE=1 for read-only live intelligence",
 )
 def test_live_openttd_deterministic_analysis_is_read_only() -> None:
     world = asyncio.run(capture_openttd_world_snapshot())
@@ -41,8 +41,8 @@ def test_live_openttd_deterministic_analysis_is_read_only() -> None:
 
 @pytest.mark.live
 @pytest.mark.skipif(
-    os.getenv("SIM_PILOT_LIVE_OPENTTD_ANALYSIS") != "1"
-    or os.getenv("SIM_PILOT_LIVE_CODEX_ANALYSIS") != "1",
+    os.getenv("SIM_PILOT_LIVE_OPENTTD_INTELLIGENCE") != "1"
+    or os.getenv("SIM_PILOT_LIVE_CODEX_INTELLIGENCE") != "1",
     reason="set both live analysis flags for the Codex explanation check",
 )
 def test_live_codex_explanation_cannot_change_deterministic_metrics() -> None:

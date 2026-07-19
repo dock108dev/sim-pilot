@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from enum import StrEnum
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,8 +14,16 @@ from sim_pilot.analysis.contracts import (
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisResponse,
+    ExplanationClaimType,
+    FindingSeverity,
 )
 from sim_pilot.analysis.errors import AnalysisInputError
+
+
+class ExplanationStyle(StrEnum):
+    COMPACT = "compact"
+    COACH = "coach"
+    TECHNICAL = "technical"
 
 
 class ExplanationInput(BaseModel):
@@ -25,7 +34,7 @@ class ExplanationInput(BaseModel):
     findings: tuple[AnalysisFinding, ...] = Field(max_length=20)
     recommendations: tuple[AnalysisRecommendation, ...] = Field(max_length=20)
     limitations: tuple[str, ...] = Field(max_length=50)
-    tone: str = Field(default="concise", min_length=1, max_length=40)
+    style: ExplanationStyle = ExplanationStyle.COMPACT
 
 
 class ExplanationProvider(Protocol):
@@ -43,14 +52,18 @@ class ScriptedExplanationProvider:
         return self._explanations.popleft()
 
 
-def explanation_input(response: AnalysisResponse, *, tone: str = "concise") -> ExplanationInput:
+def explanation_input(
+    response: AnalysisResponse,
+    *,
+    style: ExplanationStyle = ExplanationStyle.COMPACT,
+) -> ExplanationInput:
     return ExplanationInput(
         question=response.request.question,
         request=response.request,
         findings=response.findings,
         recommendations=response.recommendations,
         limitations=response.limitations,
-        tone=tone,
+        style=style,
     )
 
 
@@ -65,6 +78,12 @@ def validate_explanation(
         for evidence in finding.evidence
         if evidence.entity_id is not None
     }
+    critical_findings = {
+        item.finding_id
+        for item in response.findings
+        if item.severity is FindingSeverity.CRITICAL and item.limitations
+    }
+    acknowledged_limitations: set[str] = set()
     for statement in explanation.statements:
         if not set(statement.finding_ids).issubset(findings):
             raise AnalysisInputError("explanation references an unknown finding")
@@ -72,6 +91,15 @@ def validate_explanation(
             raise AnalysisInputError("explanation references an unknown recommendation")
         if not set(statement.entity_ids).issubset(entities):
             raise AnalysisInputError("explanation references an unknown entity")
+        if (
+            statement.recommendation_ids
+            and statement.claim_type is not ExplanationClaimType.RECOMMENDATION
+        ):
+            raise AnalysisInputError(
+                "an explanation recommendation must be labeled as a recommendation"
+            )
+        if statement.claim_type is ExplanationClaimType.LIMITATION:
+            acknowledged_limitations.update(statement.finding_ids)
         for reference in statement.metric_references:
             finding = findings.get(reference.finding_id)
             if finding is None:
@@ -80,4 +108,6 @@ def validate_explanation(
                 raise AnalysisInputError("explanation changes an authoritative metric name")
             if finding.metric_value != reference.metric_value:
                 raise AnalysisInputError("explanation changes an authoritative metric value")
+    if not critical_findings.issubset(acknowledged_limitations):
+        raise AnalysisInputError("explanation omits a critical finding limitation")
     return explanation
