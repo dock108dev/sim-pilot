@@ -14,6 +14,7 @@ from sim_pilot.adapters.base import (
     ActionParameterType,
 )
 from sim_pilot.domain import Action, ExecutionResult, Observation
+from sim_pilot.domain.world import WorldSnapshot
 from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
 from sim_pilot.openttd.gamescript.errors import BridgeCommandError
 from sim_pilot.openttd.gamescript.models import BridgeHealth, SynchronizationState
@@ -23,6 +24,7 @@ from sim_pilot.openttd.models import (
     OpenTTDObservationState,
     OpenTTDState,
 )
+from sim_pilot.openttd.world_diff import diff_world
 from sim_pilot.openttd.world_translation import translate_world
 
 SET_SERVER_NAME = "set_server_name"
@@ -127,6 +129,7 @@ class OpenTTDAdapter:
         self._last_observed_state: OpenTTDState | None = None
         self._pending_bridge_health: BridgeHealth | None = None
         self._last_bridge_health: BridgeHealth | None = None
+        self._last_world_snapshot: WorldSnapshot | None = None
 
     @property
     def capabilities(self) -> OpenTTDAdapterCapabilities:
@@ -198,6 +201,10 @@ class OpenTTDAdapter:
             )
         else:
             world = translate_world(game_state, bridge_health)
+            if world is not None and self._last_world_snapshot is not None:
+                world = diff_world(self._last_world_snapshot, world)
+            if world is not None:
+                self._last_world_snapshot = world
             state = OpenTTDObservationState.from_combined_state(
                 game_state, bridge_health, self.capabilities, world
             )
@@ -337,6 +344,7 @@ class OpenTTDAdapter:
         self._initialized = False
         self._pending_state = None
         self._pending_bridge_health = None
+        self._last_world_snapshot = None
 
     async def _validate_company_name(self, action: Action) -> OpenTTDValidation:
         if not self.allow_gamescript_writes:
