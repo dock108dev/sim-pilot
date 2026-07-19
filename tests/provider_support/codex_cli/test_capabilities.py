@@ -20,7 +20,7 @@ def _runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     if "--help" in command:
         help_text = """Run Codex non-interactively
 --ephemeral --json --output-schema --output-last-message --sandbox read-only --model --cd
---ignore-user-config --ignore-rules --skip-git-repo-check --config
+--ignore-user-config --ignore-rules --skip-git-repo-check --disable <FEATURE> --config
 """
         return subprocess.CompletedProcess(command, 0, help_text, "")
     return subprocess.CompletedProcess(command, 0, "Logged in using ChatGPT\n", "")
@@ -56,6 +56,18 @@ def test_probe_rejects_missing_feature_and_unauthenticated_cli() -> None:
         Path("/fake/codex"), runner=missing_json, cache_duration_seconds=0
     )
     with pytest.raises(CodexCLICompatibilityError, match="--json"):
+        capabilities.require_provider_contract()
+
+    def missing_disable(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        result = _runner(command)
+        return subprocess.CompletedProcess(
+            command, result.returncode, result.stdout.replace("--disable", ""), ""
+        )
+
+    capabilities = probe_codex_cli(
+        Path("/fake/codex"), runner=missing_disable, cache_duration_seconds=0
+    )
+    with pytest.raises(CodexCLICompatibilityError, match="--disable shell_tool"):
         capabilities.require_provider_contract()
 
     def logged_out(command: Sequence[str]) -> subprocess.CompletedProcess[str]:

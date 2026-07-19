@@ -1,4 +1,4 @@
-"""Strict runtime-local models for Task 3 orchestration."""
+"""Strict runtime-local orchestration models."""
 
 from datetime import datetime
 from enum import StrEnum

@@ -22,10 +22,10 @@ and API-key fallback are forbidden.
 
 Each call receives an argument-list invocation in a new owner-only temporary directory outside any
 Git repository. The command uses `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`,
-`--sandbox read-only`, `approval_policy="never"`, `--output-schema`, `--output-last-message`, an
-explicit model, and that directory as `--cd`. It never uses a shell, `--add-dir`, workspace-write,
-or repository context. The subprocess receives a small environment allowlist needed for CLI auth,
-locale, and certificates; API token variables are not inherited.
+`--sandbox read-only`, `--disable shell_tool`, `approval_policy="never"`, `--output-schema`,
+`--output-last-message`, an explicit model, and that directory as `--cd`. It never uses a shell,
+`--add-dir`, workspace-write, or repository context. The subprocess receives a small environment
+allowlist needed for CLI auth, locale, and certificates; API token variables are not inherited.
 
 The prompt is delivered through a bounded stdin pipe with the explicit `-` prompt marker; it is
 never placed in the argument list. This prevents Codex from interpreting a non-terminal stdin as
@@ -48,6 +48,9 @@ Every invocation receives a fresh UUID independent of the Codex thread/request I
 directory preservation is explicitly enabled, an owner-only diagnostic record contains only the
 sanitized command, Codex version, invocation and request IDs, process ID, temporary directory,
 elapsed time, parser state, and termination reason. It never contains the prompt or full stderr.
+Cleanup failure after an otherwise successful request is a typed boundary failure. If provider
+processing has already failed, diagnostic-write or temporary-directory cleanup failure is logged
+and attached as an exception note without replacing the primary provider exception.
 
 Product evaluation records Codex invocation counts and reported usage/latency. It reports direct API
 cost as none and allowance/credit consumption as not directly priced by Sim Pilot. Conservative
@@ -60,7 +63,7 @@ Normal defaults and CI remain network-free.
 |---|---|
 | Prompt injection in task or game state | Treat inputs as data, prohibit tools in the prompt, require canonical schemas, and run deterministic post-validation. |
 | Inherited AGENTS instructions, project rules, hooks, or user configuration | Empty non-repository working directory plus `--ignore-user-config` and `--ignore-rules`. |
-| MCP/tool or shell execution | Ignored user configuration, approval policy `never`, read-only sandbox, no shell invocation, and no added directories. |
+| MCP/tool or shell execution | Ignored user configuration, disabled `shell_tool`, approval policy `never`, read-only sandbox, no shell invocation, and no added directories. |
 | Repository or local-file inspection | Fresh temporary directory outside Git repositories; no checkout, mounts, or repository paths in prompts. |
 | Credential or environment exposure | Small environment allowlist, no API-key variables, no credential logging, and no authentication-file inspection. |
 | Sensitive stderr or telemetry leakage | Bounded stderr held in memory; raw events off by default and sanitized/owner-only when explicitly enabled. |

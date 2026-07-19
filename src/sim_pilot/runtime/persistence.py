@@ -171,7 +171,7 @@ class RuntimePersistence:
 
 
 class RepositoryEventView:
-    """Read-only compatibility view used by existing Task 3 callers."""
+    """Read-only event view exposed for diagnostics and tests."""
 
     def __init__(self, unit_of_work_factory: UnitOfWorkFactory) -> None:
         self._factory = unit_of_work_factory

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
-from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter
+from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.domain import Observation
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
@@ -26,7 +26,7 @@ from tests.persistence.factories import TASK_ID, task_record
 
 def test_observation_and_adapter_metadata_round_trip_through_event_repository() -> None:
     async def capture() -> Observation:
-        adapter = OpenTTDReadOnlyAdapter(FakeOpenTTDClient())
+        adapter = OpenTTDAdapter(FakeOpenTTDClient())
         await adapter.initialize()
         try:
             return await adapter.observe()

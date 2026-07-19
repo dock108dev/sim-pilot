@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 from types import TracebackType
 
 from sqlalchemy import Connection, Engine
@@ -22,6 +24,8 @@ from sim_pilot.persistence.sqlite.repositories import (
     SQLiteSimulationRepository,
     SQLiteTaskRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteUnitOfWork:
@@ -57,10 +61,16 @@ class SQLiteUnitOfWork:
     def begin(self) -> None:
         if self._connection is not None:
             raise TransactionError("unit of work is already active")
+        connection: Connection | None = None
         try:
             connection = self._engine.connect()
             transaction = connection.begin()
         except SQLAlchemyError as error:
+            if connection is not None:
+                try:
+                    connection.close()
+                except SQLAlchemyError as cleanup_error:
+                    self._report_secondary_failure(error, cleanup_error, "begin connection close")
             raise TransactionError(f"could not begin transaction: {error}") from error
         self._connection = connection
         self._transaction = transaction
@@ -74,12 +84,17 @@ class SQLiteUnitOfWork:
         try:
             transaction.commit()
         except SQLAlchemyError as error:
+            failure = TransactionError(f"could not commit transaction: {error}")
             if transaction.is_active:
-                transaction.rollback()
-            raise TransactionError(f"could not commit transaction: {error}") from error
+                try:
+                    transaction.rollback()
+                except SQLAlchemyError as cleanup_error:
+                    self._report_secondary_failure(
+                        failure, cleanup_error, "rollback after commit failure"
+                    )
+            raise failure from error
         finally:
-            connection.close()
-            self._clear()
+            self._close(connection)
 
     def rollback(self) -> None:
         connection, transaction = self._require_transaction()
@@ -88,8 +103,7 @@ class SQLiteUnitOfWork:
         except SQLAlchemyError as error:
             raise TransactionError(f"could not roll back transaction: {error}") from error
         finally:
-            connection.close()
-            self._clear()
+            self._close(connection)
 
     def __enter__(self) -> SQLiteUnitOfWork:
         self.begin()
@@ -126,3 +140,31 @@ class SQLiteUnitOfWork:
         self._events = None
         self._approvals = None
         self._simulations = None
+
+    def _close(self, connection: Connection) -> None:
+        active_error = sys.exception()
+        try:
+            connection.close()
+        except SQLAlchemyError as cleanup_error:
+            if active_error is None:
+                raise TransactionError(
+                    f"could not close transaction connection: {cleanup_error}"
+                ) from cleanup_error
+            self._report_secondary_failure(
+                active_error, cleanup_error, "transaction connection close"
+            )
+        finally:
+            self._clear()
+
+    @staticmethod
+    def _report_secondary_failure(
+        primary: BaseException,
+        secondary: BaseException,
+        operation: str,
+    ) -> None:
+        primary.add_note(f"{operation} also failed with {type(secondary).__name__}")
+        logger.exception(
+            "SQLite cleanup failed while another error was active operation=%s error_type=%s",
+            operation,
+            type(secondary).__name__,
+        )

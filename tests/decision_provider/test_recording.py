@@ -1,6 +1,7 @@
 """Opt-in decision recording security and failure behavior."""
 
 import asyncio
+import stat
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,7 @@ class FakeProvider:
 
 
 def test_recording_round_trip_permissions_and_redaction(tmp_path: Path) -> None:
+    tmp_path.chmod(0o755)
     context = make_context(
         state={
             "cash": 500_000.0,
@@ -63,6 +65,7 @@ def test_recording_round_trip_permissions_and_redaction(tmp_path: Path) -> None:
     paths = tuple(tmp_path.iterdir())
     assert len(paths) == 1
     assert paths[0].suffix == ".json"
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o700
     assert paths[0].stat().st_mode & 0o077 == 0
     recording = DecisionRecording.model_validate_json(paths[0].read_text())
     assert recording.response == result.decision

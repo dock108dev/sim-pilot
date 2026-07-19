@@ -1,4 +1,4 @@
-"""Repeatable Task 4C crash-window demonstration."""
+"""Repeatable reference-adapter crash-window demonstration."""
 
 import asyncio
 import tempfile
@@ -20,6 +20,7 @@ from sim_pilot.domain import (
     TaskStatus,
 )
 from sim_pilot.persistence.sqlite import SQLiteUnitOfWork, create_sqlite_engine, upgrade_database
+from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import RuntimeEngine, ScriptedDecisionProvider
 from sim_pilot.runtime.action_attempts import RecoveryResolution
 from sim_pilot.runtime.errors import SimulatedCrash
@@ -37,7 +38,9 @@ async def main() -> None:
                 raise SimulatedCrash(point.value)
 
         runtime = RuntimeEngine(
-            unit_of_work_factory=lambda: SQLiteUnitOfWork(engine), crash_hook=crash
+            unit_of_work_factory=lambda: SQLiteUnitOfWork(engine),
+            crash_hook=crash,
+            reconciliation_dispatcher=default_reconciliation_dispatcher(),
         )
         now = datetime.now(UTC)
         task = Task(
@@ -70,7 +73,10 @@ async def main() -> None:
         engine.dispose()
 
         restarted_engine = create_sqlite_engine(url)
-        restarted = RuntimeEngine(unit_of_work_factory=lambda: SQLiteUnitOfWork(restarted_engine))
+        restarted = RuntimeEngine(
+            unit_of_work_factory=lambda: SQLiteUnitOfWork(restarted_engine),
+            reconciliation_dispatcher=default_reconciliation_dispatcher(),
+        )
         report = await restarted.inspect_recovery(task.id, current)
         if report is None:
             raise RuntimeError("expected an interrupted action attempt")

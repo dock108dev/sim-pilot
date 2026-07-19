@@ -171,9 +171,16 @@ def test_evaluation_is_resumable_private_and_preserves_manual_review(tmp_path: P
     review[0]["compiler_rating"] = "correct"
     review[0]["decision_rating"] = "annoying"
     review[0]["runtime_rating"] = "acceptable"
-    review[0]["overall_rating"] = "acceptable"
+    review[0]["overall_rating"] = None
+    review[0]["manual_rating"] = "acceptable"
     review[0]["reviewer_notes"] = "Clear and faithful."
     review_path.write_text(json.dumps(review))
+
+    result_path = output / "results" / "informal-001.json"
+    persisted_result = json.loads(result_path.read_text())
+    persisted_result["overall_rating"] = None
+    persisted_result["manual_rating"] = "acceptable"
+    result_path.write_text(json.dumps(persisted_result))
 
     second = asyncio.run(
         run_product_evaluation(
@@ -193,7 +200,9 @@ def test_evaluation_is_resumable_private_and_preserves_manual_review(tmp_path: P
     assert preserved[0]["decision_rating"] == "annoying"
     assert preserved[0]["runtime_rating"] == "acceptable"
     assert preserved[0]["overall_rating"] == "acceptable"
+    assert "manual_rating" not in preserved[0]
     assert preserved[0]["reviewer_notes"] == "Clear and faithful."
+    assert "manual_rating" not in json.loads(result_path.read_text())
 
 
 def test_paid_case_failure_is_retained_as_evaluation_evidence(tmp_path: Path) -> None:

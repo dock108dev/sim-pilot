@@ -6,8 +6,8 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from sim_pilot.domain import TaskSpecification
-from sim_pilot.provider_metadata import ProviderMetadata, ProviderTokenUsage
+from sim_pilot.domain import AdapterType, TaskSpecification
+from sim_pilot.provider_metadata import ProviderMetadata
 
 
 class CompilerModel(BaseModel):
@@ -27,7 +27,7 @@ class CompilerCapabilityCatalog(CompilerModel):
     """Environment-specific names accepted by deterministic compiler validation."""
 
     name: str = Field(min_length=1)
-    adapter_type: str = Field(min_length=1)
+    adapter_type: AdapterType
     resources: tuple[str, ...]
     actions: tuple[str, ...]
     string_resources: tuple[str, ...] = ()
@@ -50,15 +50,11 @@ class CompilerResponse(CompilerModel):
     ambiguities: tuple[str, ...]
 
 
-CompilerTokenUsage = ProviderTokenUsage
-CompilerProviderMetadata = ProviderMetadata
-
-
 class CompilerProviderResult(CompilerModel):
     """One provider response plus non-semantic request metadata."""
 
     response: CompilerResponse
-    metadata: CompilerProviderMetadata
+    metadata: ProviderMetadata
 
 
 class CompilerRecording(CompilerModel):
@@ -71,7 +67,7 @@ class CompilerRecording(CompilerModel):
     prompt: str = Field(min_length=1)
     instruction: str = Field(min_length=1)
     latency_ms: float = Field(ge=0)
-    provider_metadata: CompilerProviderMetadata
+    provider_metadata: ProviderMetadata
     response: CompilerResponse
 
 

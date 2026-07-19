@@ -7,6 +7,7 @@ from sqlalchemy import Engine, inspect, text
 
 from alembic import command
 from sim_pilot.persistence.errors import UnsupportedSchemaVersionError
+from sim_pilot.persistence.sqlite.database import secure_sqlite_files
 
 ALEMBIC_ROOT = Path(__file__).parents[4]
 ALEMBIC_INI = ALEMBIC_ROOT / "alembic.ini"
@@ -17,12 +18,17 @@ def alembic_config(database_url: str) -> Config:
     config = Config(str(ALEMBIC_INI))
     config.set_main_option("script_location", str(ALEMBIC_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
+    config.attributes["sim_pilot_explicit_database_url"] = True
     return config
 
 
 def upgrade_database(database_url: str) -> None:
     """Upgrade an empty or previously migrated SQLite database to head."""
-    command.upgrade(alembic_config(database_url), "head")
+    secure_sqlite_files(database_url, create_database=True)
+    try:
+        command.upgrade(alembic_config(database_url), "head")
+    finally:
+        secure_sqlite_files(database_url)
 
 
 def verify_database_revision(engine: Engine) -> None:

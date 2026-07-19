@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
@@ -42,6 +44,7 @@ from sim_pilot.provider_support.codex_cli.events import ParsedCodexEvents, parse
 
 OutputT = TypeVar("OutputT", bound=BaseModel)
 JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, object])
+logger = logging.getLogger(__name__)
 
 
 def codex_output_schema(output_type: type[BaseModel]) -> dict[str, JsonValue]:
@@ -362,15 +365,38 @@ class CodexCLIClient:
                 diagnostics["termination_reason"] = type(error).__name__
             raise
         finally:
+            active_error = sys.exception()
             if self._preserve_debug_directory:
-                self._write_diagnostics(directory / "codex-diagnostics.json", diagnostics)
+                try:
+                    self._write_diagnostics(directory / "codex-diagnostics.json", diagnostics)
+                except Exception as cleanup_error:
+                    if active_error is None:
+                        raise
+                    active_error.add_note(
+                        "Codex diagnostic preservation also failed with "
+                        f"{type(cleanup_error).__name__}"
+                    )
+                    logger.exception(
+                        "Codex diagnostic preservation failed while another error was active "
+                        "error_type=%s",
+                        type(cleanup_error).__name__,
+                    )
             else:
                 try:
                     shutil.rmtree(directory)
                 except OSError as error:
-                    raise CodexCLITemporaryDirectoryError(
-                        f"could not remove isolated Codex directory: {error}"
-                    ) from error
+                    if active_error is None:
+                        raise CodexCLITemporaryDirectoryError(
+                            f"could not remove isolated Codex directory: {error}"
+                        ) from error
+                    active_error.add_note(
+                        f"Codex temporary-directory cleanup also failed with {type(error).__name__}"
+                    )
+                    logger.exception(
+                        "Codex temporary-directory cleanup failed while another error was active "
+                        "error_type=%s",
+                        type(error).__name__,
+                    )
 
     async def execute_canonical(
         self,
@@ -507,6 +533,8 @@ class CodexCLIClient:
             "--json",
             "--sandbox",
             "read-only",
+            "--disable",
+            "shell_tool",
             "-c",
             'approval_policy="never"',
             "--output-schema",

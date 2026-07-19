@@ -38,6 +38,7 @@ class CodexCLICapabilities(BaseModel):
     supports_ignore_user_config: bool
     supports_ignore_rules: bool
     supports_skip_git_repo_check: bool
+    supports_feature_disable: bool
     approval_configuration: Literal["config_override"] | None = None
 
     def require_provider_contract(self) -> None:
@@ -53,6 +54,7 @@ class CodexCLICapabilities(BaseModel):
             "--ignore-user-config": self.supports_ignore_user_config,
             "--ignore-rules": self.supports_ignore_rules,
             "--skip-git-repo-check": self.supports_skip_git_repo_check,
+            "--disable shell_tool": self.supports_feature_disable,
             "approval_policy config override": self.approval_configuration is not None,
         }
         missing = tuple(name for name, available in required.items() if not available)
@@ -132,6 +134,7 @@ def probe_codex_cli(
         supports_ignore_user_config="--ignore-user-config" in help_text,
         supports_ignore_rules="--ignore-rules" in help_text,
         supports_skip_git_repo_check="--skip-git-repo-check" in help_text,
+        supports_feature_disable="--disable" in help_text,
         approval_configuration=("config_override" if "--config" in help_text else None),
     )
     _CACHE[cache_key] = (monotonic(), capabilities)

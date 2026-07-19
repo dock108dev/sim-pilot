@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import shutil
 import stat
 import sys
@@ -70,6 +71,7 @@ def test_client_builds_isolated_non_shell_command_and_cleans_directory(tmp_path:
     assert "--ephemeral" in command
     assert "--json" in command
     assert command[command.index("--sandbox") + 1] == "read-only"
+    assert command[command.index("--disable") + 1] == "shell_tool"
     assert command[command.index("-c") + 1] == 'approval_policy="never"'
     assert command[command.index("--model") + 1] == "gpt-5.6"
     assert "--add-dir" not in command
@@ -252,6 +254,39 @@ def test_client_rejects_malformed_jsonl_and_cleans_failed_directory(tmp_path: Pa
     with pytest.raises(CodexCLIMalformedJSONLError):
         asyncio.run(client.execute(prompt="prompt", output_type=ExampleOutput, prompt_version="v1"))
     assert not runner.working_directories[0].exists()
+
+
+def test_cleanup_failure_does_not_mask_primary_provider_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner('{"value":"ok"}', stdout=b"not-json\n")
+    client = CodexCLIClient(
+        model="gpt-5.6",
+        temporary_directory_root=tmp_path,
+        runner=runner,
+        capabilities=capabilities(),
+    )
+    real_rmtree = shutil.rmtree
+
+    def fail_cleanup(path: Path) -> None:
+        del path
+        raise OSError("cleanup unavailable")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(shutil, "rmtree", fail_cleanup)
+        with (
+            caplog.at_level(logging.ERROR, logger="sim_pilot.provider_support.codex_cli.client"),
+            pytest.raises(CodexCLIMalformedJSONLError) as caught,
+        ):
+            asyncio.run(
+                client.execute(prompt="prompt", output_type=ExampleOutput, prompt_version="v1")
+            )
+
+    assert any("cleanup also failed" in note for note in caught.value.__notes__)
+    assert "cleanup failed while another error was active" in caplog.text
+    real_rmtree(runner.working_directories[0])
 
 
 def test_failed_parser_state_cannot_leak_into_next_invocation(tmp_path: Path) -> None:

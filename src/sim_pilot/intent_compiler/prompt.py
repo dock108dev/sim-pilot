@@ -59,6 +59,20 @@ OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
     string_resources=("server_name", "company_name"),
 )
 
+CAPABILITY_CATALOGS = {
+    REFERENCE_CAPABILITIES.adapter_type: REFERENCE_CAPABILITIES,
+    OPENTTD_CAPABILITIES.adapter_type: OPENTTD_CAPABILITIES,
+}
+
+
+def capability_catalog(adapter_type: str) -> CompilerCapabilityCatalog:
+    """Return the sole supported catalog for an adapter or fail explicitly."""
+    try:
+        return CAPABILITY_CATALOGS[adapter_type]
+    except KeyError as error:
+        raise ValueError(f"unsupported adapter type: {adapter_type!r}") from error
+
+
 INTENT_COMPILER_PROMPT = f"""
 You are the Sim Pilot Intent Compiler, prompt version {PROMPT_VERSION}.
 

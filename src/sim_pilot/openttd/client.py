@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 from collections.abc import Callable
-from contextlib import suppress
 from typing import TypeVar
 
 from sim_pilot.openttd.config import OpenTTDConfiguration
@@ -49,6 +49,7 @@ from sim_pilot.openttd.protocol import (
 )
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 class OpenTTDAdminClient:
@@ -252,19 +253,31 @@ class OpenTTDAdminClient:
         self._protocol = None
         if writer is None:
             return
-        with suppress(ConnectionError, OSError):
+        try:
             writer.write(encode_packet(PacketType.ADMIN_QUIT))
             await writer.drain()
-        writer.close()
-        with suppress(ConnectionError, OSError):
+        except (ConnectionError, OSError) as error:
+            logger.warning(
+                "OpenTTD close handshake failed stage=admin_quit error_type=%s",
+                type(error).__name__,
+            )
+        try:
+            writer.close()
             await writer.wait_closed()
+        except (ConnectionError, OSError) as error:
+            logger.warning(
+                "OpenTTD socket close failed stage=wait_closed error_type=%s",
+                type(error).__name__,
+            )
 
     async def _send(self, data: bytes, timeout: float) -> None:
         self._require_connected()
-        assert self._writer is not None
+        writer = self._writer
+        if writer is None:
+            raise OpenTTDDisconnectedError("OpenTTD client is not connected")
         try:
-            self._writer.write(data)
-            await asyncio.wait_for(self._writer.drain(), timeout=timeout)
+            writer.write(data)
+            await asyncio.wait_for(writer.drain(), timeout=timeout)
         except TimeoutError as error:
             raise OpenTTDTimeoutError("timed out writing to OpenTTD") from error
         except (ConnectionError, OSError) as error:
@@ -272,13 +285,15 @@ class OpenTTDAdminClient:
 
     async def _read_packet(self, timeout: float) -> DecodedPacket:
         self._require_connected()
-        assert self._reader is not None
+        reader = self._reader
+        if reader is None:
+            raise OpenTTDDisconnectedError("OpenTTD client is not connected")
         try:
-            size_data = await asyncio.wait_for(self._reader.readexactly(2), timeout=timeout)
+            size_data = await asyncio.wait_for(reader.readexactly(2), timeout=timeout)
             size = struct.unpack("<H", size_data)[0]
             if size < 3 or size > MAX_PACKET_SIZE:
                 raise OpenTTDInvalidResponseError(f"invalid protocol packet size: {size}")
-            body = await asyncio.wait_for(self._reader.readexactly(size - 2), timeout=timeout)
+            body = await asyncio.wait_for(reader.readexactly(size - 2), timeout=timeout)
         except TimeoutError as error:
             raise OpenTTDTimeoutError("timed out waiting for OpenTTD state") from error
         except asyncio.IncompleteReadError as error:

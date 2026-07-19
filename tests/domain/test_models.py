@@ -156,6 +156,14 @@ def test_rejects_invalid_schema_version() -> None:
         )
 
 
+def test_task_specification_rejects_unknown_adapter_type() -> None:
+    payload = make_specification().model_dump(mode="json")
+    payload["adapter_type"] = "legacy-or-unknown"
+
+    with pytest.raises(ValidationError, match="adapter_type"):
+        TaskSpecification.model_validate(payload)
+
+
 def test_observation_is_immutable() -> None:
     observation = Observation(
         sequence=0,

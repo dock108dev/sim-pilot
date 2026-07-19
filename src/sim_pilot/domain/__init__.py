@@ -2,6 +2,7 @@
 
 from sim_pilot.domain.models import (
     Action,
+    AdapterType,
     AuthorityPolicy,
     Constraint,
     Decision,
@@ -15,6 +16,7 @@ from sim_pilot.domain.types import ConstraintType, DecisionType, ObjectiveType, 
 
 __all__ = [
     "Action",
+    "AdapterType",
     "AuthorityPolicy",
     "Constraint",
     "ConstraintType",

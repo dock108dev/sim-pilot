@@ -102,5 +102,5 @@ class SimulationState(BaseModel):
 
 
 def initial_state() -> SimulationState:
-    """Return the canonical Task 2 initial state."""
+    """Return the canonical reference-simulation initial state."""
     return SimulationState()

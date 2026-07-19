@@ -4,10 +4,10 @@ from collections.abc import Iterable
 
 from sim_pilot.intent_compiler.errors import CompilerProviderError
 from sim_pilot.intent_compiler.models import (
-    CompilerProviderMetadata,
     CompilerProviderResult,
     CompilerResponse,
 )
+from sim_pilot.provider_metadata import ProviderMetadata
 
 
 class ScriptedCompilerProvider:
@@ -24,5 +24,5 @@ class ScriptedCompilerProvider:
         self.request_count += 1
         return CompilerProviderResult(
             response=response,
-            metadata=CompilerProviderMetadata(provider="scripted"),
+            metadata=ProviderMetadata(provider="scripted"),
         )

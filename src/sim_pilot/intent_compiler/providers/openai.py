@@ -8,12 +8,11 @@ from sim_pilot.intent_compiler.errors import (
     InvalidCompilerOutputError,
 )
 from sim_pilot.intent_compiler.models import (
-    CompilerProviderMetadata,
     CompilerProviderResult,
     CompilerResponse,
-    CompilerTokenUsage,
 )
 from sim_pilot.intent_compiler.prompt import INTENT_COMPILER_PROMPT
+from sim_pilot.provider_metadata import ProviderMetadata, ProviderTokenUsage
 
 
 class OpenAICompilerProvider:
@@ -84,7 +83,7 @@ class OpenAICompilerProvider:
         token_usage = (
             None
             if usage is None
-            else CompilerTokenUsage(
+            else ProviderTokenUsage(
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 total_tokens=usage.total_tokens,
@@ -92,7 +91,7 @@ class OpenAICompilerProvider:
         )
         return CompilerProviderResult(
             response=parsed,
-            metadata=CompilerProviderMetadata(
+            metadata=ProviderMetadata(
                 provider="openai",
                 model=self._model,
                 token_usage=token_usage,

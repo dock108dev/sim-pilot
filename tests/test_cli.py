@@ -186,6 +186,7 @@ def test_runtime_decision_provider_defaults_to_none_without_hosted_call(
     )
     assert result.exit_code == 20
     assert "no decision provider configured" in result.output
+    assert "error[DecisionProviderNotConfiguredError]" in result.output
 
 
 def test_scripted_runtime_recording_is_opt_in_and_atomic(tmp_path: Path) -> None:

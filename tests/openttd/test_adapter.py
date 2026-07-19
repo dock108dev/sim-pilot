@@ -7,7 +7,6 @@ from datetime import UTC
 from sim_pilot.adapters.base import ActionDefinition, SimulationAdapter
 from sim_pilot.adapters.openttd import (
     OpenTTDAdapter,
-    OpenTTDReadOnlyAdapter,
     OpenTTDValidation,
 )
 from sim_pilot.domain import Action, ExecutionResult, Observation
@@ -18,9 +17,9 @@ from tests.openttd.helpers import FakeOpenTTDClient, state
 
 
 def test_adapter_satisfies_contract_and_returns_two_observations() -> None:
-    async def scenario() -> tuple[Observation, Observation, OpenTTDReadOnlyAdapter]:
+    async def scenario() -> tuple[Observation, Observation, OpenTTDAdapter]:
         client = FakeOpenTTDClient([state("initial_company"), state("profitable_company")])
-        adapter = OpenTTDReadOnlyAdapter(client)
+        adapter = OpenTTDAdapter(client)
         typed: SimulationAdapter = adapter
         await typed.initialize()
         first = await typed.observe()
@@ -41,9 +40,9 @@ def test_adapter_satisfies_contract_and_returns_two_observations() -> None:
 
 
 def test_adapter_advertises_no_actions_and_rejects_without_client_interaction() -> None:
-    async def scenario() -> tuple[int, bool, bool, OpenTTDReadOnlyAdapter, FakeOpenTTDClient]:
+    async def scenario() -> tuple[int, bool, bool, OpenTTDAdapter, FakeOpenTTDClient]:
         client = FakeOpenTTDClient()
-        adapter = OpenTTDReadOnlyAdapter(client)
+        adapter = OpenTTDAdapter(client)
         await adapter.initialize()
         action = Action(type="pause", expected_effect="Pause the game.")
         actions = await adapter.available_actions()

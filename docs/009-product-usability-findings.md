@@ -34,8 +34,8 @@ and GameScript crash recovery; the original 3.5 score remains historical and was
 
 ### P2 — recurring friction
 
-- `SIM_PILOT_DATABASE` affects application commands but not raw `alembic current`; add an
-  application-level current command or a shared URL mechanism.
+- Resolved in the SSOT enforcement pass: `SIM_PILOT_DATABASE` now selects the same database for
+  application commands and raw Alembic commands; explicit programmatic URLs still take precedence.
 - Observation, action, and bridge commands emit very large JSON documents. Default to a concise
   operator summary with an explicit `--json` or `--evidence` mode.
 - `openttd capabilities` reports safe defaults, while live negotiation lives under doctor/bridge.
@@ -61,7 +61,7 @@ and GameScript crash recovery; the original 3.5 score remains historical and was
 
 | Category | Finding |
 |---|---|
-| Setup | Reproducible; database URL behavior is inconsistent between app and Alembic CLI. |
+| Setup | Reproducible; the database URL inconsistency found during this pass is now resolved. |
 | Terminology | Mostly precise; recovery language is too implementation-oriented. |
 | Output | Correct but routinely too verbose for a player-facing CLI. |
 | Latency | Local deterministic actions are fast; hosted compilation is noticeably slow; hosted decisions failed. |

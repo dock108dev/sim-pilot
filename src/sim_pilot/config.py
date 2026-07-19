@@ -1,16 +1,7 @@
 """Small environment and CLI configuration boundary."""
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
-
-
-@dataclass(frozen=True)
-class AppConfiguration:
-    database_url: str
-    compiler_model: str
-    decision_model: str
-    decision_timeout_seconds: float
 
 
 def database_url(value: str | None = None) -> str:

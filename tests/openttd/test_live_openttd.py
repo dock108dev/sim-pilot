@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot
-from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter
+from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.domain import (
     Action,
     AuthorityPolicy,
@@ -37,7 +37,7 @@ def test_live_openttd_two_observations_and_read_only_rejection() -> None:
         pytest.skip("set SIM_PILOT_LIVE_OPENTTD=1 with local OpenTTD 15.3 to run")
 
     async def scenario() -> None:
-        adapter = OpenTTDReadOnlyAdapter(OpenTTDAdminClient(openttd_configuration()))
+        adapter = OpenTTDAdapter(OpenTTDAdminClient(openttd_configuration()))
         await adapter.initialize()
         try:
             first = await adapter.observe()

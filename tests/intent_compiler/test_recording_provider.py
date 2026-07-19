@@ -1,15 +1,14 @@
 """Provider metadata and opt-in recording behavior."""
 
 import asyncio
+import stat
 from pathlib import Path
 
 import pytest
 
 from sim_pilot.intent_compiler import (
-    CompilerProviderMetadata,
     CompilerProviderResult,
     CompilerRecording,
-    CompilerTokenUsage,
 )
 from sim_pilot.intent_compiler.errors import CompilerProviderError
 from sim_pilot.intent_compiler.providers import (
@@ -17,6 +16,7 @@ from sim_pilot.intent_compiler.providers import (
     RecordingCompilerProvider,
     ScriptedCompilerProvider,
 )
+from sim_pilot.provider_metadata import ProviderMetadata, ProviderTokenUsage
 from tests.intent_compiler.helpers import response, valid_specification
 
 
@@ -26,7 +26,7 @@ def test_scripted_provider_returns_typed_metadata() -> None:
             "Reach one million cash."
         )
         assert result.response.specification == valid_specification()
-        assert result.metadata == CompilerProviderMetadata(provider="scripted")
+        assert result.metadata == ProviderMetadata(provider="scripted")
 
     asyncio.run(scenario())
 
@@ -40,12 +40,13 @@ def test_no_provider_configured_fails_without_hosted_access() -> None:
 
 
 def test_recording_provider_writes_complete_atomic_json(tmp_path: Path) -> None:
+    tmp_path.chmod(0o755)
     provider_result = CompilerProviderResult(
         response=response(valid_specification()),
-        metadata=CompilerProviderMetadata(
+        metadata=ProviderMetadata(
             provider="example",
             model="example-model",
-            token_usage=CompilerTokenUsage(
+            token_usage=ProviderTokenUsage(
                 input_tokens=100,
                 output_tokens=40,
                 total_tokens=140,
@@ -75,4 +76,5 @@ def test_recording_provider_writes_complete_atomic_json(tmp_path: Path) -> None:
     assert recording.response == provider_result.response
     assert recording.provider_metadata == provider_result.metadata
     assert recording.latency_ms >= 0
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o700
     assert paths[0].stat().st_mode & 0o077 == 0

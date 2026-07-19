@@ -38,7 +38,7 @@ class OpenTTDConfiguration(BaseModel):
 
     @model_validator(mode="after")
     def require_loopback_for_plaintext_admin_login(self) -> OpenTTDConfiguration:
-        """Never transmit the Task 6B admin password beyond loopback."""
+        """Never transmit the plaintext OpenTTD admin password beyond loopback."""
         try:
             addresses = {info[4][0] for info in socket.getaddrinfo(self.host, self.port)}
         except socket.gaierror as error:
@@ -46,7 +46,7 @@ class OpenTTDConfiguration(BaseModel):
         if not addresses or any(
             not ipaddress.ip_address(address).is_loopback for address in addresses
         ):
-            raise ValueError("Task 6B plaintext admin authentication requires a loopback host")
+            raise ValueError("plaintext OpenTTD admin authentication requires a loopback host")
         return self
 
 

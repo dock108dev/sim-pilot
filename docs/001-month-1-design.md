@@ -451,7 +451,8 @@ Terminal statuses do not transition.
 
 Contains
 
-- adapter_type (`reference` by default; persisted so restart composition is unambiguous)
+- adapter_type (`reference` or `openttd`; `reference` by default; persisted so restart composition
+  is unambiguous; other values are invalid)
 - objective
 - constraints
 - authority
@@ -869,20 +870,21 @@ while task.running:
 
 ---
 
-# Logging
+# Failure observability
 
-Every execution step generates a runtime event.
+Expected execution activity and failures generate ordered runtime events. Unexpected adapter or
+runtime exceptions fail the task when persistence remains available. Their `TaskFailed` payload
+contains `reason`, `error_type`, and `phase`; the process logger retains the traceback with task ID
+and phase. Decision-provider failures retain their dedicated `DecisionProviderFailed` event.
 
-Minimum fields
+Persistence failure is different: if the atomic failure event itself cannot be committed, the
+runtime raises `DurablePersistenceError` instead of claiming that a failed state was stored.
+Adapter shutdown is always attempted. A shutdown failure while a task is still running fails the
+task durably; a shutdown failure after an already committed terminal outcome is logged but does not
+rewrite that outcome.
 
-```text
-timestamp
-task_id
-sequence
-component
-event
-duration
-```
+Events remain the durable operational record. Standard-library error logs supplement them with
+tracebacks for live diagnosis and are not a replacement for event history.
 
 ---
 

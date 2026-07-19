@@ -8,6 +8,7 @@ from uuid import uuid4
 from sim_pilot.intent_compiler.interfaces import CompilerProvider
 from sim_pilot.intent_compiler.models import CompilerProviderResult, CompilerRecording
 from sim_pilot.intent_compiler.prompt import INTENT_COMPILER_PROMPT, PROMPT_VERSION
+from sim_pilot.private_files import atomic_write_private_text
 
 
 class RecordingCompilerProvider:
@@ -43,13 +44,6 @@ class RecordingCompilerProvider:
         return result
 
     def _write(self, recording: CompilerRecording) -> None:
-        self._directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         stem = f"{recording.captured_at.strftime('%Y%m%dT%H%M%S%fZ')}-{recording.id}"
         destination = self._directory / f"{stem}.json"
-        temporary = self._directory / f".{stem}.tmp"
-        try:
-            temporary.write_text(recording.model_dump_json(indent=2) + "\n", encoding="utf-8")
-            temporary.chmod(0o600)
-            temporary.replace(destination)
-        finally:
-            temporary.unlink(missing_ok=True)
+        atomic_write_private_text(destination, recording.model_dump_json(indent=2) + "\n")

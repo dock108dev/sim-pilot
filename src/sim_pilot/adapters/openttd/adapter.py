@@ -30,7 +30,7 @@ MAX_SERVER_NAME_BYTES = 79
 
 
 class SetServerNameOpenTTDAction(BaseModel):
-    """The only Task 6C action with an independently observable postcondition."""
+    """The only supported Admin Network action with an observable postcondition."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -62,7 +62,7 @@ class SetServerNameOpenTTDAction(BaseModel):
 
 
 class SetCompanyNameOpenTTDAction(BaseModel):
-    """The only Task 7A-verified GameScript company mutation."""
+    """The only supported GameScript company mutation."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -432,7 +432,3 @@ class OpenTTDAdapter:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("OpenTTD adapter is not initialized.")
-
-
-# Preserve the Task 6B import while evolving its capabilities in Task 6C.
-OpenTTDReadOnlyAdapter = OpenTTDAdapter

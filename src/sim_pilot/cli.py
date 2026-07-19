@@ -1,4 +1,4 @@
-"""Minimal durable Task 4C command-line interface."""
+"""Process-facing CLI for durable tasks, providers, recovery, and OpenTTD."""
 
 import asyncio
 import json
@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot, SimulationAdapter
-from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter
+from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.config import (
     codex_capability_cache_seconds,
@@ -55,8 +55,7 @@ from sim_pilot.intent_compiler import (
     ValidationStatus,
 )
 from sim_pilot.intent_compiler.prompt import (
-    OPENTTD_CAPABILITIES,
-    REFERENCE_CAPABILITIES,
+    capability_catalog,
     compiler_prompt,
 )
 from sim_pilot.intent_compiler.providers import (
@@ -185,9 +184,7 @@ def _intent_compiler(
     adapter_name: AdapterName = AdapterName.REFERENCE,
     model_name: str | None = None,
 ) -> IntentCompiler:
-    catalog = (
-        OPENTTD_CAPABILITIES if adapter_name is AdapterName.OPENTTD else REFERENCE_CAPABILITIES
-    )
+    catalog = capability_catalog(adapter_name.value)
     prompt = compiler_prompt(catalog)
     provider: CompilerProvider
     if provider_name is CompilerProviderName.OPENAI:
@@ -204,15 +201,18 @@ def _intent_compiler(
             maximum_stderr_bytes=codex_maximum_stderr_bytes(),
             capability_cache_seconds=codex_capability_cache_seconds(),
         )
-    else:
+    elif provider_name is CompilerProviderName.NONE:
         provider = NoProviderConfigured()
+    else:
+        raise ValueError(f"unsupported compiler provider: {provider_name!r}")
     if recording_directory is not None:
         provider = RecordingCompilerProvider(provider, recording_directory, prompt=prompt)
     return IntentCompiler(provider, catalog)
 
 
 def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
-    if _is_openttd_specification(context.task.specification):
+    adapter_type = context.task.specification.adapter_type
+    if adapter_type == "openttd":
         prior_health: BridgeHealth | None = None
         if context.checkpoint is not None:
             raw = context.checkpoint.state.get("bridge")
@@ -222,9 +222,11 @@ def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
             prior_bridge_health=prior_health,
             reject_bridge_identity_change=prior_health is not None,
         )
-    if context.checkpoint is None:
-        return ReferenceSimulationAdapter()
-    return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
+    if adapter_type == "reference":
+        if context.checkpoint is None:
+            return ReferenceSimulationAdapter()
+        return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
+    raise ReconstructionConsistencyError(f"unsupported adapter type: {adapter_type!r}")
 
 
 class ReferenceDemoDecisionProvider:
@@ -290,8 +292,10 @@ def _decision_provider(
             maximum_stderr_bytes=codex_maximum_stderr_bytes(),
             capability_cache_seconds=codex_capability_cache_seconds(),
         )
-    else:
+    elif provider_name is DecisionProviderName.SCRIPTED:
         provider = ReferenceDemoDecisionProvider()
+    else:
+        raise ValueError(f"unsupported decision provider: {provider_name!r}")
     if recording_directory is not None:
         provider = RecordingDecisionProvider(provider, recording_directory)
     return provider
@@ -316,7 +320,7 @@ def _emit(value: object) -> None:
 
 
 def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
-    typer.echo(f"error: {error}", err=True)
+    typer.echo(f"error[{type(error).__name__}]: {error}", err=True)
     raise typer.Exit(code)
 
 
@@ -352,10 +356,6 @@ def _openttd_adapter(
     )
 
 
-def _is_openttd_specification(specification: TaskSpecification) -> bool:
-    return specification.adapter_type == "openttd"
-
-
 async def _capture_openttd_observation() -> Observation:
     adapter = _openttd_adapter()
     await adapter.initialize()
@@ -371,14 +371,14 @@ def evaluate_product(
         CompilerProviderName,
         typer.Option(
             "--compiler-provider",
-            help="Hosted compiler provider; explicitly select codex or openai.",
+            help="Model-backed compiler provider; explicitly select codex or openai.",
         ),
     ] = CompilerProviderName.NONE,
     decision_provider: Annotated[
         DecisionProviderName,
         typer.Option(
             "--decision-provider",
-            help="Hosted runtime provider; explicitly select codex or openai.",
+            help="Model-backed runtime provider; explicitly select codex or openai.",
         ),
     ] = DecisionProviderName.NONE,
     record_dir: Annotated[
@@ -476,7 +476,7 @@ def evaluate_product(
     )
 
     def compiler_factory(item: ProductEvaluationCase) -> CompilerProvider:
-        catalog = OPENTTD_CAPABILITIES if item.adapter == "openttd" else REFERENCE_CAPABILITIES
+        catalog = capability_catalog(item.adapter)
         prompt = compiler_prompt(catalog)
         provider: CompilerProvider
         if compiler_provider is CompilerProviderName.CODEX:
@@ -627,7 +627,7 @@ def openttd_watch(
 
     async def watch() -> None:
         configuration = openttd_configuration()
-        adapter = OpenTTDReadOnlyAdapter(OpenTTDAdminClient(configuration))
+        adapter = OpenTTDAdapter(OpenTTDAdminClient(configuration))
         previous: dict[str, str | int | None] | None = None
         await adapter.initialize()
         try:
@@ -879,7 +879,7 @@ def task_create(
     instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
     provider: Annotated[
         CompilerProviderName,
-        typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
+        typer.Option("--provider", help="Compiler provider; model access is always explicit."),
     ] = CompilerProviderName.NONE,
     model: Annotated[str | None, typer.Option("--model")] = None,
     record_dir: Annotated[
@@ -953,7 +953,7 @@ def task_compile(
     instruction: Annotated[str | None, typer.Option("--instruction", "-i")] = None,
     provider: Annotated[
         CompilerProviderName,
-        typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
+        typer.Option("--provider", help="Compiler provider; model access is always explicit."),
     ] = CompilerProviderName.NONE,
     model: Annotated[str | None, typer.Option("--model")] = None,
     record_dir: Annotated[
@@ -1035,7 +1035,7 @@ def task_run(
         DecisionProviderName,
         typer.Option(
             "--decision-provider",
-            help="Runtime decision provider; hosted access is always explicit.",
+            help="Runtime decision provider; model access is always explicit.",
         ),
     ] = DecisionProviderName.NONE,
     decision_model_name: Annotated[str | None, typer.Option("--decision-model")] = None,
@@ -1075,7 +1075,7 @@ def task_resume(
         DecisionProviderName,
         typer.Option(
             "--decision-provider",
-            help="Runtime decision provider; hosted access is always explicit.",
+            help="Runtime decision provider; model access is always explicit.",
         ),
     ] = DecisionProviderName.NONE,
     decision_model_name: Annotated[str | None, typer.Option("--decision-model")] = None,

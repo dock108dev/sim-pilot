@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from typing import cast
 
 import pytest
 from pydantic import SecretStr
@@ -136,6 +138,42 @@ def test_client_connects_authenticates_and_collects_selected_company() -> None:
             await client.close()
 
     asyncio.run(scenario())
+
+
+def test_close_keeps_cleanup_resilient_but_reports_transport_failures(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class InjectableClient(OpenTTDAdminClient):
+        def inject_writer(self, writer: asyncio.StreamWriter) -> None:
+            self._writer = writer
+
+        @property
+        def has_writer(self) -> bool:
+            return self._writer is not None
+
+    class FailingWriter:
+        def write(self, data: bytes) -> None:
+            del data
+            raise ConnectionError("peer reset")
+
+        async def drain(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+        async def wait_closed(self) -> None:
+            raise OSError("close failed")
+
+    client = InjectableClient(OpenTTDConfiguration(password=SecretStr("secret")))
+    client.inject_writer(cast("asyncio.StreamWriter", FailingWriter()))
+
+    with caplog.at_level(logging.WARNING, logger="sim_pilot.openttd.client"):
+        asyncio.run(client.close())
+
+    assert client.has_writer is False
+    assert "stage=admin_quit error_type=ConnectionError" in caplog.text
+    assert "stage=wait_closed error_type=OSError" in caplog.text
 
 
 def test_client_executes_bounded_rcon_and_matches_completion_command() -> None:

@@ -4,6 +4,22 @@ All notable changes to Sim Pilot are documented in this file.
 
 ## Unreleased
 
+### Repository maintenance
+
+- Reorganized the root README into a concise first-run guide with development and operations
+  documentation under `docs/`.
+- Added canonical configuration, data/persistence, and current-limitations references; verified the
+  documented build, migration, deterministic task, crash-recovery, and validation workflows.
+- Corrected CLI provider terminology, documented OpenTTD exit code 23, and ignored local
+  environment and Python build artifacts.
+- Consolidated owner-only atomic text output for compiler recordings, decision recordings, and
+  product-evaluation evidence.
+- Removed empty abandoned `sim_pilot.llm` and `sim_pilot.logging` package placeholders.
+- Documented current SSOT boundaries and aligned raw Alembic database selection with application
+  configuration.
+- Split the oversized runtime engine into a stable facade, adapter-session coordinator, one-cycle
+  iterator, crash-aware action executor, typed dependency bundle, and pure support helpers.
+
 ### Product evaluation corrections
 
 - Recorded the first 31-case live-model baseline and prepared the founder usage checklist.

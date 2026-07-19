@@ -25,6 +25,7 @@ def capabilities(*, authenticated: bool = True) -> CodexCLICapabilities:
         supports_ignore_user_config=True,
         supports_ignore_rules=True,
         supports_skip_git_repo_check=True,
+        supports_feature_disable=True,
         approval_configuration="config_override",
     )
 

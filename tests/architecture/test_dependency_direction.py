@@ -239,6 +239,26 @@ def test_runtime_does_not_import_openttd_client() -> None:
     assert not {path: modules for path, modules in violations.items() if modules}
 
 
+def test_runtime_orchestration_modules_stay_reviewable() -> None:
+    """Keep the facade and extracted execution responsibilities below the review threshold."""
+    limits = {
+        "engine.py": 500,
+        "execution.py": 500,
+        "iteration.py": 500,
+        "action_execution.py": 500,
+        "execution_services.py": 500,
+        "engine_support.py": 500,
+    }
+
+    sizes = {
+        name: len((PACKAGE_ROOT / "runtime" / name).read_text(encoding="utf-8").splitlines())
+        for name in limits
+    }
+    oversized = {name: size for name, size in sizes.items() if size > limits[name]}
+
+    assert not oversized, f"Runtime orchestration modules exceeded 500 lines: {oversized}"
+
+
 def test_codex_cli_boundary_is_shared_and_never_uses_a_shell() -> None:
     files = tuple((PACKAGE_ROOT / "provider_support" / "codex_cli").rglob("*.py"))
     forbidden = (

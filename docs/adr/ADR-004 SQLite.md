@@ -14,8 +14,13 @@ Use SQLite as the durable persistence database in Task 4. Store versioned domain
 preserve event sequence ordering transactionally. Task 3 first defines the storage interface and
 runtime semantics using an append-only in-memory event store. Durable persistence uses current-state
 snapshots plus the complete append-only event log. Alembic manages every schema version beginning
-with the initial schema. ADR-007 defines repository ownership, transactions, recovery, and delivery
-sequencing.
+with the initial schema. Database files and SQLite rollback/WAL sidecars are restricted to the
+owning user (`0600`) by both application and raw Alembic migration paths. ADR-007 defines repository
+ownership, transactions, recovery, and delivery sequencing.
+
+`sim_pilot.config.database_url` is the database-location source of truth for application commands
+and raw Alembic commands. `SIM_PILOT_DATABASE` selects the database for both surfaces; an explicit
+CLI or programmatic migration argument takes precedence.
 
 ## Consequences
 

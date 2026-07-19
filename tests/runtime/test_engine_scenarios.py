@@ -1,10 +1,13 @@
 """Task 3 deterministic runtime integration scenarios."""
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
 from uuid import UUID
+
+import pytest
 
 from sim_pilot.adapters.base import ActionDefinition
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
@@ -55,6 +58,12 @@ class ExecutionFailureAdapter(TrackingAdapter):
         del action
         msg = "execution failed"
         raise RuntimeError(msg)
+
+
+class ShutdownFailureAdapter(TrackingAdapter):
+    async def shutdown(self) -> None:
+        self.shutdown_count += 1
+        raise RuntimeError("shutdown failed")
 
 
 class FalseSuccessAdapter:
@@ -460,7 +469,9 @@ def test_scenario_j_cancels_between_iterations() -> None:
     asyncio.run(scenario())
 
 
-def test_maximum_iterations_and_initialization_failure_shutdown() -> None:
+def test_maximum_iterations_and_initialization_failure_shutdown(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     async def scenario() -> None:
         task = make_task(target=1_000_000)
         engine = RuntimeEngine(
@@ -479,17 +490,24 @@ def test_maximum_iterations_and_initialization_failure_shutdown() -> None:
         failed_task = make_task()
         failed_task = failed_task.model_copy(update={"id": UUID(int=257)})
         failing = InitializationFailureAdapter()
-        failed = await RuntimeEngine().run(
-            failed_task,
-            failing,
-            ScriptedDecisionProvider([]),
-        )
+        with caplog.at_level(logging.ERROR, logger="sim_pilot.runtime.engine"):
+            failed_engine = RuntimeEngine()
+            failed = await failed_engine.run(
+                failed_task,
+                failing,
+                ScriptedDecisionProvider([]),
+            )
         assert failed.status is TaskStatus.FAILED
         assert failing.shutdown_count == 1
+        initialization_failure = failed_engine.event_store.list_events(failed_task.id)[-1]
+        assert initialization_failure.payload["phase"] == "adapter_initialization"
+        assert initialization_failure.payload["error_type"] == "RuntimeError"
+        assert "phase=adapter_initialization" in caplog.text
 
         execution_task = make_task().model_copy(update={"id": UUID(int=258)})
         execution_failure = ExecutionFailureAdapter()
-        execution_outcome = await RuntimeEngine().run(
+        execution_failure_engine = RuntimeEngine()
+        execution_outcome = await execution_failure_engine.run(
             execution_task,
             execution_failure,
             ScriptedDecisionProvider([execute_decision("advance_time", ticks=1)]),
@@ -497,5 +515,43 @@ def test_maximum_iterations_and_initialization_failure_shutdown() -> None:
         assert execution_outcome.status is TaskStatus.FAILED
         assert "execution failed" in cast("str", execution_outcome.reason)
         assert execution_failure.shutdown_count == 1
+        execution_event = execution_failure_engine.event_store.list_events(execution_task.id)[-1]
+        assert execution_event.payload["phase"] == "runtime_iteration"
+        assert execution_event.payload["error_type"] == "RuntimeError"
+
+    asyncio.run(scenario())
+
+
+def test_shutdown_failure_is_observable_and_only_changes_a_running_task(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def scenario() -> None:
+        with caplog.at_level(logging.ERROR, logger="sim_pilot.runtime.engine"):
+            terminal_engine = RuntimeEngine()
+            completed = await terminal_engine.run(
+                make_task(target=500_000),
+                ShutdownFailureAdapter(),
+                ScriptedDecisionProvider([]),
+            )
+        assert completed.status is TaskStatus.COMPLETED
+        assert "adapter shutdown failed" in caplog.text
+        assert (
+            terminal_engine.event_store.list_events(completed.task_id)[-1].event_type
+            is RuntimeEventType.TASK_COMPLETED
+        )
+
+        running_engine = RuntimeEngine()
+        running_task = make_task(target=1_000_000).model_copy(update={"id": UUID(int=259)})
+        failed = await running_engine.run(
+            running_task,
+            ShutdownFailureAdapter(),
+            ScriptedDecisionProvider([execute_decision("advance_time", ticks=1)]),
+            iteration_budget=1,
+        )
+        assert failed.status is TaskStatus.FAILED
+        shutdown_event = running_engine.event_store.list_events(running_task.id)[-1]
+        assert shutdown_event.event_type is RuntimeEventType.TASK_FAILED
+        assert shutdown_event.payload["phase"] == "adapter_shutdown"
+        assert shutdown_event.payload["error_type"] == "RuntimeError"
 
     asyncio.run(scenario())

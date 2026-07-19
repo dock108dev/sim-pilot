@@ -24,7 +24,8 @@ from sim_pilot.intent_compiler import (
     IntentCompiler,
 )
 from sim_pilot.intent_compiler.models import CompilerProviderResult, ValidationStatus
-from sim_pilot.intent_compiler.prompt import OPENTTD_CAPABILITIES, REFERENCE_CAPABILITIES
+from sim_pilot.intent_compiler.prompt import capability_catalog
+from sim_pilot.private_files import atomic_write_private_text, ensure_private_directory
 from sim_pilot.provider_metadata import ProviderMetadata, ProviderTokenUsage
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
@@ -112,7 +113,6 @@ class ProductEvaluationResult(EvaluationModel):
     decision_rating: ManualRating | None = None
     runtime_rating: ManualRating | None = None
     overall_rating: ManualRating | None = None
-    manual_rating: ManualRating | None = None
     reviewer_notes: str | None = None
 
 
@@ -214,24 +214,7 @@ def load_evaluation_cases(path: Path) -> tuple[ProductEvaluationCase, ...]:
 
 
 def _catalog(case: ProductEvaluationCase) -> CompilerCapabilityCatalog:
-    return OPENTTD_CAPABILITIES if case.adapter == "openttd" else REFERENCE_CAPABILITIES
-
-
-def _secure_directory(path: Path) -> None:
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    _secure_directory(path.parent)
-    temporary = path.with_name(f".{path.name}.tmp")
-    try:
-        temporary.write_text(content, encoding="utf-8")
-        temporary.chmod(0o600)
-        temporary.replace(path)
-        path.chmod(0o600)
-    finally:
-        temporary.unlink(missing_ok=True)
+    return capability_catalog(case.adapter)
 
 
 def _estimated_cost(
@@ -561,15 +544,25 @@ def _write_review_file(
     for result in results:
         prior = existing.get(result.case_id, {})
         row: dict[str, object] = result.model_dump(mode="json")
-        legacy_rating = prior.get("manual_rating")
+        legacy_rating = prior.pop("manual_rating", None)
         row["compiler_rating"] = prior.get("compiler_rating")
         row["decision_rating"] = prior.get("decision_rating")
         row["runtime_rating"] = prior.get("runtime_rating")
         row["overall_rating"] = prior.get("overall_rating", legacy_rating)
-        row["manual_rating"] = legacy_rating
+        if row["overall_rating"] is None and legacy_rating is not None:
+            row["overall_rating"] = legacy_rating
         row["reviewer_notes"] = prior.get("reviewer_notes")
         rows.append(row)
-    _atomic_write(path, json.dumps(rows, indent=2, default=str) + "\n")
+    atomic_write_private_text(path, json.dumps(rows, indent=2, default=str) + "\n")
+
+
+def _load_evaluation_result(path: Path) -> ProductEvaluationResult:
+    """Load a result while migrating the pre-SSOT aggregate rating at the file boundary."""
+    raw = TypeAdapter(dict[str, object]).validate_json(path.read_text(encoding="utf-8"))
+    legacy_rating = raw.pop("manual_rating", None)
+    if raw.get("overall_rating") is None and legacy_rating is not None:
+        raw["overall_rating"] = legacy_rating
+    return ProductEvaluationResult.model_validate_json(json.dumps(raw))
 
 
 async def run_product_evaluation(
@@ -603,9 +596,9 @@ async def run_product_evaluation(
     ):
         raise ValueError("selected cases exceed the configured total provider-call limit")
     budget = _EvaluationBudget(configuration)
-    _secure_directory(output_directory)
+    ensure_private_directory(output_directory)
     results_directory = output_directory / "results"
-    _secure_directory(results_directory)
+    ensure_private_directory(results_directory)
     fixture_digest = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
     manifest = {
         **configuration.model_dump(mode="json"),
@@ -619,13 +612,19 @@ async def run_product_evaluation(
             "contains no API keys."
         ),
     }
-    _atomic_write(output_directory / "manifest.json", json.dumps(manifest, indent=2) + "\n")
+    atomic_write_private_text(
+        output_directory / "manifest.json", json.dumps(manifest, indent=2) + "\n"
+    )
 
     results: list[ProductEvaluationResult] = []
     for case in cases:
         destination = results_directory / f"{case.id}.json"
         if destination.exists() and not force:
-            results.append(ProductEvaluationResult.model_validate_json(destination.read_text()))
+            persisted_result = _load_evaluation_result(destination)
+            atomic_write_private_text(
+                destination, persisted_result.model_dump_json(indent=2) + "\n"
+            )
+            results.append(persisted_result)
             continue
         result = await _evaluate_case(
             case,
@@ -634,7 +633,7 @@ async def run_product_evaluation(
             configuration,
             budget,
         )
-        _atomic_write(destination, result.model_dump_json(indent=2) + "\n")
+        atomic_write_private_text(destination, result.model_dump_json(indent=2) + "\n")
         results.append(result)
         if (
             configuration.stop_on_usage_limit
@@ -648,6 +647,8 @@ async def run_product_evaluation(
 
     materialized = tuple(results)
     aggregate = _aggregate(materialized, configuration)
-    _atomic_write(output_directory / "aggregate.json", json.dumps(aggregate, indent=2) + "\n")
+    atomic_write_private_text(
+        output_directory / "aggregate.json", json.dumps(aggregate, indent=2) + "\n"
+    )
     _write_review_file(output_directory / "manual_review.json", materialized)
     return aggregate

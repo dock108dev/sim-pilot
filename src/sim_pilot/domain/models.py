@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
@@ -19,6 +19,7 @@ from pydantic import (
 from sim_pilot.domain.types import ConstraintType, DecisionType, ObjectiveType, TaskStatus
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+type AdapterType = Literal["reference", "openttd"]
 type JsonScalar = None | bool | int | float | str
 type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]
 
@@ -71,7 +72,7 @@ class AuthorityPolicy(DomainModel):
 class TaskSpecification(DomainModel):
     """The compiled, structured definition of delegated work."""
 
-    adapter_type: NonEmptyString = "reference"
+    adapter_type: AdapterType = "reference"
     objective: Objective
     constraints: tuple[Constraint, ...] = ()
     authority: AuthorityPolicy
