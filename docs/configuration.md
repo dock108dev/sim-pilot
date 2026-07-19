@@ -78,6 +78,8 @@ The default test suite skips live access. These variables are read only by live 
 | `SIM_PILOT_LIVE_CODEX=1` plus `SIM_PILOT_LIVE_CODEX_DECISION=1` | Authenticated compatible Codex CLI. |
 | `SIM_PILOT_LIVE_OPENTTD=1` | Disposable loopback OpenTTD 15.3 server; writes also require `SIM_PILOT_OPENTTD_ALLOW_WRITES=1`. |
 | `SIM_PILOT_LIVE_OPENTTD_GS=1` | Installed bridge; writes also require `SIM_PILOT_OPENTTD_GS_ALLOW_WRITES=1`. |
+| `SIM_PILOT_LIVE_OPENTTD_ANALYSIS=1` | Read-only live world collection and deterministic analysis. |
+| `SIM_PILOT_LIVE_CODEX_ANALYSIS=1` plus the OpenTTD analysis gate | Authenticated Codex explanation over bounded findings. |
 
 These gates authorize a test to attempt external access; they do not configure credentials or the
 OpenTTD connection themselves.

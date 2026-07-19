@@ -163,6 +163,13 @@ vehicle control, and public multiplayer automation are not supported.
 The world commands are read-only and accept `--json`; their model, coverage, route inference, and
 diff rules are documented in [013-openttd-world-observation.md](013-openttd-world-observation.md).
 
+### Read-only gameplay analysis
+
+`sim-pilot ask` and `sim-pilot openttd analyze` require either `--snapshot FILE` or explicit
+`--live`. Compact output is default; `--detailed` and `--json` are available. Compiler and
+explanation providers independently default to `none`; selecting `codex` or `openai` never enables
+OpenTTD writes. See [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md).
+
 ## Approval and recovery
 
 Approval commands take an approval ID. Inspect the task and events before changing recovery state:

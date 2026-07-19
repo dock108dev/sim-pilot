@@ -158,6 +158,11 @@ took 13.64 ms with an 8.37 MB traced peak. The canonical JSON snapshot was 707,1
 single-machine measurements from a busy evolving save, not a universal performance guarantee.
 
 Phase 8B should consume only canonical models and coverage records. It should begin with read-only,
-explainable analysis such as unserved-industry candidates, station congestion, unprofitable
+explainable analysis such as unserved-industry candidates, high station waiting cargo, unprofitable
 vehicles, route duplication, and changes of interest; it should not add action planning until those
 signals are validated against live saves.
+
+Phase 8B now consumes this model through the separate query boundary in
+[014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md). It says “high waiting cargo” or
+“potentially underserved,” not “congested,” because tile movement is unavailable. Analyses are not
+persisted and comparisons remain explicit and fail closed.

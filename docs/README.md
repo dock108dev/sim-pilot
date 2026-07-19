@@ -19,6 +19,8 @@ Start with the root [README](../README.md), then use the guide that matches the 
   response.
 - [SSOT enforcement](016-ssot-enforcement.md): authoritative modules and retained compatibility
   boundaries.
+- [Gameplay analysis engine](014-gameplay-analysis-engine.md): read-only questions, deterministic
+  findings, heuristics, evidence, optional explanations, and CLI usage.
 
 ## Product and implementation contracts
 
@@ -29,6 +31,7 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [004 — GameScript capability discovery](004-openttd-gamescript-capability.md)
 - [005 — GameScript bridge protocol](005-openttd-bridge-protocol.md)
 - [013 — OpenTTD world observation](013-openttd-world-observation.md)
+- [014 — Gameplay analysis engine](014-gameplay-analysis-engine.md)
 
 The RFCs define public behavior. The implementation guides describe how to work with the current
 tree. When they disagree, update the guide or stop and resolve the contract conflict before changing

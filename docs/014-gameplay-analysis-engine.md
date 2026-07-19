@@ -1,0 +1,150 @@
+# Gameplay Analysis Engine
+
+Phase 8B adds read-only, evidence-backed gameplay questions over the canonical OpenTTD world model.
+Analysis requests are not action tasks and never enter the one-action runtime.
+
+## Flow and authority
+
+```text
+question -> analysis compiler -> AnalysisRequest -> canonical WorldSnapshot
+         -> deterministic analyzer -> findings/evidence/recommendations
+         -> optional explanation provider -> AnalysisResponse
+```
+
+Deterministic findings are authoritative. Model providers may compile a question or explain existing
+findings, but cannot add evidence, change metrics or severity, claim unsupported causality, or make a
+recommendation executable. Invalid explanations are discarded and deterministic output is retained.
+
+Analysis history is not persisted. Supplied snapshots and responses remain ordinary local JSON;
+task lifecycle tables and migrations are unchanged.
+
+## Supported analysis types
+
+The closed version-1 catalog is `company_health`, `financial_summary`, `vehicle_performance`,
+`station_performance`, `route_performance`, `service_coverage`, `industry_opportunities`,
+`town_coverage`, `fleet_summary`, `world_changes`, `anomaly_detection`, `priority_review`, and
+`entity_summary`.
+
+Each request is immutable and semantic: type, subject IDs, filters, ranking, explicit comparison
+snapshot, top-N limit, and recommendation preference are separate from the original question.
+Unknown types, filters, rankings, subjects, analyzers, evidence references, and incompatible
+comparisons fail closed.
+
+## Findings, evidence, and recommendations
+
+Findings distinguish observed facts, inferred findings, and data-quality findings. Severity is
+informational, opportunity, warning, or critical. Every finding carries one or more compact evidence
+references containing a snapshot ID, entity/field identity, observed value, optional comparison
+value, and transparent derived-metric inputs.
+
+Confidence describes evidence quality, not model confidence:
+
+- high: a directly observed field from a complete snapshot;
+- medium: an inference or derived metric over available evidence;
+- low: incomplete or unavailable evidence.
+
+Recommendations are linked to supporting findings, informational, and always
+`executable=false`. Priority is deterministic: severity base `0/25/50/75` plus confidence points
+`5/15/25`. Stable IDs and entity IDs break ties.
+
+## Sim Pilot heuristics
+
+These are investigation thresholds, not universal OpenTTD truths:
+
+| Signal | Rule | Principal limitation |
+|---|---|---|
+| Operating result | `income + expenses < 0` | Accounting period may be partial or atypical. |
+| Critical cash/debt | cash below zero and loan above zero | Does not predict bankruptcy timing. |
+| Low reserve | `cash / max(abs(expenses), 1) < 1` | Expense period and purchases may distort it. |
+| Leverage | loan/value at least 0.50 opportunity; at least 1.00 warning | Company value is not liquidation value. |
+| Unprofitable fleet | last-year loss share at least 25% warning or 50% critical; minimum four vehicles | New, redirected, or subsidized vehicles may be false positives. |
+| Fleet concentration | largest type at least 75%; minimum four vehicles | Concentration is not inherently harmful. |
+| Vehicle loss | last-year profit below zero | Current-year loss alone is informational. |
+| Old vehicle | age at least 7,305 days | Some vehicle sets do not meaningfully obsolete. |
+| Idle vehicle | stopped or depot; warning only with a prior-year loss | Idle state can be intentional. |
+| Station service | waiting at least 500 and zero vehicles; warning at 1,000; opportunity at 1,000 with one vehicle | Waiting cargo does not prove congestion. |
+| Weak route | aggregate last-year profit below zero | Route is inferred from orders. |
+| Route loss share | at least 50%, minimum two vehicles | Correlation is not causality. |
+
+Town opportunity score is:
+
+```text
+60 * min(population / 5000, 1)
++ 30 * (1 - min(nearest_company_station_distance / 50, 1))
++ 10 when the observed growth state is growing
+```
+
+Industry opportunity score is:
+
+```text
+70 * min(total_observed_production / 1000, 1)
++ 30 * (1 - min(nearest_company_station_distance / 50, 1))
+```
+
+Only entities without observed selected-company service qualify. Scores expose every input. They do
+not evaluate terrain, authority, competitors, cargo consumers, buildability, or future profit.
+
+Material typed changes use both relative and absolute gates: cash `10% and 100,000`, loan increase
+`10% and 50,000`, profit zero-crossing `10,000`, and waiting increase `50% and 500`. Entity removal
+and coverage regression are warnings; incomplete current collection is a critical data-quality
+finding. Currency gates vary with inflation and economy settings.
+
+Bounded anomaly alerts require an explicit comparison: cash drop `25% and 250,000`, vehicle or
+route-profit drop `50% and 20,000`, station waiting increase `100% and 1,000`, and route membership
+drop `25% and at least two vehicles`. These are fixed change alerts, not learned or statistical
+baselines.
+
+## Comparison safety and route identity
+
+Comparisons require distinct complete snapshots with the same world, game, version, capability
+fingerprint, chronological order, and observer company. A save/load-generation boundary is allowed
+only with a disclosed limitation when world identity remains stable.
+
+Route IDs hash owner, vehicle type, and cyclically normalized orders. Vehicle renaming and snapshot
+ordering do not change them. Order changes, vehicle-type changes, and some replacement workflows do;
+those changes can appear as route removal/addition. Route comparisons always disclose this limit.
+
+## Providers
+
+The deterministic compiler handles common bounded questions and rejects or clarifies unsupported
+ones. Codex CLI and OpenAI compiler/explanation providers are optional and schema-bound. No provider
+is selected implicitly. Explanation input contains only the normalized request, top findings,
+recommendations, evidence summaries, and limitations; never raw bridge messages, files, history,
+credentials, adapters, or executable tools. Prompt input is capped at 64 KB.
+
+## CLI
+
+Analyze a saved canonical snapshot without a model:
+
+```bash
+uv run sim-pilot ask --snapshot snapshot.json "Why am I losing money?"
+uv run sim-pilot openttd analyze company --snapshot snapshot.json
+uv run sim-pilot openttd analyze vehicles --snapshot snapshot.json --top 10
+uv run sim-pilot openttd analyze stations --snapshot snapshot.json --detailed
+uv run sim-pilot openttd analyze routes --snapshot snapshot.json --json
+uv run sim-pilot openttd analyze coverage --snapshot snapshot.json
+uv run sim-pilot openttd analyze changes --snapshot current.json --comparison previous.json
+```
+
+Use `--live` instead of `--snapshot` to explicitly collect a fresh read-only OpenTTD snapshot.
+Model use is separately explicit:
+
+```bash
+uv run sim-pilot ask --live \
+  --compiler-provider codex \
+  --explanation-provider codex \
+  "Which trains made the least money last year?"
+```
+
+Compact text is the default. `--detailed`, `--json`, `--top`, `--entity`, `--snapshot`, and
+`--comparison` expose detail, stable filters, and explicit snapshot selection. Analysis never
+initializes the action runtime.
+
+## Unsupported evidence and safety
+
+The engine does not claim exact path congestion, construction feasibility, competitor intention,
+future profitability, crash causality, or expense causality. The snapshot lacks tile movement,
+terrain/buildability, complete competitor state, forecasting evidence, native crash events, and
+separate infrastructure/maintenance expenses. The engine adds no gameplay actions, background
+monitor, scheduler, HTTP service, UI, or database migration.
+

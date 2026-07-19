@@ -8,7 +8,7 @@ import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
-from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
+from sim_pilot.cli import INVALID_INPUT, CompilerProviderName, ReferenceDemoDecisionProvider, app
 from sim_pilot.domain import (
     CapabilityCoverage,
     Company,
@@ -517,7 +517,7 @@ def test_openttd_world_commands_render_tables_and_json(
     async def capture() -> WorldSnapshot:
         return world
 
-    monkeypatch.setattr("sim_pilot.cli._world_snapshot", capture)
+    monkeypatch.setattr("sim_pilot.cli.capture_openttd_world_snapshot", capture)
     runner = CliRunner()
 
     summary = runner.invoke(app, ["openttd", "world"])
@@ -542,6 +542,68 @@ def test_openttd_world_commands_render_tables_and_json(
         "diff",
     ):
         assert command in help_result.output
+
+
+def test_analysis_cli_uses_snapshot_files_without_action_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    world = WorldSnapshot(
+        metadata=WorldSnapshotMetadata(
+            snapshot_id="analysis-world",
+            world_id="fixture-world",
+            game="openttd",
+            game_version="15.3",
+            game_date=712223,
+            capture_started_game_date=712223,
+            capture_completed_game_date=712223,
+            complete=True,
+            capability_fingerprint="fingerprint",
+            save_generation=2,
+            bridge_sequence=4,
+            captured_at=datetime.now(UTC),
+            observer_company_id="company-1",
+        ),
+        coverage=(CapabilityCoverage(category="companies", status=CoverageStatus.AVAILABLE),),
+        companies=(
+            Company(
+                id="company-1",
+                name="Fixture Transport",
+                cash=425000,
+                loan=50000,
+                income=1000,
+                expenses=-2000,
+            ),
+        ),
+    )
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(world.model_dump_json(), encoding="utf-8")
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise AssertionError("analysis must not initialize the action runtime")
+
+    monkeypatch.setattr("sim_pilot.cli._runtime", unexpected)
+    runner = CliRunner()
+    ask = runner.invoke(
+        app,
+        ["ask", "Why am I losing money?", "--snapshot", str(snapshot_path)],
+    )
+    direct = runner.invoke(
+        app,
+        ["openttd", "analyze", "company", "--snapshot", str(snapshot_path), "--json"],
+    )
+
+    assert ask.exit_code == 0, ask.output
+    assert "Company Health" in ask.output
+    assert "Negative operating result" in ask.output
+    assert direct.exit_code == 0, direct.output
+    assert '"analysis_type": "company_health"' in direct.output
+
+
+def test_analysis_cli_requires_explicit_snapshot_or_live() -> None:
+    result = CliRunner().invoke(app, ["openttd", "analyze", "company"])
+    assert result.exit_code == INVALID_INPUT
+    assert "supply --snapshot or explicitly select --live" in result.output
 
 
 def test_openttd_bridge_doctor_reports_negotiated_health(

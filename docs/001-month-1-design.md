@@ -221,6 +221,11 @@ selected explicitly and are never added globally to the reference prompt. A sema
 requires a new version and golden-fixture review. The compiler never invents a missing threshold or
 runtime capability.
 
+Gameplay questions use the separate Phase 8B analysis boundary documented in
+`014-gameplay-analysis-engine.md` and ADR-014. They do not compile to `TaskSpecification`, enter the
+action runtime, create task events, or inherit action authority. Optional analysis model providers
+only compile semantic `AnalysisRequest` values or explain authoritative deterministic findings.
+
 `run_until` normally compares numeric resources with `above` or `below`. An environment catalog may
 declare a string resource and allow `direction="equal"` with an exact string target. Task 6C uses
 this only for the observed OpenTTD `server_name` resource. The evaluator resolves resources from

@@ -108,6 +108,21 @@ Writes remain disabled unless their separate safety flags are enabled on a dispo
 The canonical model and its explicit coverage limits are documented in
 [OpenTTD world observation](docs/013-openttd-world-observation.md).
 
+## Analyze OpenTTD
+
+Gameplay analysis is read-only and separate from action tasks. It works deterministically from a
+saved snapshot or an explicitly collected live snapshot without a model:
+
+```bash
+uv run sim-pilot ask --snapshot snapshot.json "Why am I losing money?"
+uv run sim-pilot openttd analyze vehicles --snapshot snapshot.json --top 10
+uv run sim-pilot openttd analyze coverage --live
+```
+
+Codex or OpenAI compilation and explanation are optional and must be selected explicitly with
+`--compiler-provider` and `--explanation-provider`. See the
+[gameplay analysis engine](docs/014-gameplay-analysis-engine.md).
+
 ## Architecture at a glance
 
 ```text

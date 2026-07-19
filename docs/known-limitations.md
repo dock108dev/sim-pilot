@@ -57,6 +57,9 @@ are evidence from specific milestones, not the current product contract.
   memory scraping, and arbitrary console commands are unsupported.
 - Live OpenTTD and GameScript tests require a separately configured disposable server and are
   skipped by the normal validation gate.
+- Phase 8B analysis is heuristic and read-only. It cannot prove congestion, construction
+  feasibility, competitor intent, future profit, crash causality, or infrastructure-expense
+  causality. Analysis responses are not durably retained.
 
 ## Deferred decisions
 

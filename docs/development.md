@@ -122,10 +122,16 @@ sequence, the simulation must produce identical results.
 - `tests/persistence`: repository contracts, transactions, and migrations.
 - `tests/intent_compiler` and `tests/decision_provider`: provider boundaries and structured output.
 - `tests/openttd`: protocol, adapter, GameScript, and opt-in live behavior.
+- `tests/analysis`: request contracts, analyzers, evidence, compiler, explanation, CLI data, and
+  separately gated live analysis.
 - `tests/architecture`: import and dependency-direction guards.
 
 Use scripted providers in automated tests. Do not add paid or authenticated calls to the default
 suite.
+
+`sim_pilot.analysis` is provider-, adapter-, persistence-, and runtime-independent.
+`sim_pilot.analysis_provider` owns optional Codex/OpenAI implementations. Architecture tests enforce
+that dependency direction and isolate the OpenAI SDK to provider modules.
 
 All configuration keys and live-test gates are cataloged in
 [configuration.md](configuration.md). Persistence contracts and schema ownership are described in
