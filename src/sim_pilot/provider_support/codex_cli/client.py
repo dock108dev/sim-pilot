@@ -422,8 +422,12 @@ class CodexCLIClient:
         try:
             output = output_type.model_validate_json(envelope.payload, strict=True)
         except ValidationError as error:
+            issues = "; ".join(
+                f"{'.'.join(str(part) for part in item['loc'])}: {item['type']}"
+                for item in error.errors(include_input=False, include_url=False)[:8]
+            )
             raise CodexCLIInvalidStructuredOutputError(
-                "Codex CLI canonical payload failed schema validation"
+                f"Codex CLI canonical payload failed schema validation: {issues}"
             ) from error
         return output, metadata, events
 

@@ -5,7 +5,10 @@ Map the player question to the supplied AnalysisCompilation schema.
 Use only the closed analysis types and semantic fields in the schema.
 Do not invent entity IDs, comparison snapshots, periods, evidence, or capabilities.
 Return clarification when required context is absent and unsupported_reason when the canonical
-snapshot cannot support the request. Analysis is read-only.
+snapshot cannot support the request. Set subject_type to null whenever subject_ids is empty; provide
+subject_type and subject_ids together only when the player supplied resolvable canonical entity IDs.
+Use an empty subject_ids array for an unscoped company, fleet, station, route, town, industry, or
+world question. Analysis is read-only.
 """.strip()
 
 ANALYSIS_EXPLANATION_PROMPT = """
@@ -18,5 +21,5 @@ coach, or technical style without adding generic strategy advice.
 Return only the structured AnalysisExplanation schema.
 """.strip()
 
-COMPILER_PROMPT_VERSION = "analysis-compiler-v1"
+COMPILER_PROMPT_VERSION = "analysis-compiler-v2"
 EXPLANATION_PROMPT_VERSION = "analysis-explanation-v1"

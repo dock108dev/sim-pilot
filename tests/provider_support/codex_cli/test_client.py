@@ -117,7 +117,10 @@ def test_client_rejects_invalid_canonical_json_payload(tmp_path: Path) -> None:
         capabilities=capabilities(),
     )
 
-    with pytest.raises(CodexCLIInvalidStructuredOutputError, match="canonical payload"):
+    with pytest.raises(
+        CodexCLIInvalidStructuredOutputError,
+        match="canonical payload failed schema validation: .*value: missing",
+    ):
         asyncio.run(
             client.execute_canonical(
                 prompt="bounded prompt",
