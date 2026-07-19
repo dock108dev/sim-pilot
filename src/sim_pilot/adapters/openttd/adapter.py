@@ -23,6 +23,7 @@ from sim_pilot.openttd.models import (
     OpenTTDObservationState,
     OpenTTDState,
 )
+from sim_pilot.openttd.world_translation import translate_world
 
 SET_SERVER_NAME = "set_server_name"
 SET_COMPANY_NAME = "set_company_name"
@@ -153,6 +154,13 @@ class OpenTTDAdapter:
                 and bridge_capabilities.full_snapshots
             ),
             supports_set_company_name=company_name_writable,
+            supports_world_snapshots=(
+                bridge_detected
+                and bridge_capabilities is not None
+                and bridge_capabilities.world_snapshots
+                and bridge_health is not None
+                and bridge_health.world_snapshot is not None
+            ),
             bridge_read_resources=(
                 () if bridge_capabilities is None else bridge_capabilities.readable_resources
             ),
@@ -189,8 +197,9 @@ class OpenTTDAdapter:
                 }
             )
         else:
+            world = translate_world(game_state, bridge_health)
             state = OpenTTDObservationState.from_combined_state(
-                game_state, bridge_health, self.capabilities
+                game_state, bridge_health, self.capabilities, world
             )
         self._observation_sequence += 1
         company = game_state.company

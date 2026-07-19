@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sim_pilot.domain.world import WorldSnapshot
 from sim_pilot.openttd.gamescript.models import BridgeHealth
 
 
@@ -144,15 +145,18 @@ class OpenTTDAdapterCapabilities(OpenTTDModel):
     supports_full_snapshots: bool = False
     supports_state_deltas: Literal[False] = False
     supports_set_company_name: bool = False
+    supports_world_snapshots: bool = False
     bridge_read_resources: tuple[str, ...] = ()
     bridge_actions: tuple[str, ...] = ()
 
 
 class OpenTTDAdapterMetadata(OpenTTDModel):
     adapter_type: Literal["openttd"] = "openttd"
-    integration_version: Literal["admin-network-v3", "admin-network-v3+gamescript-v1"] = (
-        "admin-network-v3"
-    )
+    integration_version: Literal[
+        "admin-network-v3",
+        "admin-network-v3+gamescript-v1",
+        "admin-network-v3+gamescript-v2",
+    ] = "admin-network-v3"
     capabilities: OpenTTDAdapterCapabilities = OpenTTDAdapterCapabilities()
 
 
@@ -162,6 +166,7 @@ class OpenTTDObservationState(OpenTTDModel):
     resources: OpenTTDResourceMapping
     adapter: OpenTTDAdapterMetadata = OpenTTDAdapterMetadata()
     bridge: BridgeHealth | None = None
+    world: WorldSnapshot | None = None
     source_attribution: OpenTTDSourceAttribution = OpenTTDSourceAttribution(
         admin_network_fields=(
             "connection",
@@ -187,6 +192,7 @@ class OpenTTDObservationState(OpenTTDModel):
         state: OpenTTDState,
         bridge: BridgeHealth,
         capabilities: OpenTTDAdapterCapabilities,
+        world: WorldSnapshot | None = None,
     ) -> OpenTTDObservationState:
         snapshot = bridge.snapshot
         if snapshot is None:
@@ -224,10 +230,15 @@ class OpenTTDObservationState(OpenTTDModel):
             game=state,
             resources=resources,
             adapter=OpenTTDAdapterMetadata(
-                integration_version="admin-network-v3+gamescript-v1",
+                integration_version=(
+                    "admin-network-v3+gamescript-v2"
+                    if world is not None
+                    else "admin-network-v3+gamescript-v1"
+                ),
                 capabilities=capabilities,
             ),
             bridge=bridge,
+            world=world,
             source_attribution=OpenTTDSourceAttribution(
                 admin_network_fields=(
                     "connection",
