@@ -169,6 +169,7 @@ def test_openai_sdk_is_isolated_to_openai_provider() -> None:
     provider_modules = {
         PACKAGE_ROOT / "intent_compiler" / "providers" / "openai.py",
         PACKAGE_ROOT / "decision_provider" / "providers" / "openai.py",
+        PACKAGE_ROOT / "analysis_provider" / "openai.py",
     }
     violations = {
         str(path.relative_to(PACKAGE_ROOT)): sorted(

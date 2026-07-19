@@ -1,5 +1,11 @@
 """Read-only deterministic gameplay analysis boundary."""
 
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    AnalysisCompiler,
+    DeterministicAnalysisCompiler,
+    ScriptedAnalysisCompiler,
+)
 from sim_pilot.analysis.contracts import (
     AnalysisExplanation,
     AnalysisFilter,
@@ -21,10 +27,13 @@ from sim_pilot.analysis.contracts import (
     RankingMetric,
     RankingRequest,
 )
+from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import AnalyzerRegistry, default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
 
 __all__ = [
+    "AnalysisCompilation",
+    "AnalysisCompiler",
     "AnalysisExplanation",
     "AnalysisFilter",
     "AnalysisFilterField",
@@ -33,12 +42,14 @@ __all__ = [
     "AnalysisRecommendation",
     "AnalysisRequest",
     "AnalysisResponse",
+    "AnalysisQueryService",
     "AnalysisStatus",
     "AnalysisSubjectType",
     "AnalysisType",
     "AnalysisService",
     "AnalyzerRegistry",
     "default_analyzer_registry",
+    "DeterministicAnalysisCompiler",
     "EvidenceConfidence",
     "EvidenceReference",
     "EvidenceSourceType",
@@ -47,4 +58,5 @@ __all__ = [
     "RankingDirection",
     "RankingMetric",
     "RankingRequest",
+    "ScriptedAnalysisCompiler",
 ]
