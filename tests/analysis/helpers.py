@@ -4,6 +4,7 @@ from sim_pilot.domain.world import (
     CapabilityCoverage,
     Company,
     CoverageStatus,
+    Vehicle,
     WorldSnapshot,
     WorldSnapshotMetadata,
 )
@@ -18,6 +19,8 @@ def snapshot(
     capability_fingerprint: str = "fingerprint",
     save_generation: int = 2,
     observer_company_id: str | None = "company-1",
+    company: Company | None = None,
+    vehicles: tuple[Vehicle, ...] = (),
 ) -> WorldSnapshot:
     return WorldSnapshot(
         metadata=WorldSnapshotMetadata(
@@ -47,5 +50,6 @@ def snapshot(
                 "cargo",
             )
         ),
-        companies=(Company(id="company-1", name="Company", cash=100, loan=0),),
+        companies=(company or Company(id="company-1", name="Company", cash=100, loan=0),),
+        vehicles=vehicles,
     )
