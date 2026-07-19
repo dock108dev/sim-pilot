@@ -310,7 +310,10 @@ def _coverage() -> tuple[CapabilityCoverage, ...]:
         CapabilityCoverage(category="routes", status=partial, reason=adapter),
         CapabilityCoverage(category="cargo", status=partial, reason=adapter),
         CapabilityCoverage(category="tiles", status=CoverageStatus.UNAVAILABLE, reason=bridge),
-        CapabilityCoverage(category="terrain", status=partial, reason=bridge),
+        CapabilityCoverage(category="terrain", status=CoverageStatus.UNAVAILABLE, reason=bridge),
+        CapabilityCoverage(
+            category="infrastructure", status=CoverageStatus.UNAVAILABLE, reason=bridge
+        ),
         CapabilityCoverage(category="economy", status=partial, reason=bridge),
         CapabilityCoverage(
             category="native_events", status=CoverageStatus.UNAVAILABLE, reason=bridge

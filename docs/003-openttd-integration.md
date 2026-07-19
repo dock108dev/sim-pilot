@@ -19,9 +19,11 @@ verifies the value from a new `SERVER_WELCOME`. RCON text alone is not proof of 
 arbitrary RCON, and other gameplay commands remain unavailable through that boundary.
 
 Task 7B adds the separately gated production `SimPilotBridge` GameScript over
-the same Admin connection. It negotiates protocol v1, supplies snapshot-only
-pause/town/industry telemetry, persists bridge identity and a bounded command
-ledger in the save, and supports only the independently verified
+the same Admin connection. Phase 8A advances that bridge to protocol v2, retaining the summary
+snapshot while adding strictly assembled companies, towns, industries, selected-company stations,
+vehicles, orders, and cargo. The adapter translates those payloads into the canonical world model,
+infers routes, and precomputes changes. It persists bridge identity and a bounded command
+ledger in the save, and still supports only the independently verified
 `set_company_name` action. Admin Network remains authoritative for shared
 server/company fields. See `docs/005-openttd-bridge-protocol.md`.
 
@@ -117,6 +119,16 @@ uv run sim-pilot openttd doctor
 uv run sim-pilot openttd capabilities
 uv run sim-pilot openttd observe
 uv run sim-pilot openttd watch --count 5
+
+export SIM_PILOT_OPENTTD_GS_ENABLED=1
+uv run sim-pilot openttd world
+uv run sim-pilot openttd towns
+uv run sim-pilot openttd industries
+uv run sim-pilot openttd stations
+uv run sim-pilot openttd vehicles
+uv run sim-pilot openttd company
+uv run sim-pilot openttd routes
+uv run sim-pilot openttd diff
 ```
 
 These commands are local/offline by default. They do not construct an Intent Compiler or Decision
@@ -184,9 +196,11 @@ active/stopped/lost vehicles, vehicle profitability, route/order detail, towns, 
 subsidies, alerts/news, and save identity. Recorded fixtures named for paused and stopped-vehicle
 scenarios explicitly mark those fields unavailable instead of fabricating values.
 
-With the Task 7B bridge enabled, pause state, town count, industry count,
-company name, bridge/save identity, and synchronization health are available.
-All other items in the Admin-only unsupported list remain unavailable.
+With the protocol-v2 bridge enabled, pause state, company summaries, towns, industries,
+selected-company stations, vehicles and orders, scoped cargo, inferred routes, bridge/save identity,
+and synchronization health are available. Per-tile terrain and infrastructure topology, native
+events, exact catchments, and pathfinder routes remain unavailable. See
+[013-openttd-world-observation.md](013-openttd-world-observation.md) for field-level coverage.
 
 ## Persistence and recovery
 

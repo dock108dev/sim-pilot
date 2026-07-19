@@ -145,12 +145,23 @@ uv run sim-pilot openttd bridge doctor
 uv run sim-pilot openttd bridge capabilities
 uv run sim-pilot openttd bridge observe
 
+uv run sim-pilot openttd world
+uv run sim-pilot openttd towns
+uv run sim-pilot openttd industries
+uv run sim-pilot openttd stations
+uv run sim-pilot openttd vehicles
+uv run sim-pilot openttd company
+uv run sim-pilot openttd routes
+uv run sim-pilot openttd diff --wait-seconds 1
+
 export SIM_PILOT_OPENTTD_GS_ALLOW_WRITES=1
 uv run sim-pilot openttd bridge action set-company-name "Sim Pilot Test"
 ```
 
 The two supported live actions are `set_server_name` and `set_company_name`. Route construction,
 vehicle control, and public multiplayer automation are not supported.
+The world commands are read-only and accept `--json`; their model, coverage, route inference, and
+diff rules are documented in [013-openttd-world-observation.md](013-openttd-world-observation.md).
 
 ## Approval and recovery
 

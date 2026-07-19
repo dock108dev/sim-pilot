@@ -48,6 +48,69 @@ def test_protocol_v2_assembles_a_complete_paginated_world() -> None:
     assert [vehicle.name for vehicle in world.vehicles] == ["Train 1"]
 
 
+def test_protocol_v2_handles_empty_and_multiple_entity_worlds() -> None:
+    async def empty_scenario() -> GameScriptBridgeClient:
+        values = world_sync_messages()
+        manifest = json.loads(values[4])
+        manifest["payload"]["collection_counts"] = {
+            key: 0 for key in manifest["payload"]["collection_counts"]
+        }
+        complete = json.loads(values[-1])
+        complete["sequence"] = 6
+        complete["message_id"] = "bridge-instance:6"
+        complete["payload"]["total_items"] = 0
+        client = GameScriptBridgeClient(
+            FakeBridgeTransport([*values[:4], json.dumps(manifest), json.dumps(complete)]),
+            company_id=0,
+        )
+        await client.synchronize()
+        return client
+
+    empty = asyncio.run(empty_scenario()).health.world_snapshot
+    assert empty is not None
+    assert empty.companies == ()
+    assert empty.towns == ()
+
+    async def multiple_scenario() -> GameScriptBridgeClient:
+        values = world_sync_messages()
+        manifest = json.loads(values[4])
+        manifest["payload"]["collection_counts"]["companies"] = 2
+        manifest["payload"]["collection_counts"]["towns"] = 2
+        companies = json.loads(values[5])
+        second_company = {**companies["payload"]["items"][0], "id": 1, "name": "Second"}
+        companies["payload"]["items"].append(second_company)
+        towns = json.loads(values[6])
+        second_town = {**towns["payload"]["items"][0], "id": 2, "name": "Second Town"}
+        towns["payload"]["items"].append(second_town)
+        complete = json.loads(values[-1])
+        complete["payload"]["total_items"] += 2
+        values[4] = json.dumps(manifest)
+        values[5] = json.dumps(companies)
+        values[6] = json.dumps(towns)
+        values[-1] = json.dumps(complete)
+        client = GameScriptBridgeClient(FakeBridgeTransport(values), company_id=0)
+        await client.synchronize()
+        return client
+
+    multiple = asyncio.run(multiple_scenario()).health.world_snapshot
+    assert multiple is not None
+    assert [company.name for company in multiple.companies] == ["Fixture Transport", "Second"]
+    assert [town.name for town in multiple.towns] == ["Town", "Second Town"]
+
+
+def test_protocol_v2_rejects_manifest_count_mismatch() -> None:
+    async def scenario() -> None:
+        values = world_sync_messages()
+        manifest = json.loads(values[4])
+        manifest["payload"]["collection_counts"]["vehicles"] = 2
+        values[4] = json.dumps(manifest)
+        client = GameScriptBridgeClient(FakeBridgeTransport(values), company_id=0)
+        with pytest.raises(BridgeSequenceError, match="vehicles count"):
+            await client.synchronize()
+
+    asyncio.run(scenario())
+
+
 def test_sequence_gap_duplicate_and_identity_change_fail_outside_resync() -> None:
     async def sequence_gap() -> None:
         transport = FakeBridgeTransport(sync_messages())

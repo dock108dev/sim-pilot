@@ -61,3 +61,12 @@ GameScript package does not expose a supported human/AI status getter in the
 OpenTTD 15.3 API surface used by the package. Admin Network therefore remains
 the sole source for that field. This does not broaden or reverse the constrained
 go decision. Construction, state deltas, and generalized events remain absent.
+
+## Phase 8A implementation note
+
+Protocol v2 expands read-only telemetry into manifest-validated, bounded pages for companies,
+towns, industries, selected-company stations, vehicles, orders, and cargo. The OpenTTD adapter,
+not the runtime, owns translation into immutable canonical world models, opaque save-scoped IDs,
+deterministic route inference, capability coverage, and snapshot diffs. The runtime, persistence,
+recovery model, and sole `set_company_name` GameScript action are unchanged. Protocol v1 remains
+parseable, but rich world snapshots require the exact v2 capability contract.

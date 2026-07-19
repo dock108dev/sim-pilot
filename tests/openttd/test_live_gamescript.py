@@ -45,7 +45,7 @@ def _require_live_bridge() -> None:
 def test_live_bridge_snapshot_and_process_reconnect_preserve_identity() -> None:
     _require_live_bridge()
 
-    async def synchronize_once() -> tuple[str | None, int, int]:
+    async def synchronize_once() -> tuple[str | None, int, int, int, str, tuple[str, ...]]:
         configuration = openttd_configuration()
         admin = OpenTTDAdminClient(configuration)
         bridge = GameScriptBridgeClient(admin, company_id=configuration.company_id)
@@ -56,10 +56,30 @@ def test_live_bridge_snapshot_and_process_reconnect_preserve_identity() -> None:
             assert bridge.health.synchronization_state is SynchronizationState.SYNCHRONIZED
             assert bridge.health.snapshot is not None
             assert bridge.health.snapshot.town_count >= 1
+            assert bridge.health.world_snapshot is not None
+            assert bridge.health.world_snapshot.complete is True
+            assert bridge.health.capabilities is not None
+            assert bridge.health.capability_fingerprint == bridge.health.capabilities.fingerprint
+            capability_fingerprint = bridge.health.capability_fingerprint
+            assert capability_fingerprint is not None
+            state = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
+            assert state.world is not None
+            assert len(state.world.towns) == bridge.health.snapshot.town_count
+            follow_up = OpenTTDObservationState.model_validate_json(
+                json.dumps((await adapter.observe()).state)
+            )
+            assert follow_up.world is not None
+            assert follow_up.world.changes_from_snapshot_id == state.world.metadata.snapshot_id
+            assert tuple(town.id for town in follow_up.world.towns) == tuple(
+                town.id for town in state.world.towns
+            )
             return (
                 bridge.health.script_instance_id,
                 bridge.health.last_sequence or 0,
                 observation.tick,
+                bridge.health.snapshot.save_generation,
+                capability_fingerprint,
+                tuple(town.id for town in follow_up.world.towns),
             )
         finally:
             await adapter.shutdown()
@@ -69,6 +89,9 @@ def test_live_bridge_snapshot_and_process_reconnect_preserve_identity() -> None:
     assert second[0] == first[0]
     assert second[1] > first[1]
     assert second[2] >= first[2]
+    assert second[3] == first[3]
+    assert second[4] == first[4]
+    assert second[5] == first[5]
 
 
 @pytest.mark.live

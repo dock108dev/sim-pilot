@@ -46,6 +46,7 @@ from sim_pilot.domain import (
     Task,
     TaskSpecification,
     TaskStatus,
+    WorldSnapshot,
 )
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.intent_compiler import (
@@ -73,6 +74,11 @@ from sim_pilot.openttd import (
 )
 from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
 from sim_pilot.openttd.gamescript.models import BridgeHealth
+from sim_pilot.openttd.query_output import (
+    render_world_changes,
+    render_world_collection,
+    render_world_summary,
+)
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
     SQLiteUnitOfWork,
@@ -675,6 +681,148 @@ async def _bridge_observation() -> tuple[Observation, BridgeHealth]:
         await adapter.shutdown()
 
 
+def _bridge_health_summary(health: BridgeHealth) -> dict[str, object]:
+    payload = health.model_dump(mode="json", exclude={"world_snapshot"})
+    world = health.world_snapshot
+    payload["world_snapshot"] = (
+        None
+        if world is None
+        else {
+            "snapshot_id": world.snapshot_id,
+            "complete": world.complete,
+            "capture_started_game_date": world.capture_started_game_date,
+            "capture_completed_game_date": world.capture_completed_game_date,
+            "counts": {
+                "companies": len(world.companies),
+                "towns": len(world.towns),
+                "industries": len(world.industries),
+                "stations": len(world.stations),
+                "vehicles": len(world.vehicles),
+                "orders": len(world.orders),
+                "cargos": len(world.cargos),
+            },
+        }
+    )
+    return payload
+
+
+def _world_from_observation(observation: Observation) -> WorldSnapshot:
+    state = OpenTTDObservationState.model_validate_json(json.dumps(observation.state))
+    if state.world is None:
+        raise ValueError("the running GameScript does not provide world snapshots")
+    return state.world
+
+
+async def _world_snapshot() -> WorldSnapshot:
+    observation, _ = await _bridge_observation()
+    return _world_from_observation(observation)
+
+
+def _emit_world_collection(collection: str, json_output: bool) -> None:
+    try:
+        world = asyncio.run(_world_snapshot())
+        if json_output:
+            items = getattr(world, "companies" if collection == "company" else collection)
+            _emit([item.model_dump(mode="json") for item in items])
+        else:
+            typer.echo(render_world_collection(world, collection))
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_app.command("world")
+def openttd_world(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """Display the canonical world snapshot and its coverage."""
+    try:
+        world = asyncio.run(_world_snapshot())
+        _emit(world) if json_output else typer.echo(render_world_summary(world))
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
+@openttd_app.command("towns")
+def openttd_towns(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List observed towns."""
+    _emit_world_collection("towns", json_output)
+
+
+@openttd_app.command("industries")
+def openttd_industries(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List observed industries."""
+    _emit_world_collection("industries", json_output)
+
+
+@openttd_app.command("stations")
+def openttd_stations(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List selected-company stations."""
+    _emit_world_collection("stations", json_output)
+
+
+@openttd_app.command("vehicles")
+def openttd_vehicles(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List selected-company vehicles."""
+    _emit_world_collection("vehicles", json_output)
+
+
+@openttd_app.command("company")
+def openttd_company(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List observed companies."""
+    _emit_world_collection("company", json_output)
+
+
+@openttd_app.command("routes")
+def openttd_routes(
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """List deterministically inferred routes."""
+    _emit_world_collection("routes", json_output)
+
+
+@openttd_app.command("diff")
+def openttd_diff(
+    wait_seconds: Annotated[
+        float,
+        typer.Option(min=0.0, help="Seconds between the two snapshots."),
+    ] = 1.0,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit canonical JSON.")] = False,
+) -> None:
+    """Capture two snapshots and display deterministic changes."""
+
+    async def capture() -> WorldSnapshot:
+        adapter = _openttd_adapter(enable_bridge=True)
+        await adapter.initialize()
+        try:
+            first = _world_from_observation(await adapter.observe())
+            await asyncio.sleep(wait_seconds)
+            second = _world_from_observation(await adapter.observe())
+            if second.changes_from_snapshot_id != first.metadata.snapshot_id:
+                raise ValueError("adapter did not link consecutive world snapshots")
+            return second
+        finally:
+            await adapter.shutdown()
+
+    try:
+        world = asyncio.run(capture())
+        if json_output:
+            _emit([change.model_dump(mode="json") for change in world.changes])
+        else:
+            typer.echo(render_world_changes(world.changes))
+    except (OpenTTDError, ValidationError, ValueError) as error:
+        _fail(error, OPENTTD_FAILURE)
+
+
 @openttd_bridge_app.command("doctor")
 def openttd_bridge_doctor() -> None:
     """Connect, negotiate, synchronize, and display bridge health."""
@@ -686,7 +834,7 @@ def openttd_bridge_doctor() -> None:
                 "admin_protocol_version": state.game.connection.protocol_version,
                 "openttd_version": state.game.connection.openttd_version,
                 "selected_company": state.game.company.company_id,
-                "bridge": health.model_dump(mode="json"),
+                "bridge": _bridge_health_summary(health),
                 "snapshot_age_seconds": (
                     None
                     if health.last_snapshot_at is None
@@ -735,7 +883,7 @@ def openttd_bridge_sync() -> None:
     """Force a full bridge resynchronization and display its identity."""
     try:
         _, health = asyncio.run(_bridge_observation())
-        _emit(health)
+        _emit(_bridge_health_summary(health))
     except (OpenTTDError, ValidationError, ValueError) as error:
         _fail(error, OPENTTD_FAILURE)
 

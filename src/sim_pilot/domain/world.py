@@ -138,7 +138,7 @@ class Vehicle(WorldModel):
     profit_this_year: int
     profit_last_year: int
     running_state: str = Field(min_length=1)
-    coordinates: Coordinates
+    coordinates: Coordinates | None
     current_order: VehicleOrder | None = None
     orders: tuple[VehicleOrder, ...] = ()
     route_id: str | None = None

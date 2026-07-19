@@ -32,6 +32,10 @@ provide the supported getter assumed during discovery, so the combined adapter
 uses Admin Network as the only authority for human/AI status. See
 `docs/005-openttd-bridge-protocol.md`.
 
+Phase 8A subsequently implemented protocol v2 read-only entity paging and canonical adapter
+translation. That expansion does not change this capability audit's constrained action decision;
+see `docs/013-openttd-world-observation.md` for the current observation contract and limits.
+
 ## 2. Tested versions and primary evidence
 
 - OpenTTD 15.3, exact tag commit `14ec60f248547d4d062a1160f0fc26d742319888`.
@@ -121,7 +125,7 @@ should use deltas plus periodic snapshots.
 | Game settings | P | `GSGameSettings.GetValue`; only script-exposed settings, invalid name errors | source |
 | Loaded NewGRFs | P | `GSNewGRF` parameter/name access; not a complete content manifest | source |
 | Cargo types; vehicle engines; road/rail/infrastructure types | A | cargo/engine/road/rail lists and `GSCargo`, `GSEngine`, `GSRoad`, `GSRail` | source |
-| Company IDs, names, inactive/bankruptcy | A/P | `GSCompanyList`, `GetName`; list membership; bankruptcy partly events. Human/AI status is not exposed by the production API 15 surface and comes from Admin Network. | live name; rest source |
+| Company IDs, names, inactive/bankruptcy | A/P | GameScript does not export `GSCompanyList`; protocol v2 scans the bounded 0-14 company slots and validates each with `ResolveCompanyID`. Names are available; bankruptcy is partly event-only. Human/AI status is not exposed by the production API 15 surface and comes from Admin Network. | live |
 | Bank balance | A | `GSCompany.GetBankBalance(id)`; signed money | live |
 | Loan | C | `GSCompany.GetLoanAmount()` in selected company | live |
 | Maximum loan | P | game setting plus loan rules; derive current limit, may change over time | source |

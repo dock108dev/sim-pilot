@@ -18,6 +18,8 @@ def test_package_declares_the_verified_openttd_api_and_protocol() -> None:
     assert '"set_company_name"' in main
     assert '"world_manifest"' in main
     assert '"world_collection_page"' in main
+    assert "GSCompanyList" not in main
+    assert "GSCompany.ResolveCompanyID(company_id)" in main
     assert "c7e830e62f9898d01704396f91785c9e4a6e9abf87cc08799f8f49a4d4103ec6" in main
     assert "function HasExactKeys(value, keys)" in main
 

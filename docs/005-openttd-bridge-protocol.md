@@ -22,8 +22,9 @@ fresh-snapshot verification, and recovery rules.
 ## Scope and compatibility
 
 The production bridge is a constrained bidirectional integration for OpenTTD
-15.3, Admin Network protocol 3, GameScript API 15, script package version 1,
-and Sim Pilot adapter `openttd-gamescript-v1`. It uses the existing authenticated
+15.3, Admin Network protocol 3, GameScript API 15, script package version 2,
+and Sim Pilot adapter `openttd-gamescript-v2`. Protocol-v1 messages remain parseable during
+transition, but only v2 supplies rich world snapshots. It uses the existing authenticated
 Admin TCP connection: one `OpenTTDAdminClient` owns authentication, packet
 polling, RCON responses, GameScript packet routing, reconnect, and shutdown.
 
@@ -39,7 +40,7 @@ Every message has this envelope:
 
 ```json
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "sequence": 1,
   "message_id": "stable-message-id",
   "correlation_id": null,
@@ -54,7 +55,8 @@ Every message has this envelope:
 The implemented message set is `hello`, `capabilities`, `heartbeat`,
 `state_snapshot`, `command_request`, `command_accepted`, `command_rejected`,
 `command_completed`, `command_failed`, `resync_request`, `resync_response`,
-`save`, `load`, and `error`. Save/load payloads are defined for compatibility;
+`save`, `load`, `world_manifest`, `world_collection_page`,
+`world_snapshot_complete`, and `error`. Save/load payloads are defined for compatibility;
 the script communicates actual load continuity in `hello` because OpenTTD save
 callbacks must not perform communication. State deltas, generic events, and
 `command_started` are intentionally absent because Task 7A did not verify them.
@@ -91,6 +93,12 @@ count, selected company ID/name, cash, loan, aggregate vehicle/station counts,
 snapshot ID, and save generation. It is observational and cannot restore or
 roll OpenTTD back.
 
+Protocol v2 follows that summary with a manifest and complete paged collections for companies,
+towns, industries, selected-company stations and vehicles, orders, and cargo. The client publishes
+the assembled bridge world only after exact count, type, identity, and completion validation. The
+adapter then exposes the canonical model described in
+[013-openttd-world-observation.md](013-openttd-world-observation.md).
+
 Admin Network remains authoritative for connection, map identity, game date,
 company identity/economy, and aggregate counts. GameScript is authoritative for
 the added pause/town/industry fields. Shared-field disagreements are retained in
@@ -101,7 +109,7 @@ this GameScript, so that field comes only from Admin Network.
 ## Capabilities and command
 
 The running script publishes the live capability set and a deterministic SHA-256
-fingerprint. Protocol v1 supports full snapshots, save/load continuity,
+fingerprint. Protocol v2 supports full summary and world snapshots, save/load continuity,
 reconciliation, and only one action: `set_company_name`. Deltas, construction,
 vehicle management, general console commands, and arbitrary GameScript actions
 are not advertised.
@@ -201,6 +209,7 @@ not initialize a hosted compiler or decision provider.
 - Capability mismatch: install the exact OpenTTD 15.3/API 15 package. Unknown
   versions fail closed.
 
-There is no state delta, map/entity paging, event stream, construction, route
+There is no wire-level state delta, full-map tile paging, event stream, construction, route
 planning, fleet optimization, rollback, public multiplayer automation, UI
-control, patched OpenTTD build, or generalized multi-game protocol in v1.
+control, patched OpenTTD build, or generalized multi-game protocol in v2. Entity collections are
+paged, then translated and diffed by the adapter.

@@ -9,7 +9,14 @@ from pydantic import SecretStr
 from typer.testing import CliRunner
 
 from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
-from sim_pilot.domain import Observation
+from sim_pilot.domain import (
+    CapabilityCoverage,
+    Company,
+    Observation,
+    WorldSnapshot,
+    WorldSnapshotMetadata,
+)
+from sim_pilot.domain.world import CoverageStatus
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from sim_pilot.openttd.config import OpenTTDConfiguration
@@ -478,6 +485,65 @@ def test_openttd_observe_uses_local_observation_path(
     assert "Local fixture observation." in result.output
 
 
+def test_openttd_world_commands_render_tables_and_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world = WorldSnapshot(
+        metadata=WorldSnapshotMetadata(
+            snapshot_id="world-1",
+            world_id="fixture-world",
+            game="openttd",
+            game_version="15.3",
+            game_date=712223,
+            capture_started_game_date=712223,
+            capture_completed_game_date=712223,
+            complete=True,
+            capability_fingerprint="fingerprint",
+            save_generation=2,
+            bridge_sequence=4,
+            captured_at=datetime.now(UTC),
+        ),
+        coverage=(CapabilityCoverage(category="companies", status=CoverageStatus.AVAILABLE),),
+        companies=(
+            Company(
+                id="company:opaque-identifier",
+                name="Fixture Transport",
+                cash=425000,
+                loan=50000,
+            ),
+        ),
+    )
+
+    async def capture() -> WorldSnapshot:
+        return world
+
+    monkeypatch.setattr("sim_pilot.cli._world_snapshot", capture)
+    runner = CliRunner()
+
+    summary = runner.invoke(app, ["openttd", "world"])
+    company = runner.invoke(app, ["openttd", "company"])
+    payload = runner.invoke(app, ["openttd", "company", "--json"])
+    help_result = runner.invoke(app, ["openttd", "--help"])
+
+    assert summary.exit_code == 0, summary.output
+    assert "Entities: 1 companies" in summary.output
+    assert company.exit_code == 0, company.output
+    assert "Fixture Transport" in company.output
+    assert payload.exit_code == 0, payload.output
+    assert '"cash": 425000' in payload.output
+    for command in (
+        "world",
+        "towns",
+        "industries",
+        "stations",
+        "vehicles",
+        "company",
+        "routes",
+        "diff",
+    ):
+        assert command in help_result.output
+
+
 def test_openttd_bridge_doctor_reports_negotiated_health(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -524,6 +590,7 @@ def test_openttd_bridge_doctor_reports_negotiated_health(
     assert result.exit_code == 0, result.output
     assert '"script_instance_id": "cli-bridge"' in result.output
     assert '"synchronization_state": "synchronized"' in result.output
+    assert '"world_snapshot": null' in result.output
 
 
 def test_openttd_watch_is_bounded_and_emits_changes(

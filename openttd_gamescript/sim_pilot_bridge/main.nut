@@ -220,7 +220,8 @@ class SimPilotBridge extends GSController {
                 accepted = null, transported = null, transported_percent = null
             });
         }
-        foreach (company_id, unused in GSCompanyList()) {
+        for (local company_id = 0; company_id < 15; company_id++) {
+            if (GSCompany.ResolveCompanyID(company_id) == GSCompany.COMPANY_INVALID) continue;
             local loan = 0;
             local station_count = 0;
             local hq = GSCompany.GetCompanyHQ(company_id);

@@ -24,6 +24,13 @@ All domain models reject extra fields and carry `schema_version=1`. `TaskSpecifi
 serialization tests when changing them. `ExecutionResult` currently has the four documented result
 fields plus inherited `schema_version`; it has no optional error-code field.
 
+`src/sim_pilot/domain/world.py` defines the immutable game-neutral world-observation contracts:
+`WorldSnapshot`, metadata and capability coverage, companies, towns, industries, stations,
+vehicles and orders, inferred routes, cargo flows, and discriminated world changes. OpenTTD wire
+models never cross this boundary. The snapshot remains nested in the existing observation state,
+so Phase 8A changes no persisted table or repository interface. See
+[013-openttd-world-observation.md](013-openttd-world-observation.md).
+
 ## Runtime and repository records
 
 `src/sim_pilot/runtime/models.py` defines strict runtime evaluations, policy decisions,

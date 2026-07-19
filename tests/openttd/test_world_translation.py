@@ -2,7 +2,14 @@ import asyncio
 import json
 
 from sim_pilot.adapters.openttd import OpenTTDAdapter
-from sim_pilot.domain.world import Coordinates, Station, Vehicle, VehicleOrder, VehicleOrderKind
+from sim_pilot.domain.world import (
+    Coordinates,
+    CoverageStatus,
+    Station,
+    Vehicle,
+    VehicleOrder,
+    VehicleOrderKind,
+)
 from sim_pilot.openttd.gamescript.client import GameScriptBridgeClient
 from sim_pilot.openttd.models import OpenTTDObservationState
 from sim_pilot.openttd.route_inference import infer_routes
@@ -31,6 +38,9 @@ def test_adapter_translates_complete_world_without_raw_ids() -> None:
     assert world.companies[0].is_ai is False
     assert world.vehicles[0].route_id is not None
     assert world.routes[0].ordered_station_ids == (world.stations[0].id,)
+    coverage = {item.category: item.status for item in world.coverage}
+    assert coverage["infrastructure"] is CoverageStatus.UNAVAILABLE
+    assert coverage["terrain"] is CoverageStatus.UNAVAILABLE
 
 
 def test_route_identity_is_stable_when_order_cycles_rotate() -> None:

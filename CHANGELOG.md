@@ -4,6 +4,15 @@ All notable changes to Sim Pilot are documented in this file.
 
 ## Unreleased
 
+### OpenTTD world observation
+
+- Added GameScript protocol v2 and immutable canonical snapshots for companies, towns, industries,
+  selected-company stations and vehicles, orders, scoped cargo, inferred routes, explicit
+  capability coverage, and deterministic typed changes.
+- Added read-only `openttd world`, entity query, and `diff` commands with concise tables and
+  canonical JSON output. No gameplay action, runtime lifecycle, persistence table, or recovery
+  behavior changed.
+
 ### Repository maintenance
 
 - Reorganized the root README into a concise first-run guide with development and operations

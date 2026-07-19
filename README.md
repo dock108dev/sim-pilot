@@ -90,11 +90,23 @@ export SIM_PILOT_OPENTTD_ADMIN_PASSWORD="..."
 uv run sim-pilot openttd doctor
 uv run sim-pilot openttd capabilities
 uv run sim-pilot openttd observe
+
+# With the protocol-v2 GameScript bridge enabled:
+uv run sim-pilot openttd world
+uv run sim-pilot openttd towns
+uv run sim-pilot openttd industries
+uv run sim-pilot openttd stations
+uv run sim-pilot openttd vehicles
+uv run sim-pilot openttd company
+uv run sim-pilot openttd routes
+uv run sim-pilot openttd diff
 ```
 
 Writes remain disabled unless their separate safety flags are enabled on a disposable server. See
 [OpenTTD integration](docs/003-openttd-integration.md) and the
 [GameScript bridge protocol](docs/005-openttd-bridge-protocol.md) before enabling them.
+The canonical model and its explicit coverage limits are documented in
+[OpenTTD world observation](docs/013-openttd-world-observation.md).
 
 ## Architecture at a glance
 

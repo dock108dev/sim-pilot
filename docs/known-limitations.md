@@ -45,10 +45,15 @@ are evidence from specific milestones, not the current product contract.
 
 - The supported live target is OpenTTD 15.3 with Admin protocol 3, bound to loopback. Remote Admin
   Network connections and public multiplayer automation are intentionally rejected.
-- The integration observes the bounded resources documented in the OpenTTD RFCs. Its only write
+- Protocol v2 observes companies, towns, industries, selected-company stations and vehicles,
+  orders, scoped cargo, and inferred routes. It does not expose a complete tile/terrain or
+  infrastructure graph, native events, exact catchments, or pathfinder routes. Captures are
+  cooperative rather than atomic and record their start/completion dates.
+- The integration's only write
   actions are Admin RCON `set_server_name` and GameScript `set_company_name`, each behind an
   independent opt-in flag.
-- Route construction, vehicles, schedules, finances beyond the exposed observation, UI control,
+- Route construction, vehicle/order mutation, schedules, finances beyond the exposed observation,
+  UI control,
   memory scraping, and arbitrary console commands are unsupported.
 - Live OpenTTD and GameScript tests require a separately configured disposable server and are
   skipped by the normal validation gate.
@@ -61,5 +66,5 @@ The following require product or operational direction rather than a documentati
 - package publication, deployment, backups, and data-retention policy;
 - security-scanner ownership and CI failure thresholds;
 - remote-service authentication, authorization, encryption, and tenant isolation;
-- expansion of OpenTTD observations and actions beyond the two verified writes;
+- further OpenTTD observation surfaces or actions beyond the two verified writes;
 - a managed retention policy for provider and evaluation recordings.

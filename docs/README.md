@@ -28,6 +28,7 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [003 — OpenTTD integration](003-openttd-integration.md)
 - [004 — GameScript capability discovery](004-openttd-gamescript-capability.md)
 - [005 — GameScript bridge protocol](005-openttd-bridge-protocol.md)
+- [013 — OpenTTD world observation](013-openttd-world-observation.md)
 
 The RFCs define public behavior. The implementation guides describe how to work with the current
 tree. When they disagree, update the guide or stop and resolve the contract conflict before changing

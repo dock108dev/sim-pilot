@@ -11,7 +11,7 @@ from sim_pilot.openttd.gamescript.messages import (
     MessageType,
     parse_bridge_message,
 )
-from tests.openttd.gamescript.helpers import capabilities, message, snapshot
+from tests.openttd.gamescript.helpers import capabilities, message, snapshot, world_sync_messages
 
 
 def test_every_production_inbound_payload_round_trips_deterministically() -> None:
@@ -33,6 +33,10 @@ def test_every_production_inbound_payload_round_trips_deterministically() -> Non
         parsed = parse_bridge_message(raw)
         assert parsed.to_json(maximum_bytes=1450) == raw
 
+    for raw in world_sync_messages()[4:]:
+        parsed = parse_bridge_message(raw)
+        assert parsed.to_json(maximum_bytes=1450) == raw
+
 
 def test_unknown_fields_types_versions_and_payload_mismatch_fail_closed() -> None:
     raw = json.loads(
@@ -44,7 +48,7 @@ def test_unknown_fields_types_versions_and_payload_mismatch_fail_closed() -> Non
     )
     for key, value in (
         ("unknown", True),
-        ("protocol_version", 2),
+        ("protocol_version", 3),
         ("message_type", "state_delta"),
     ):
         invalid = {**raw, key: value}
