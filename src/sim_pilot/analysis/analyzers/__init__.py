@@ -1,6 +1,12 @@
 """Deterministic analyzers over canonical world snapshots."""
 
 from sim_pilot.analysis.analyzers.base import Analyzer, AnalyzerResult
+from sim_pilot.analysis.analyzers.changes import (
+    AnomalyDetectionAnalyzer,
+    EntitySummaryAnalyzer,
+    PriorityReviewAnalyzer,
+    WorldChangesAnalyzer,
+)
 from sim_pilot.analysis.analyzers.coverage import (
     IndustryOpportunitiesAnalyzer,
     ServiceCoverageAnalyzer,
@@ -16,13 +22,17 @@ from sim_pilot.analysis.analyzers.vehicles import FleetSummaryAnalyzer, VehicleP
 __all__ = [
     "Analyzer",
     "AnalyzerResult",
+    "AnomalyDetectionAnalyzer",
     "CompanyHealthAnalyzer",
     "FinancialSummaryAnalyzer",
     "FleetSummaryAnalyzer",
     "IndustryOpportunitiesAnalyzer",
+    "EntitySummaryAnalyzer",
+    "PriorityReviewAnalyzer",
     "RoutePerformanceAnalyzer",
     "ServiceCoverageAnalyzer",
     "StationPerformanceAnalyzer",
     "TownCoverageAnalyzer",
     "VehiclePerformanceAnalyzer",
+    "WorldChangesAnalyzer",
 ]

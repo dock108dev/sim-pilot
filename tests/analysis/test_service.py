@@ -19,7 +19,7 @@ from sim_pilot.analysis.errors import (
     AnalyzerResultError,
 )
 from sim_pilot.analysis.evidence import field_evidence
-from sim_pilot.analysis.registry import AnalyzerRegistry
+from sim_pilot.analysis.registry import AnalyzerRegistry, default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
 from sim_pilot.domain.world import WorldSnapshot
 from tests.analysis.helpers import snapshot
@@ -92,6 +92,10 @@ def test_registry_rejects_duplicate_and_missing_analyzers() -> None:
         registry.register(FakeFinancialAnalyzer())
     with pytest.raises(AnalyzerRegistrationError, match="no analyzer"):
         registry.get(AnalysisType.VEHICLE_PERFORMANCE)
+
+
+def test_default_registry_covers_the_closed_catalog() -> None:
+    assert set(default_analyzer_registry().registered_types) == set(AnalysisType)
 
 
 def test_service_validates_truncates_and_preserves_reference_integrity() -> None:

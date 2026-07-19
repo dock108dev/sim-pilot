@@ -21,7 +21,7 @@ from sim_pilot.analysis.contracts import (
     RankingMetric,
     RankingRequest,
 )
-from sim_pilot.analysis.registry import AnalyzerRegistry
+from sim_pilot.analysis.registry import AnalyzerRegistry, default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
 
 __all__ = [
@@ -38,6 +38,7 @@ __all__ = [
     "AnalysisType",
     "AnalysisService",
     "AnalyzerRegistry",
+    "default_analyzer_registry",
     "EvidenceConfidence",
     "EvidenceReference",
     "EvidenceSourceType",
