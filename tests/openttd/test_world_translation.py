@@ -36,6 +36,7 @@ def test_adapter_translates_complete_world_without_raw_ids() -> None:
     assert world.towns[0].id.startswith("town:")
     assert world.towns[0].id != "1"
     assert world.companies[0].is_ai is False
+    assert world.metadata.observer_company_id == world.companies[0].id
     assert world.vehicles[0].route_id is not None
     assert world.routes[0].ordered_station_ids == (world.stations[0].id,)
     coverage = {item.category: item.status for item in world.coverage}

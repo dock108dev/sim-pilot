@@ -32,7 +32,8 @@ v2 and the `openttd-gamescript-v2` adapter contract.
 stations and vehicles, inferred routes, cargo flows, and precomputed typed changes. Metadata
 records the world and snapshot identities, OpenTTD version and date, capture start/completion game
 dates, completeness, capability fingerprint, save generation, bridge sequence, and UTC capture
-time.
+time. `observer_company_id` identifies the selected company using the same canonical opaque-ID
+scheme, so downstream analysis never needs a raw GameScript company slot.
 
 The entity models expose:
 

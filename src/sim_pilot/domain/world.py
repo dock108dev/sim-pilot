@@ -217,6 +217,7 @@ class WorldSnapshotMetadata(WorldModel):
     save_generation: int = Field(ge=0)
     bridge_sequence: int = Field(ge=1)
     captured_at: AwareDatetime
+    observer_company_id: str | None = Field(default=None, min_length=1)
 
 
 class WorldSnapshot(WorldModel):

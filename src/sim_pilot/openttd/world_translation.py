@@ -106,6 +106,7 @@ def translate_world(
             save_generation=0 if health.snapshot is None else health.snapshot.save_generation,
             bridge_sequence=health.last_sequence or 1,
             captured_at=captured_at or datetime.now(UTC),
+            observer_company_id=_id(world_id, "company", state.company.company_id),
         ),
         coverage=_coverage(),
         companies=companies,

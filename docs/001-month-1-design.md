@@ -527,6 +527,11 @@ than being represented as zero. Runtime orchestration does not interpret these g
 collections and persistence continues storing the complete observation JSON through the existing
 event and checkpoint contracts.
 
+Phase 8B analysis questions are separate from action-oriented `TaskSpecification` and the runtime
+lifecycle. World metadata identifies the canonical observer company when the adapter has a
+selected company, allowing read-only analyzers to interpret “my company” without inspecting raw
+adapter identifiers. Analysis contracts and services do not grant execution authority.
+
 ---
 
 ## Action
@@ -1046,21 +1051,21 @@ Validate
 | OQ-009 | Compiler request telemetry | Resolved: typed result envelope plus opt-in atomic JSON recorder |
 | OQ-010 | Runtime decision provider | Resolved: bounded context plus explicit scripted/OpenAI/Codex/unconfigured providers |
 | OQ-011 | Decision provider recording | Resolved: opt-in redacted atomic JSON; recording failure blocks execution |
-| OQ-012 | OpenTTD gameplay bridge | Resolved: constrained snapshot-only GameScript protocol v1 with `set_company_name` as the sole supported action |
+| OQ-012 | OpenTTD gameplay bridge | Resolved: constrained GameScript protocol v2 world observation with `set_company_name` as the sole supported action |
 | OQ-013 | Codex CLI provider surface | Resolved: development-only isolated `codex exec`; schema-bound output, JSONL telemetry, no API-key fallback |
 
-## Task 7B OpenTTD bridge interface
+## Task 7B and Phase 8A OpenTTD bridge interface
 
-The OpenTTD adapter may compose one `OpenTTDAdminClient` with a protocol-v1
+The OpenTTD adapter may compose one `OpenTTDAdminClient` with a protocol-v2
 GameScript bridge client. The Admin client exclusively owns the TCP stream and
 routes GameScript packets; the bridge client does not import runtime or
 persistence. A combined observation retains Admin as authority for connection,
 date, map, company identity/economy, and aggregate counts, while the GameScript
-snapshot adds pause state and town/industry counts. Source disagreements are
+snapshot adds pause state and paged world entities. Source disagreements are
 recorded explicitly.
 
 The live capability intersection, not a global static catalog, controls action
-availability. Protocol v1 supports full snapshots and the zero-cost,
+availability. Protocol v2 supports summary and paged world snapshots and the zero-cost,
 state-comparable `set_company_name` action only. It does not support deltas,
 events, construction, vehicle control, or restore. Writes require a separate
 loopback/disposable-server opt-in and runtime success requires a fresh snapshot
