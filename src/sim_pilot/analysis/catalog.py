@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from types import MappingProxyType
+from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -20,6 +21,15 @@ from sim_pilot.analysis.errors import AnalysisRequestError
 class ComparisonRequirement(StrEnum):
     OPTIONAL = "optional"
     REQUIRED = "required"
+
+
+class CompilerCapability(TypedDict):
+    analysis_type: str
+    subjects: list[str]
+    filters: list[str]
+    ranking_metrics: list[str]
+    comparison: str
+    subject_required: bool
 
 
 class AnalysisCapability(BaseModel):
@@ -205,6 +215,21 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
 
 def capability_for(analysis_type: AnalysisType) -> AnalysisCapability:
     return DEFAULT_ANALYSIS_CATALOG[analysis_type]
+
+
+def compiler_capability_catalog() -> tuple[CompilerCapability, ...]:
+    """Return the bounded semantic compatibility surface supplied to compilers."""
+    return tuple(
+        {
+            "analysis_type": item.analysis_type.value,
+            "subjects": sorted(value.value for value in item.subjects),
+            "filters": sorted(value.value for value in item.filters),
+            "ranking_metrics": sorted(value.value for value in item.ranking_metrics),
+            "comparison": item.comparison.value,
+            "subject_required": item.subject_required,
+        }
+        for item in DEFAULT_ANALYSIS_CATALOG.values()
+    )
 
 
 def validate_analysis_request(request: AnalysisRequest) -> AnalysisCapability:

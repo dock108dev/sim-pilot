@@ -13,6 +13,7 @@ from sim_pilot.analysis.founder_session import run_founder_session
 from sim_pilot.analysis_provider import CodexAnalysisCompiler, CodexExplanationProvider
 from sim_pilot.cli import capture_openttd_world_snapshot
 from sim_pilot.config import codex_executable, codex_model, codex_timeout_seconds
+from sim_pilot.domain.world import WorldSnapshot
 from sim_pilot.private_files import atomic_write_private_text
 
 EXPLANATION_CASES = frozenset(
@@ -34,15 +35,32 @@ def main() -> None:
         type=Path,
         default=Path("tests/fixtures/founder_intelligence_questions.json"),
     )
+    parser.add_argument("--current-snapshot", type=Path)
+    parser.add_argument("--comparison-snapshot", type=Path)
+    parser.add_argument("--case-id", action="append", default=[])
+    parser.add_argument("--explanation-case-id", action="append", default=[])
     arguments = parser.parse_args()
     _require_safe_live_gates()
 
-    capture_started = perf_counter()
-    comparison = asyncio.run(capture_openttd_world_snapshot())
-    comparison_ms = (perf_counter() - capture_started) * 1_000
-    capture_started = perf_counter()
-    current = asyncio.run(capture_openttd_world_snapshot())
-    current_ms = (perf_counter() - capture_started) * 1_000
+    if (arguments.current_snapshot is None) != (arguments.comparison_snapshot is None):
+        raise RuntimeError("current and comparison snapshot files must be supplied together")
+    if arguments.current_snapshot is None:
+        capture_started = perf_counter()
+        comparison = asyncio.run(capture_openttd_world_snapshot())
+        comparison_ms = (perf_counter() - capture_started) * 1_000
+        capture_started = perf_counter()
+        current = asyncio.run(capture_openttd_world_snapshot())
+        current_ms = (perf_counter() - capture_started) * 1_000
+    else:
+        assert arguments.comparison_snapshot is not None
+        current = WorldSnapshot.model_validate_json(
+            arguments.current_snapshot.read_text(encoding="utf-8"), strict=True
+        )
+        comparison = WorldSnapshot.model_validate_json(
+            arguments.comparison_snapshot.read_text(encoding="utf-8"), strict=True
+        )
+        current_ms = 0.0
+        comparison_ms = 0.0
 
     compiler = CodexAnalysisCompiler(
         model=codex_model(),
@@ -54,8 +72,20 @@ def main() -> None:
         timeout_seconds=codex_timeout_seconds(),
         executable=codex_executable(),
     )
+    cases = load_founder_intelligence_cases(arguments.fixture)
+    selected_case_ids = frozenset(arguments.case_id)
+    if selected_case_ids:
+        cases = tuple(case for case in cases if case.case_id in selected_case_ids)
+        missing = selected_case_ids - {case.case_id for case in cases}
+        if missing:
+            raise RuntimeError(f"unknown founder case IDs: {', '.join(sorted(missing))}")
+    explanation_case_ids = (
+        frozenset(arguments.explanation_case_id)
+        if arguments.explanation_case_id
+        else EXPLANATION_CASES
+    )
     manifest = run_founder_session(
-        cases=load_founder_intelligence_cases(arguments.fixture),
+        cases=cases,
         current=current,
         comparison=comparison,
         compiler=compiler,
@@ -63,7 +93,7 @@ def main() -> None:
         compiler_metadata=lambda: compiler.last_metadata,
         explanation_metadata=lambda: explainer.last_metadata,
         output_directory=arguments.output,
-        explanation_case_ids=EXPLANATION_CASES,
+        explanation_case_ids=explanation_case_ids,
     )
     atomic_write_private_text(
         arguments.output / "snapshot-latency.json",

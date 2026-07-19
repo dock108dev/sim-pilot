@@ -7,7 +7,8 @@ import json
 from openai import AsyncOpenAI, OpenAIError
 from pydantic import BaseModel
 
-from sim_pilot.analysis.compiler import AnalysisCompilation
+from sim_pilot.analysis.catalog import compiler_capability_catalog
+from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompilerContext
 from sim_pilot.analysis.contracts import AnalysisExplanation
 from sim_pilot.analysis.explanation import ExplanationInput
 from sim_pilot.analysis.prompt import ANALYSIS_COMPILER_PROMPT, ANALYSIS_EXPLANATION_PROMPT
@@ -78,10 +79,22 @@ class OpenAIAnalysisCompiler(_OpenAIProvider):
             max_output_tokens=max_output_tokens,
         )
 
-    async def compile(self, question: str) -> AnalysisCompilation:
+    async def compile(
+        self,
+        question: str,
+        *,
+        context: AnalysisCompilerContext | None = None,
+    ) -> AnalysisCompilation:
+        context_payload = None if context is None else context.model_dump(mode="json")
         result = await self._parse(
-            developer=ANALYSIS_COMPILER_PROMPT,
-            user=question,
+            developer=(
+                f"{ANALYSIS_COMPILER_PROMPT}\n\nSupported analyzer compatibility catalog:\n"
+                f"{json.dumps(compiler_capability_catalog(), separators=(',', ':'))}"
+            ),
+            user=json.dumps(
+                {"resolution_context": context_payload, "player_question": question},
+                separators=(",", ":"),
+            ),
             output_type=AnalysisCompilation,
         )
         assert isinstance(result, AnalysisCompilation)

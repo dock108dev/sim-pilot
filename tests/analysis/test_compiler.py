@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from sim_pilot.analysis.compiler import (
     AnalysisCompilation,
+    AnalysisCompilerContext,
     DeterministicAnalysisCompiler,
     ScriptedAnalysisCompiler,
 )
@@ -32,6 +33,18 @@ def test_deterministic_compiler_ranks_profitable_routes_descending() -> None:
     assert result.request.ranking is not None
     assert result.request.ranking.metric is RankingMetric.ROUTE_AGGREGATE_PROFIT
     assert result.request.ranking.direction is RankingDirection.DESCENDING
+
+
+def test_deterministic_compiler_uses_supplied_comparison_context() -> None:
+    result = asyncio.run(
+        DeterministicAnalysisCompiler().compile(
+            "What changed since before?",
+            context=AnalysisCompilerContext(comparison_snapshot_id="snapshot-before"),
+        )
+    )
+    assert result.request is not None
+    assert result.request.analysis_type is AnalysisType.WORLD_CHANGES
+    assert result.request.comparison_snapshot_id == "snapshot-before"
 
 
 @pytest.mark.parametrize(

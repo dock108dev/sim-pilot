@@ -13,11 +13,44 @@ from sim_pilot.analysis.contracts import (
     AnalysisFilterField,
     AnalysisFilterOperator,
     AnalysisRequest,
+    AnalysisSubjectType,
     AnalysisType,
     RankingDirection,
     RankingMetric,
     RankingRequest,
 )
+
+
+def _empty_entity_counts() -> dict[AnalysisSubjectType, int]:
+    return {}
+
+
+class AnalysisEntityContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    subject_type: AnalysisSubjectType
+    canonical_id: str = Field(min_length=1)
+    alias: str = Field(min_length=1)
+    name: str | None = Field(default=None, min_length=1)
+
+
+class AnalysisFindingContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    finding_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    entity_ids: tuple[str, ...] = Field(max_length=10)
+
+
+class AnalysisCompilerContext(BaseModel):
+    """Bounded context for comparison and follow-up reference resolution."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    comparison_snapshot_id: str | None = Field(default=None, min_length=1)
+    entity_counts: dict[AnalysisSubjectType, int] = Field(default_factory=_empty_entity_counts)
+    focus_entities: tuple[AnalysisEntityContext, ...] = Field(default=(), max_length=10)
+    prior_findings: tuple[AnalysisFindingContext, ...] = Field(default=(), max_length=5)
 
 
 class AnalysisCompilation(BaseModel):
@@ -41,14 +74,25 @@ class AnalysisCompilation(BaseModel):
 
 
 class AnalysisCompiler(Protocol):
-    async def compile(self, question: str) -> AnalysisCompilation: ...
+    async def compile(
+        self,
+        question: str,
+        *,
+        context: AnalysisCompilerContext | None = None,
+    ) -> AnalysisCompilation: ...
 
 
 class ScriptedAnalysisCompiler:
     def __init__(self, results: tuple[AnalysisCompilation, ...]) -> None:
         self._results = deque(results)
 
-    async def compile(self, question: str) -> AnalysisCompilation:
+    async def compile(
+        self,
+        question: str,
+        *,
+        context: AnalysisCompilerContext | None = None,
+    ) -> AnalysisCompilation:
+        del context
         if not question.strip():
             raise ValueError("question must not be empty")
         if not self._results:
@@ -59,7 +103,12 @@ class ScriptedAnalysisCompiler:
 class DeterministicAnalysisCompiler:
     """Compile a bounded set of common questions without invoking a model."""
 
-    async def compile(self, question: str) -> AnalysisCompilation:
+    async def compile(
+        self,
+        question: str,
+        *,
+        context: AnalysisCompilerContext | None = None,
+    ) -> AnalysisCompilation:
         normalized = " ".join(question.lower().split())
         if not normalized:
             raise ValueError("question must not be empty")
@@ -89,7 +138,11 @@ class DeterministicAnalysisCompiler:
                     "Ask about company health, vehicles, stations, routes, coverage, or changes."
                 )
             )
-        if "compare" in normalized and "before" in normalized:
+        if (
+            "compare" in normalized
+            and "before" in normalized
+            and (context is None or context.comparison_snapshot_id is None)
+        ):
             return AnalysisCompilation(
                 clarification="Supply an explicit compatible comparison snapshot."
             )
@@ -100,7 +153,9 @@ class DeterministicAnalysisCompiler:
                     "The question does not map to the supported deterministic analysis catalog."
                 )
             )
-        if analysis_type is AnalysisType.ANOMALY_DETECTION:
+        if analysis_type is AnalysisType.ANOMALY_DETECTION and (
+            context is None or context.comparison_snapshot_id is None
+        ):
             return AnalysisCompilation(
                 clarification=(
                     "Supply an explicit compatible comparison snapshot for anomaly review."
@@ -138,6 +193,7 @@ class DeterministicAnalysisCompiler:
             question=question.strip(),
             filters=filters,
             ranking=ranking,
+            comparison_snapshot_id=(None if context is None else context.comparison_snapshot_id),
         )
         validate_analysis_request(request)
         return AnalysisCompilation(request=request)

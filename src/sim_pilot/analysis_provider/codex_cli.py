@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sim_pilot.analysis.compiler import AnalysisCompilation
+from sim_pilot.analysis.catalog import compiler_capability_catalog
+from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompilerContext
 from sim_pilot.analysis.contracts import AnalysisExplanation
 from sim_pilot.analysis.explanation import ExplanationInput
 from sim_pilot.analysis.prompt import (
@@ -40,11 +41,18 @@ class CodexAnalysisCompiler:
         )
         self.last_metadata: ProviderMetadata | None = None
 
-    async def compile(self, question: str) -> AnalysisCompilation:
+    async def compile(
+        self,
+        question: str,
+        *,
+        context: AnalysisCompilerContext | None = None,
+    ) -> AnalysisCompilation:
         if not question.strip():
             raise ValueError("question must not be empty")
         prompt = (
             f"{SAFETY}\n\nCompiler contract:\n{ANALYSIS_COMPILER_PROMPT}\n\n"
+            f"Supported analyzer compatibility catalog:\n{_catalog_payload()}\n\n"
+            f"Bounded resolution context:\n{_compiler_context_payload(context)}\n\n"
             f"Player question:\n{question}"
         )
         try:
@@ -57,6 +65,19 @@ class CodexAnalysisCompiler:
             raise RuntimeError(f"Codex analysis compilation failed: {error}") from error
         self.last_metadata = metadata
         return result
+
+
+def _compiler_context_payload(context: AnalysisCompilerContext | None) -> str:
+    if context is None:
+        return (
+            '{"comparison_snapshot_id":null,"entity_counts":{},"focus_entities":[],'
+            '"prior_findings":[]}'
+        )
+    return json.dumps(context.model_dump(mode="json"), separators=(",", ":"))
+
+
+def _catalog_payload() -> str:
+    return json.dumps(compiler_capability_catalog(), separators=(",", ":"))
 
 
 class CodexExplanationProvider:

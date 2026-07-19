@@ -1,6 +1,6 @@
 import pytest
 
-from sim_pilot.analysis.catalog import validate_analysis_request
+from sim_pilot.analysis.catalog import compiler_capability_catalog, validate_analysis_request
 from sim_pilot.analysis.contracts import (
     AnalysisFilter,
     AnalysisFilterField,
@@ -82,3 +82,11 @@ def test_entity_summary_requires_an_explicit_subject() -> None:
                 question="Summarize it.",
             )
         )
+
+
+def test_compiler_catalog_exposes_only_semantic_compatibility_fields() -> None:
+    catalog = compiler_capability_catalog()
+    vehicle = next(item for item in catalog if item["analysis_type"] == "vehicle_performance")
+    assert "vehicle_type" in vehicle["filters"]
+    assert "profit_last_year" in vehicle["ranking_metrics"]
+    assert "required_coverage" not in vehicle

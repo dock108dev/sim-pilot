@@ -11,14 +11,22 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompiler
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    AnalysisCompiler,
+    AnalysisCompilerContext,
+    AnalysisEntityContext,
+    AnalysisFindingContext,
+)
 from sim_pilot.analysis.contracts import (
     AnalysisRequest,
     AnalysisResponse,
     AnalysisStatus,
+    AnalysisSubjectType,
     ExplanationClaimType,
 )
-from sim_pilot.analysis.evaluation import FounderIntelligenceCase
+from sim_pilot.analysis.evaluation import FounderIntelligenceCase, FounderQuestionCategory
+from sim_pilot.analysis.evidence_view import entity_aliases, resolve_entity
 from sim_pilot.analysis.explanation import (
     ExplanationProvider,
     ExplanationStyle,
@@ -137,6 +145,7 @@ def run_founder_session(
     )
     _write_results(output_directory / "pass-a-deterministic.json", deterministic_results)
 
+    deterministic_by_id = {item.case_id: item for item in deterministic_results}
     compiler_results: list[FounderSessionCaseResult] = []
     compiled_responses: dict[str, AnalysisResponse] = {}
     for case in cases:
@@ -147,6 +156,12 @@ def run_founder_session(
             service,
             compiler,
             compiler_metadata,
+            _compiler_context(
+                case,
+                current,
+                comparison,
+                deterministic_by_id.get(case.case_id),
+            ),
         )
         compiler_results.append(result)
         if result.response is not None:
@@ -249,12 +264,13 @@ def _run_compiler_case(
     service: AnalysisService,
     compiler: AnalysisCompiler,
     metadata: Callable[[], ProviderMetadata | None],
+    context: AnalysisCompilerContext,
 ) -> FounderSessionCaseResult:
     import asyncio
 
     started = perf_counter()
     try:
-        compilation = asyncio.run(compiler.compile(case.question))
+        compilation = asyncio.run(compiler.compile(case.question, context=context))
         response: AnalysisResponse | None = None
         if compilation.request is not None:
             request = compilation.request.model_copy(
@@ -414,6 +430,59 @@ def _validate_snapshots(current: WorldSnapshot, comparison: WorldSnapshot) -> No
         raise ValueError("founder session snapshots must share a world identity")
     if current.metadata.capability_fingerprint != comparison.metadata.capability_fingerprint:
         raise ValueError("founder session snapshots must share a capability fingerprint")
+
+
+def _compiler_context(
+    case: FounderIntelligenceCase,
+    current: WorldSnapshot,
+    comparison: WorldSnapshot,
+    deterministic: FounderSessionCaseResult | None,
+) -> AnalysisCompilerContext:
+    focus_entities: list[AnalysisEntityContext] = []
+    prior_findings: list[AnalysisFindingContext] = []
+    if (
+        case.category is FounderQuestionCategory.DRILL_DOWN
+        and deterministic is not None
+        and deterministic.response is not None
+        and deterministic.response.findings
+    ):
+        finding = deterministic.response.findings[0]
+        entity_ids: list[str] = []
+        for evidence in finding.evidence:
+            if evidence.entity_type is None or evidence.entity_id is None:
+                continue
+            entity_ids.append(evidence.entity_id)
+            entity = resolve_entity(current, evidence.entity_type, evidence.entity_id)
+            focus_entities.append(
+                AnalysisEntityContext(
+                    subject_type=evidence.entity_type,
+                    canonical_id=evidence.entity_id,
+                    alias=entity_aliases(current, evidence.entity_type)[evidence.entity_id],
+                    name=getattr(entity, "name", None),
+                )
+            )
+        prior_findings.append(
+            AnalysisFindingContext(
+                finding_id=finding.finding_id,
+                title=finding.title,
+                entity_ids=tuple(dict.fromkeys(entity_ids)),
+            )
+        )
+    return AnalysisCompilerContext(
+        comparison_snapshot_id=(
+            comparison.metadata.snapshot_id if case.requires_comparison else None
+        ),
+        entity_counts={
+            AnalysisSubjectType.COMPANY: len(current.companies),
+            AnalysisSubjectType.TOWN: len(current.towns),
+            AnalysisSubjectType.INDUSTRY: len(current.industries),
+            AnalysisSubjectType.STATION: len(current.stations),
+            AnalysisSubjectType.VEHICLE: len(current.vehicles),
+            AnalysisSubjectType.ROUTE: len(current.routes),
+        },
+        focus_entities=tuple(focus_entities[:10]),
+        prior_findings=tuple(prior_findings),
+    )
 
 
 def _write_results(path: Path, results: tuple[FounderSessionCaseResult, ...]) -> None:
