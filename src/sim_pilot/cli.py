@@ -18,17 +18,24 @@ from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.analysis import (
     AnalysisRequest,
+    AnalysisResponse,
     AnalysisSubjectType,
     AnalysisType,
     DeterministicAnalysisCompiler,
 )
 from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompiler
 from sim_pilot.analysis.errors import AnalysisError
+from sim_pilot.analysis.evidence_view import (
+    render_entity,
+    render_finding_evidence,
+    render_session_summary,
+)
 from sim_pilot.analysis.explanation import ExplanationProvider
 from sim_pilot.analysis.output import render_analysis
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
+from sim_pilot.analysis.session import AnalysisSessionRecord, AnalysisSessionStore
 from sim_pilot.analysis_provider import (
     CodexAnalysisCompiler,
     CodexExplanationProvider,
@@ -36,6 +43,7 @@ from sim_pilot.analysis_provider import (
     OpenAIExplanationProvider,
 )
 from sim_pilot.config import (
+    analysis_session_directory,
     codex_capability_cache_seconds,
     codex_executable,
     codex_maximum_stderr_bytes,
@@ -141,6 +149,7 @@ task_app = typer.Typer(help="Create and operate structured tasks.")
 recovery_app = typer.Typer(help="Inspect and resolve interrupted action attempts.")
 openttd_app = typer.Typer(help="Observe a local OpenTTD 15.3 game through its admin port.")
 openttd_analyze_app = typer.Typer(help="Run deterministic read-only gameplay analysis.")
+analysis_app = typer.Typer(help="Inspect previous gameplay analysis and evidence.")
 openttd_action_app = typer.Typer(help="Run a directly validated and verified OpenTTD action.")
 openttd_bridge_app = typer.Typer(help="Operate the versioned OpenTTD GameScript bridge.")
 openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled bridge action.")
@@ -148,6 +157,7 @@ evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation ex
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
+app.add_typer(analysis_app, name="analysis")
 app.add_typer(evaluate_app, name="evaluate")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_analyze_app, name="analyze")
@@ -785,14 +795,24 @@ async def _analysis_snapshot(path: Path | None, live: bool) -> WorldSnapshot:
     return await capture_openttd_world_snapshot()
 
 
-def _emit_analysis(response: object, *, json_output: bool, detailed: bool) -> None:
+def _analysis_session_store() -> AnalysisSessionStore:
+    return AnalysisSessionStore(analysis_session_directory())
+
+
+def _emit_analysis(
+    response: AnalysisResponse,
+    record: AnalysisSessionRecord,
+    *,
+    json_output: bool,
+    detailed: bool,
+) -> None:
     if json_output:
         _emit(response)
+        typer.echo(f"Analysis ID: {record.analysis_id}", err=True)
         return
-    if not hasattr(response, "findings"):
-        _emit(response)
-        return
-    typer.echo(render_analysis(response, detailed=detailed))  # type: ignore[arg-type]
+    typer.echo(render_analysis(response, detailed=detailed))
+    typer.echo("")
+    typer.echo(f"Evidence available: sim-pilot analysis show {record.analysis_id}")
 
 
 @app.command("ask")
@@ -832,7 +852,7 @@ def analysis_ask(
             INVALID_INPUT,
         )
 
-    async def run() -> tuple[AnalysisCompilation, object | None]:
+    async def run() -> tuple[AnalysisCompilation, AnalysisResponse | None, WorldSnapshot]:
         current = await _analysis_snapshot(snapshot_file, live)
         comparison = (
             None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
@@ -840,7 +860,7 @@ def analysis_ask(
         compiler = _analysis_compiler(compiler_provider, model)
         compilation = await compiler.compile(question)
         if compilation.request is None:
-            return compilation, None
+            return compilation, None, current
         request = compilation.request.model_copy(
             update={
                 "maximum_findings": maximum_findings,
@@ -860,14 +880,15 @@ def analysis_ask(
             explanation_provider=_analysis_explainer(explanation_provider, model),
             tone="detailed" if detailed else "concise",
         )
-        return compilation, response
+        return compilation, response, current
 
     try:
-        compilation, response = asyncio.run(run())
+        compilation, response, current = asyncio.run(run())
         if response is None:
             _emit(compilation)
             raise typer.Exit(INVALID_INPUT)
-        _emit_analysis(response, json_output=json_output, detailed=detailed)
+        record = _analysis_session_store().save(response, current)
+        _emit_analysis(response, record, json_output=json_output, detailed=detailed)
     except typer.Exit:
         raise
     except (
@@ -893,7 +914,7 @@ def _direct_analysis(
     json_output: bool,
     detailed: bool,
 ) -> None:
-    async def run():
+    async def run() -> tuple[AnalysisResponse, WorldSnapshot]:
         current = await _analysis_snapshot(snapshot_file, live)
         comparison = (
             None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
@@ -908,11 +929,15 @@ def _direct_analysis(
             ),
             maximum_findings=maximum_findings,
         )
-        return AnalysisService(default_analyzer_registry()).analyze(request, current, comparison)
+        return (
+            AnalysisService(default_analyzer_registry()).analyze(request, current, comparison),
+            current,
+        )
 
     try:
-        response = asyncio.run(run())
-        _emit_analysis(response, json_output=json_output, detailed=detailed)
+        response, current = asyncio.run(run())
+        record = _analysis_session_store().save(response, current)
+        _emit_analysis(response, record, json_output=json_output, detailed=detailed)
     except (AnalysisError, OSError, RuntimeError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)
 
@@ -1071,6 +1096,108 @@ def analyze_changes(
         json_output,
         detailed,
     )
+
+
+@analysis_app.command("show")
+def analysis_show(
+    analysis_id: Annotated[str | None, typer.Argument()] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show the latest or selected analysis and its finding IDs."""
+    try:
+        record = _analysis_session_store().load(analysis_id)
+        _emit(record) if json_output else typer.echo(render_session_summary(record))
+    except (OSError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+
+
+@analysis_app.command("evidence")
+def analysis_evidence(analysis_id: str, finding_id: str) -> None:
+    """Explain the evidence behind one previous finding."""
+    try:
+        record = _analysis_session_store().load(analysis_id)
+        typer.echo(render_finding_evidence(record, finding_id))
+    except (OSError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+
+
+@analysis_app.command("entity")
+def analysis_entity(
+    analysis_id: str,
+    subject: AnalysisSubjectType,
+    reference: str,
+) -> None:
+    """Inspect one entity from a previous analysis snapshot."""
+    try:
+        record = _analysis_session_store().load(analysis_id)
+        typer.echo(
+            render_entity(
+                record.snapshot,
+                subject,
+                reference,
+                record.response.findings,
+            )
+        )
+    except (OSError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+
+
+def _openttd_entity(
+    subject: AnalysisSubjectType,
+    reference: str,
+    snapshot_file: Path | None,
+    live: bool,
+) -> None:
+    try:
+        snapshot = asyncio.run(_analysis_snapshot(snapshot_file, live))
+        typer.echo(render_entity(snapshot, subject, reference))
+    except (OpenTTDError, OSError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+
+
+@openttd_app.command("vehicle")
+def openttd_vehicle(
+    reference: str,
+    snapshot_file: Annotated[Path | None, typer.Option("--snapshot", exists=True)] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    _openttd_entity(AnalysisSubjectType.VEHICLE, reference, snapshot_file, live)
+
+
+@openttd_app.command("station")
+def openttd_station(
+    reference: str,
+    snapshot_file: Annotated[Path | None, typer.Option("--snapshot", exists=True)] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    _openttd_entity(AnalysisSubjectType.STATION, reference, snapshot_file, live)
+
+
+@openttd_app.command("route")
+def openttd_route(
+    reference: str,
+    snapshot_file: Annotated[Path | None, typer.Option("--snapshot", exists=True)] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    _openttd_entity(AnalysisSubjectType.ROUTE, reference, snapshot_file, live)
+
+
+@openttd_app.command("industry")
+def openttd_industry(
+    reference: str,
+    snapshot_file: Annotated[Path | None, typer.Option("--snapshot", exists=True)] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    _openttd_entity(AnalysisSubjectType.INDUSTRY, reference, snapshot_file, live)
+
+
+@openttd_app.command("town")
+def openttd_town(
+    reference: str,
+    snapshot_file: Annotated[Path | None, typer.Option("--snapshot", exists=True)] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    _openttd_entity(AnalysisSubjectType.TOWN, reference, snapshot_file, live)
 
 
 def _emit_world_collection(collection: str, json_output: bool) -> None:

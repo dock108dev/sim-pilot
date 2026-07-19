@@ -97,3 +97,10 @@ def codex_capability_cache_seconds() -> float:
     if configured < 0:
         raise ValueError("SIM_PILOT_CODEX_CAPABILITY_CACHE_SECONDS must not be negative")
     return configured
+
+
+def analysis_session_directory(value: Path | None = None) -> Path:
+    configured = value or Path(
+        os.getenv("SIM_PILOT_ANALYSIS_SESSION_DIRECTORY", "data/analysis-session")
+    )
+    return configured.expanduser().resolve()

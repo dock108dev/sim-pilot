@@ -1,5 +1,6 @@
 """Minimal process-facing CLI coverage."""
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -583,6 +584,9 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
         raise AssertionError("analysis must not initialize the action runtime")
 
     monkeypatch.setattr("sim_pilot.cli._runtime", unexpected)
+    monkeypatch.setattr(
+        "sim_pilot.cli.analysis_session_directory", lambda: tmp_path / "analysis-session"
+    )
     runner = CliRunner()
     ask = runner.invoke(
         app,
@@ -598,6 +602,21 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
     assert "Negative operating result" in ask.output
     assert direct.exit_code == 0, direct.output
     assert '"analysis_type": "company_health"' in direct.output
+
+    record = next((tmp_path / "analysis-session").glob("analysis-*.json"))
+    analysis_id = json.loads(record.read_text(encoding="utf-8"))["analysis_id"]
+    show = runner.invoke(app, ["analysis", "show", analysis_id])
+    assert show.exit_code == 0, show.output
+    assert "Negative operating result" in show.output
+    finding_id = json.loads(record.read_text(encoding="utf-8"))["response"]["findings"][0][
+        "finding_id"
+    ]
+    evidence = runner.invoke(app, ["analysis", "evidence", analysis_id, finding_id])
+    entity = runner.invoke(app, ["analysis", "entity", analysis_id, "company", "C-001"])
+    assert evidence.exit_code == 0, evidence.output
+    assert "Evidence" in evidence.output
+    assert entity.exit_code == 0, entity.output
+    assert "Fixture Transport" in entity.output
 
 
 def test_analysis_cli_requires_explicit_snapshot_or_live() -> None:

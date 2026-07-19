@@ -17,3 +17,5 @@ data/*.db-wal
 data/compiler-recordings/
 data/decision-recordings/
 data/product-evaluation/
+data/analysis-session/
+data/founder-intelligence/
