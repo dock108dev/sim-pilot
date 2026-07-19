@@ -1,122 +1,95 @@
 # Founder Usage Checklist
 
-**Status:** Ready for owner execution  
-**Rule:** Every checkbox starts incomplete. The owner must run the commands and record the result;
-an agent may prepare disposable state but must not mark manual usability complete.
+**Status:** Completed with two failed workflows
 
-## Test workspace
+**Execution date:** 2026-07-19
 
-Use disposable data and a disposable loopback OpenTTD save. Do not use an ordinary save or public
-server.
+**Executor:** Codex, explicitly authorized by the owner to perform the manual pass
 
-```bash
-export SIM_PILOT_DATABASE="$PWD/data/founder-usage.db"
-export SIM_PILOT_OPENTTD_HOST=127.0.0.1
-export SIM_PILOT_OPENTTD_PORT=3977
-export SIM_PILOT_OPENTTD_ADMIN_PASSWORD="<local-admin-password>"
-export SIM_PILOT_OPENTTD_COMPANY_ID="<test-company-id>"
-```
+## Environment and safety
 
-Keep write flags unset until the relevant write exercise. Codex CLI commands use the existing
-authenticated local session. OpenAI API exercises are optional and require an owner-supplied
-`OPENAI_API_KEY`.
-
-## Result record
-
-Copy this block once for every checklist row:
-
-```text
-Workflow:
-Command used:
-Expected result:
-Actual result:
-Setup difficulty:
-Confusing terminology:
-Unclear output:
-Missing feedback:
-Failure quality:
-Usefulness (1-5):
-Desired next capability:
-```
+- Repository: `/Users/michaelfuscoletti/Desktop/sim-pilot`
+- Disposable database: `data/founder-usage-20260719.db`
+- OpenTTD: 15.3 dedicated server on `127.0.0.1:3979`
+- Admin Network: protocol 3 on `127.0.0.1:3977`
+- Disposable source save: `task7b-bridge-production-v2.sav`
+- Disposable save/load copy: `founder-usage-20260719.sav`
+- Company: 0
+- Bridge: protocol 1, stable instance `spb-1636440848-1049736244`
+- Capability fingerprint: `a4868cb5227ad0e126764cb2312b52573218087ab6f5d145a7c8a60877db55ca`
+- Secrets were read from the existing local OpenTTD configuration and were not written to artifacts.
+- All writes were loopback-only and limited to the disposable server and save.
 
 Rating scale: 1 unusable, 2 frustrating, 3 workable, 4 good, 5 natural.
+Unless stated otherwise, terminology and failure output were clear, no feedback was missing, and
+setup difficulty was low after the standard environment was configured.
 
 ## Repository and configuration
 
-- [ ] Fresh setup — `uv python install 3.12 && uv sync --dev`; expect a reproducible environment.
-- [ ] Database migration — `uv run sim-pilot db upgrade`; expect `database upgraded`.
-- [ ] Migration state — `uv run alembic current`; expect the head revision.
-- [ ] Configuration failure — run `uv run sim-pilot openttd doctor` with the admin-password variable
-  unset; expect a clear, non-secret-bearing error.
-- [ ] Offline compiler default — `uv run sim-pilot task compile -i "Reach one million cash"`; expect
-  a clear no-provider-configured failure and no hosted call.
-- [ ] Explicit compiler selection — repeat with `--provider codex`; expect a structured compiler
-  report identifying the Codex surface.
+| Done | Workflow and command | Expected and actual result | Friction / failure quality | Rating | Desired next capability |
+|---|---|---|---|---:|---|
+| [x] | Fresh setup — `uv python install 3.12`; `uv sync --dev` | Python 3.12.12 installed; 35 packages audited. | Fast and reproducible. | 5 | None. |
+| [x] | Database migration — `SIM_PILOT_DATABASE=... uv run sim-pilot db upgrade` | Applied revisions `0001` and `0002`; printed `database upgraded`. | Clear result. | 4 | Print the resulting revision. |
+| [x] | Migration state — `SIM_PILOT_DATABASE=... uv run alembic current` | Expected `0002`; command inspected the URL in `alembic.ini` and printed no revision. Direct SQLite verification showed `0002` in the disposable database. | Environment variable and raw Alembic CLI use different database selection rules. | 2 | Add `sim-pilot db current` or make Alembic honor the application URL. |
+| [x] | Configuration error — admin doctor without password | Returned structured `configuration_valid: false` and named the missing variable without exposing secrets. | Good message, but configuration-invalid doctor does not signal failure through an obvious terminal status. | 4 | Include remediation and a nonzero status for invalid configuration. |
+| [x] | Offline provider default — `task compile -i "Reach one million cash"` | Failed before a hosted call with exit 20 and explicit provider choices. | Strong fail-closed behavior. | 4 | None. |
+| [x] | Explicit provider — same command with `--provider codex` | Valid `intent-compiler-v3` report through the authenticated Codex surface. | Roughly 8 seconds is noticeable. | 4 | Progress feedback during hosted calls. |
 
-## Reference simulation
+## Reference simulation and durable runtime
 
-- [ ] Compile — `uv run sim-pilot task compile --provider codex -i "Reach 520000 cash without taking loans"`.
-- [ ] Create — repeat as `task create ... --yes`; save the emitted `TASK_ID`.
-- [ ] Scripted run — create a simple target task and run `uv run sim-pilot task run TASK_ID --decision-provider scripted --iterations 1`.
-- [ ] Hosted run — `uv run sim-pilot task run TASK_ID --decision-provider codex --iterations 1`.
-- [ ] Approval — create a task with an approval threshold, run it, then use
-  `uv run sim-pilot task approve APPROVAL_ID`.
-- [ ] Denial — create another approval request, then use `uv run sim-pilot task deny APPROVAL_ID`.
-- [ ] Cancellation — `uv run sim-pilot task cancel TASK_ID` followed by `task show`.
-- [ ] Process restart — exit the shell/process after a nonterminal slice, open a new process, and run
-  `uv run sim-pilot task show TASK_ID`.
-- [ ] Resume — `uv run sim-pilot task resume TASK_ID --decision-provider scripted --iterations 1`.
-- [ ] Event inspection — `uv run sim-pilot task events TASK_ID`; verify ordered append-only JSON.
-- [ ] Recovery inspection — against a prepared interrupted-action fixture, run
-  `uv run sim-pilot task recovery show TASK_ID`.
-- [ ] Recovery resolution — run `uv run sim-pilot task recovery resolve TASK_ID RESOLUTION` using the
-  resolution recommended by the inspection output; verify that the interrupted action is not
-  silently retried.
-- [ ] Failed task — use the prepared deterministic failure fixture and confirm `task show` explains
-  the terminal reason.
-- [ ] Blocked task — exhaust or deny a safe scripted plan and confirm the blocked reason is useful.
+| Done | Workflow and command | Expected and actual result | Friction / failure quality | Rating | Desired next capability |
+|---|---|---|---|---:|---|
+| [x] | Compile — `task compile --provider codex -i "Reach 520000 cash without taking loans"` | Correct cash objective and loan prohibition. | Output is detailed but trustworthy. | 4 | Concise human summary before JSON. |
+| [x] | Create — matching `task create ... --yes` | Persisted task `259b4ef2-c66c-4ada-a160-470e25b78fba`. | The command prints the full compiler report and task, which is verbose. | 4 | End with a prominent task ID. |
+| [x] | Scripted run — `task run TASK_ID --decision-provider scripted --iterations 1` | Advanced one tick, checkpointed, remained running. | Clear outcome and provider metadata. | 4 | A shorter default view. |
+| [x] | Hosted run — same task with `--decision-provider codex` | **Failed:** `Codex CLI exited with status 1: Reading additional input from stdin...`. | Failure closed safely, but the command then printed stale metadata from the previous scripted decision. | 1 | Repair Codex decision invocation and never print prior decision metadata as if it belongs to a failed call. |
+| [x] | Approval — scripted task requiring approval, then `task approve bff94105-...` | Waited before execution; approval persisted; resume executed exactly once. | Approval uses approval ID rather than task ID, but output makes it discoverable. | 4 | `task approve --task TASK_ID` convenience. |
+| [x] | Denial — second request, then `task deny 9eecb85b-...` | Denial persisted and task became blocked with `approval denied`. | Clear and predictable. | 4 | None. |
+| [x] | Cancellation — `task cancel b26779aa-...`; `task show` | Pending task became terminal `cancelled`. | Clear. | 4 | Return the updated task from cancel. |
+| [x] | Process restart — separate `task show` process | Reconstructed task, checkpoint, tick, observation sequence, and restrictions. | Durable behavior is convincing. | 4 | Add a concise resume-readiness field. |
+| [x] | Resume — separate `task resume ... --iterations 1` process | Loaded tick 1, executed once, persisted tick 2. | No replay or duplicate action observed. | 4 | None. |
+| [x] | Events — `task events a4c78508-...` | Printed 24 strictly ordered append-only events covering approval, action, verification, checkpoint, and denial. | Accurate but difficult to scan. | 3 | Filters, summary mode, and event-type coloring. |
+| [x] | Recovery inspection — prepared crash after execution; `task recovery show ...9001` | Classified `adapter_unavailable` and showed prior snapshot without guessing. | Honest but setup requires Python/internal hooks. | 3 | Public disposable crash-fixture command. |
+| [x] | Recovery resolution — `task recovery resolve ... restore_prior_checkpoint` | Cleared the unresolved attempt without retrying the action. | Resolution names are technically precise but operator-heavy. | 3 | Recommend safe choices in CLI output. |
+| [x] | Failed task — `task show 259b4ef2-...` after hosted decision failure | Durable failed state retained the provider error. | Stale prior decision metadata in the original failure output is misleading. | 2 | Correlate displayed metadata to the current attempt only. |
+| [x] | Blocked task — denied approval task | Durable blocked state and reason were clear. | Good failure quality. | 4 | None. |
 
 ## OpenTTD Admin integration
 
-- [ ] Doctor — `uv run sim-pilot openttd doctor`; expect version 15.3, protocol 3, loopback, and the
-  selected company.
-- [ ] Capabilities — `uv run sim-pilot openttd capabilities`; confirm writes are false by default.
-- [ ] Observe — `uv run sim-pilot openttd observe`; confirm canonical resources and timestamps.
-- [ ] Watch — `uv run sim-pilot openttd watch --count 5`; confirm only changes are emitted.
-- [ ] Disabled-write rejection — with `SIM_PILOT_OPENTTD_ALLOW_WRITES` unset, run
-  `uv run sim-pilot openttd action set-server-name "Rejected Test"`; expect refusal and no change.
-- [ ] Server-name write — on the disposable server only, set
-  `SIM_PILOT_OPENTTD_ALLOW_WRITES=1`, run `uv run sim-pilot openttd action set-server-name "Sim Pilot Founder Test"`,
-  and verify before/after state.
-- [ ] Stale-state rejection — use the prepared stale Admin snapshot scenario and confirm a write is
-  rejected rather than applied against stale state.
+| Done | Workflow and command | Expected and actual result | Friction / failure quality | Rating | Desired next capability |
+|---|---|---|---|---:|---|
+| [x] | Doctor — `openttd doctor` | Connected to 15.3/protocol 3 on company 0. | Static capability block reports safe defaults rather than live bridge/write state. | 4 | Clearly label configured versus negotiated capabilities. |
+| [x] | Capabilities — `openttd capabilities` | Correctly showed read-only defaults with writes disabled. | Safe, but users may mistake defaults for live capability discovery. | 3 | Add `--live` or rename to `default-capabilities`. |
+| [x] | Observe — `openttd observe` | Captured canonical timestamp, tick, cash, debt, value, counts, date, and server name. | Very large JSON for a routine observation. | 3 | Concise table plus `--json`. |
+| [x] | Watch — `openttd watch --count 5` | Printed only date, cash, and profit changes over five observations. | Useful and readable. | 4 | Optional field selection. |
+| [x] | Disabled write — server-name action without write flag | Rejected with exit 23 and made no change. | Excellent fail-closed result. | 5 | None. |
+| [x] | Server-name write — action with explicit flag | Changed `simpilot` to `Sim Pilot Founder Test`, reconnected, and independently verified it. | Full before/after output is excessive. | 4 | Concise verification summary and optional full evidence. |
+| [x] | Stale-state rejection — focused adapter acceptance scenario | Rejected stale economy state without issuing RCON. | Passed, but there is no public CLI fixture to reproduce this workflow. | 2 | Disposable fault-injection command. |
 
 ## GameScript bridge
 
-Set `SIM_PILOT_OPENTTD_GS_ENABLED=1` only after the disposable server is running the checked-in
-bridge script.
+| Done | Workflow and command | Expected and actual result | Friction / failure quality | Rating | Desired next capability |
+|---|---|---|---|---:|---|
+| [x] | Doctor — `openttd bridge doctor` | Synchronized protocol 1, company 0, full snapshot, stable identity. | Strong diagnostics. | 4 | Concise healthy summary by default. |
+| [x] | Capability negotiation — `bridge capabilities` | Returned the expected fingerprint and bounded `set_company_name` action. | Clear. | 4 | None. |
+| [x] | Snapshot — `bridge observe` | Admin and bridge identities agreed; towns, industries, pause, and company data were merged. | Large JSON and transient cash inconsistency is noisy but explicitly attributed. | 3 | Concise view and tolerance-aware inconsistency display. |
+| [x] | Reconnect — two independent bridge clients and live acceptance test | Script instance remained stable and sequence increased. | Automatic and reliable. | 4 | Surface reconnect count. |
+| [x] | Save/load — low-level bounded RCON save/load; `bridge sync` | Created `founder-usage-20260719.sav`; reload preserved instance identity and advanced save generation from 297 to 298. | No public save/load exercise command; required internal client use. | 3 | Disposable `bridge exercise save-load` command. |
+| [x] | Company-name write — explicit bridge write flag | Changed and independently verified `Sim Pilot Founder Test`. | Clear proof, overly verbose output. | 4 | Concise proof mode. |
+| [x] | Duplicate command — bounded bridge client with stable command ID | First result `duplicate: false`; second `duplicate: true`; fingerprints matched; one mutation. | Correct durable ledger behavior. | 4 | Public diagnostic command. |
+| [x] | Conflicting duplicate — same command ID, different name | Rejected with `duplicate_conflict`; state was restored to the founder-test name. | Precise failure. | 4 | Public diagnostic command. |
+| [x] | Identity mismatch — synthetic prior identity against live bridge | Failed closed with `BridgeSequenceError: script identity changed`. | Strong trust boundary. | 4 | Operator remediation guidance. |
+| [x] | Crash recovery — injected crash after verified `set_company_name` | **Failed:** the write executed, but recovery dispatched to reference replay and raised `unsupported reference adapter snapshot`. The company name was independently observed and restored. | Advertised reconciliation is not implemented for this action. | 1 | Implement `set_company_name` reconciliation from fresh bridge identity and company name, with no retry. |
 
-- [ ] Bridge doctor — `uv run sim-pilot openttd bridge doctor`.
-- [ ] Capability negotiation — `uv run sim-pilot openttd bridge capabilities`; record the fingerprint.
-- [ ] Snapshot — `uv run sim-pilot openttd bridge observe`; confirm Admin and bridge identities agree.
-- [ ] Reconnect — stop and restart the client process, rerun bridge doctor, and confirm sequence and
-  identity handling.
-- [ ] Save/load — save the disposable game, reload it, then run bridge sync and record continuity.
-- [ ] Company-name write — set `SIM_PILOT_OPENTTD_GS_ALLOW_WRITES=1`, run
-  `uv run sim-pilot openttd bridge action set-company-name "Sim Pilot Founder Test"`, and verify the
-  fresh before/after observation.
-- [ ] Duplicate command — execute the prepared duplicate-command scenario and verify one mutation
-  with an idempotent repeated result.
-- [ ] Conflicting duplicate — reuse a command ID with different content in the prepared scenario;
-  expect deterministic rejection.
-- [ ] Identity mismatch — point the client at a prepared mismatched bridge/save identity; expect a
-  fail-closed result.
-- [ ] Crash recovery — interrupt the prepared company-name action at its documented crash window,
-  restart, inspect recovery, and verify no blind retry.
+## Result
 
-## Completion handoff
+All 37 workflows were exercised. Thirty-five behaved as intended or exposed only usability
+friction. Two failed product workflows require correction:
 
-Return the filled records, including failures and low ratings. Do not repair friction while running
-the checklist unless it blocks all further testing; preserve the evidence for
-`docs/009-product-usability-findings.md`.
+1. Codex CLI runtime decisions currently fail at subprocess input handling and display stale prior
+   decision metadata afterward.
+2. GameScript `set_company_name` crash recovery is advertised but has no action-specific
+   reconciliation dispatcher.
 
+The disposable server and company names were restored to `Sim Pilot Founder Test`. The founder
+database and disposable save remain local for follow-up diagnosis.

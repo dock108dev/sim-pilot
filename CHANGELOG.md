@@ -7,6 +7,7 @@ All notable changes to Sim Pilot are documented in this file.
 ### Product evaluation corrections
 
 - Recorded the first 31-case live-model baseline and prepared the founder usage checklist.
+- Completed the 37-workflow founder usage pass and recorded prioritized usability findings.
 - Corrected project-completion evidence and already-satisfied run-until handling.
 - Split manual evaluation ratings across compiler, decision, runtime, and overall behavior.
 - Advanced the compiler prompt to `intent-compiler-v3` for required/forbidden method conflicts,
