@@ -137,3 +137,13 @@ def test_service_rejects_unknown_evidence_references() -> None:
     service = AnalysisService(AnalyzerRegistry((InvalidEvidenceAnalyzer(),)))
     with pytest.raises(AnalyzerResultError, match="unknown snapshot"):
         service.analyze(request(), snapshot())
+
+
+def test_service_honors_recommendation_opt_out() -> None:
+    service = AnalysisService(AnalyzerRegistry((FakeFinancialAnalyzer(),)))
+    response = service.analyze(
+        request(maximum_findings=2).model_copy(update={"include_recommendations": False}),
+        snapshot(),
+    )
+    assert response.recommendations == ()
+    assert all(item.recommendation_ids == () for item in response.findings)

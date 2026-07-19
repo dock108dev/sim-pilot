@@ -41,3 +41,8 @@ class FounderEvaluationResult(BaseModel):
 def load_founder_questions(path: Path) -> tuple[FounderQuestion, ...]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return tuple(TypeAdapter(list[FounderQuestion]).validate_python(payload, strict=True))
+
+
+def load_founder_results(path: Path) -> tuple[FounderEvaluationResult, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(TypeAdapter(list[FounderEvaluationResult]).validate_python(payload, strict=True))

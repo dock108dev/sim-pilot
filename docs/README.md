@@ -51,5 +51,6 @@ These files are retained as dated evidence rather than current operating instruc
 - [008 — Founder usage checklist](008-founder-usage-checklist.md)
 - [009 — Product usability findings](009-product-usability-findings.md)
 - [012 — Phase 7.6 stability report](012-phase-7.6-stability-report.md)
+- [017 — Phase 8B live founder evaluation](017-phase-8b-live-evaluation.md)
 
 Use [operations.md](operations.md) for current commands.

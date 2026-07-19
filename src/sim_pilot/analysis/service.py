@@ -53,10 +53,14 @@ class AnalysisService:
         _validate_result(request, snapshot, comparison, result)
         findings = result.findings[: request.maximum_findings]
         retained_ids = {item.finding_id for item in findings}
-        recommendations = tuple(
-            item
-            for item in result.recommendations
-            if set(item.supporting_finding_ids).issubset(retained_ids)
+        recommendations = (
+            tuple(
+                item
+                for item in result.recommendations
+                if set(item.supporting_finding_ids).issubset(retained_ids)
+            )
+            if request.include_recommendations
+            else ()
         )
         retained_recommendations = {item.recommendation_id for item in recommendations}
         findings = tuple(

@@ -1,0 +1,20 @@
+[
+  {
+    "case_id": "health-01",
+    "compilation_correct": null,
+    "analyzer_selection_correct": true,
+    "evidence_correct": true,
+    "finding_useful": true,
+    "recommendation_useful": false,
+    "unsupported_behavior_correct": null,
+    "explanation_faithful": null,
+    "latency_seconds": 8.13,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "deterministic_contribution": "All metrics, findings, severity, confidence, and recommendations",
+    "model_contribution": "None",
+    "manual_rating": "acceptable",
+    "revealed_nonobvious_information": "partially",
+    "reviewer_notes": "The financial conclusion appears correct and appropriately cautious. The fleet-concentration finding is valid, but it is not especially useful by itself because it does not connect concentration to profitability, route performance, congestion, or risk. The operating-result summary is useful confirmation rather than a new insight. An approximately 8-second runtime is also too slow for a deterministic, no-model analysis unless most of that time is unavoidable live snapshot collection. This result is trustworthy, but it does not yet demonstrate strong gameplay intelligence."
+  }
+]
