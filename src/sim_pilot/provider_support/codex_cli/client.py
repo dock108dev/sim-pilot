@@ -1,0 +1,423 @@
+"""Isolated, bounded, structured execution through authenticated `codex exec`."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import re
+import shutil
+import tempfile
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from time import perf_counter
+from typing import Literal, Protocol, TypeVar
+
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+
+from sim_pilot.provider_metadata import ProviderMetadata
+from sim_pilot.provider_support.codex_cli.capabilities import CodexCLICapabilities, probe_codex_cli
+from sim_pilot.provider_support.codex_cli.errors import (
+    CodexCLIAuthenticationExpiredError,
+    CodexCLIConflictingFinalResponseError,
+    CodexCLIInvalidStructuredOutputError,
+    CodexCLIMissingFinalResponseError,
+    CodexCLINonzeroExitError,
+    CodexCLIOutputLimitError,
+    CodexCLIProcessStartError,
+    CodexCLIProcessTerminationError,
+    CodexCLIRefusalError,
+    CodexCLISandboxError,
+    CodexCLISchemaFileError,
+    CodexCLITemporaryDirectoryError,
+    CodexCLITimeoutError,
+    CodexCLIUsageLimitError,
+)
+from sim_pilot.provider_support.codex_cli.events import ParsedCodexEvents, parse_codex_jsonl
+
+OutputT = TypeVar("OutputT", bound=BaseModel)
+JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, object])
+
+
+class CodexCLIResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    schema_version: Literal[1] = 1
+    output: dict[str, object]
+    metadata: ProviderMetadata
+    exit_code: int
+    unknown_event_types: tuple[str, ...] = ()
+    debug_directory: Path | None = None
+
+
+@dataclass(frozen=True)
+class ProcessResult:
+    exit_code: int
+    stdout: bytes
+    stderr: bytes
+
+
+class ProcessRunner(Protocol):
+    async def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        environment: Mapping[str, str],
+        timeout_seconds: float,
+        maximum_stdout_bytes: int,
+        maximum_stderr_bytes: int,
+    ) -> ProcessResult: ...
+
+
+class AsyncioProcessRunner:
+    async def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        environment: Mapping[str, str],
+        timeout_seconds: float,
+        maximum_stdout_bytes: int,
+        maximum_stderr_bytes: int,
+    ) -> ProcessResult:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=cwd,
+                env=dict(environment),
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError as error:
+            raise CodexCLIProcessStartError(f"could not start Codex CLI: {error}") from error
+        if process.stdout is None or process.stderr is None:
+            await self._terminate(process)
+            raise CodexCLIProcessStartError("Codex CLI subprocess pipes were unavailable")
+
+        async def read_bounded(stream: asyncio.StreamReader, limit: int, label: str) -> bytes:
+            chunks: list[bytes] = []
+            length = 0
+            while chunk := await stream.read(65_536):
+                length += len(chunk)
+                if length > limit:
+                    raise CodexCLIOutputLimitError(f"Codex CLI {label} exceeded {limit} bytes")
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        tasks = (
+            asyncio.create_task(process.wait()),
+            asyncio.create_task(read_bounded(process.stdout, maximum_stdout_bytes, "stdout")),
+            asyncio.create_task(read_bounded(process.stderr, maximum_stderr_bytes, "stderr")),
+        )
+        try:
+            _, stdout, stderr = await asyncio.wait_for(
+                asyncio.gather(*tasks), timeout=timeout_seconds
+            )
+        except TimeoutError as error:
+            for task in tasks:
+                task.cancel()
+            await self._terminate(process)
+            raise CodexCLITimeoutError(
+                f"Codex CLI exceeded the {timeout_seconds:g}-second timeout"
+            ) from error
+        except CodexCLIOutputLimitError:
+            for task in tasks:
+                task.cancel()
+            await self._terminate(process)
+            raise
+        return ProcessResult(process.returncode or 0, stdout, stderr)
+
+    @staticmethod
+    async def _terminate(process: asyncio.subprocess.Process) -> None:
+        if process.returncode is not None:
+            return
+        try:
+            process.terminate()
+            await asyncio.wait_for(process.wait(), timeout=2)
+        except (ProcessLookupError, TimeoutError):
+            try:
+                process.kill()
+                await asyncio.wait_for(process.wait(), timeout=2)
+            except (ProcessLookupError, TimeoutError) as error:
+                raise CodexCLIProcessTerminationError(
+                    "Codex CLI subprocess could not be terminated"
+                ) from error
+
+
+class CodexCLIClient:
+    """Run one schema-bound provider request in a fresh empty directory."""
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        timeout_seconds: float = 120,
+        executable: Path | None = None,
+        temporary_directory_root: Path | None = None,
+        preserve_debug_directory: bool = False,
+        maximum_stdout_bytes: int = 2_000_000,
+        maximum_stderr_bytes: int = 64_000,
+        capability_cache_seconds: float = 60,
+        runner: ProcessRunner | None = None,
+        capabilities: CodexCLICapabilities | None = None,
+    ) -> None:
+        if not model.strip():
+            raise ValueError("Codex CLI model must not be empty")
+        if timeout_seconds <= 0 or maximum_stdout_bytes <= 0 or maximum_stderr_bytes <= 0:
+            raise ValueError("Codex CLI timeout and output limits must be positive")
+        self._model = model
+        self._timeout_seconds = timeout_seconds
+        self._temporary_directory_root = temporary_directory_root
+        self._record_raw_events = os.getenv("SIM_PILOT_CODEX_RECORD_RAW_EVENTS", "0") == "1"
+        self._preserve_debug_directory = preserve_debug_directory or self._record_raw_events
+        self._maximum_stdout_bytes = maximum_stdout_bytes
+        self._maximum_stderr_bytes = maximum_stderr_bytes
+        self._runner = runner or AsyncioProcessRunner()
+        self._capabilities = capabilities or probe_codex_cli(
+            executable, cache_duration_seconds=capability_cache_seconds
+        )
+        self._capabilities.require_provider_contract()
+
+    @property
+    def capabilities(self) -> CodexCLICapabilities:
+        return self._capabilities
+
+    async def execute(
+        self,
+        *,
+        prompt: str,
+        output_type: type[OutputT],
+        prompt_version: str,
+    ) -> tuple[OutputT, ProviderMetadata, ParsedCodexEvents]:
+        if not prompt.strip():
+            raise ValueError("Codex CLI prompt must not be empty")
+        directory = self._create_directory()
+        schema_path = directory / "output-schema.json"
+        output_path = directory / "structured-output.json"
+        try:
+            self._write_schema(schema_path, output_type)
+            command = self._command(directory, schema_path, output_path, prompt)
+            started_at = datetime.now(UTC)
+            started = perf_counter()
+            result = await self._runner.run(
+                command,
+                cwd=directory,
+                environment=self._environment(),
+                timeout_seconds=self._timeout_seconds,
+                maximum_stdout_bytes=self._maximum_stdout_bytes,
+                maximum_stderr_bytes=self._maximum_stderr_bytes,
+            )
+            latency_ms = (perf_counter() - started) * 1000
+            completed_at = datetime.now(UTC)
+            events = parse_codex_jsonl(result.stdout)
+            if self._record_raw_events:
+                self._write_sanitized_events(directory / "codex-events.jsonl", result.stdout)
+            self._raise_terminal_failure(result, events)
+            if not events.terminal_completed:
+                raise CodexCLIMissingFinalResponseError(
+                    "Codex CLI exited without a terminal turn.completed event"
+                )
+            if not output_path.is_file():
+                raise CodexCLIMissingFinalResponseError(
+                    "Codex CLI produced no structured final-output file"
+                )
+            try:
+                output = output_type.model_validate_json(
+                    output_path.read_text(encoding="utf-8"), strict=True
+                )
+            except (OSError, ValidationError) as error:
+                raise CodexCLIInvalidStructuredOutputError(
+                    "Codex CLI final output failed canonical schema validation"
+                ) from error
+            if len(events.final_messages) != 1:
+                raise CodexCLIMissingFinalResponseError(
+                    "Codex CLI JSONL contained no unique final agent response"
+                )
+            try:
+                event_output = output_type.model_validate_json(
+                    events.final_messages[0], strict=True
+                )
+            except ValidationError as error:
+                raise CodexCLIInvalidStructuredOutputError(
+                    "Codex CLI JSONL final response failed canonical schema validation"
+                ) from error
+            if event_output != output:
+                raise CodexCLIConflictingFinalResponseError(
+                    "Codex CLI JSONL and final-output file contain conflicting responses"
+                )
+            notes = tuple(
+                [f"unknown_event:{event_type}" for event_type in events.unknown_event_types]
+                + (["token_usage_unavailable"] if events.token_usage is None else [])
+                + (["sanitized_raw_events_preserved"] if self._record_raw_events else [])
+            )
+            metadata = ProviderMetadata(
+                provider="codex",
+                provider_surface="Codex CLI using authenticated ChatGPT access",
+                provider_version=self._capabilities.version,
+                model=self._model,
+                request_id=events.thread_id,
+                token_usage=events.token_usage,
+                latency_ms=latency_ms,
+                prompt_version=prompt_version,
+                validation_result="valid",
+                telemetry_notes=notes,
+                started_at=started_at,
+                completed_at=completed_at,
+                subprocess_exit_code=result.exit_code,
+            )
+            return output, metadata, events
+        finally:
+            if not self._preserve_debug_directory:
+                try:
+                    shutil.rmtree(directory)
+                except OSError as error:
+                    raise CodexCLITemporaryDirectoryError(
+                        f"could not remove isolated Codex directory: {error}"
+                    ) from error
+
+    def _create_directory(self) -> Path:
+        root = Path(self._temporary_directory_root or tempfile.gettempdir()).resolve()
+        if any((candidate / ".git").exists() for candidate in (root, *root.parents)):
+            raise CodexCLITemporaryDirectoryError(
+                "Codex CLI temporary directories must not be created inside a Git repository"
+            )
+        try:
+            path = Path(
+                tempfile.mkdtemp(
+                    prefix="sim-pilot-codex-",
+                    dir=root,
+                )
+            )
+            path.chmod(0o700)
+            return path
+        except OSError as error:
+            raise CodexCLITemporaryDirectoryError(
+                f"could not create isolated Codex directory: {error}"
+            ) from error
+
+    @staticmethod
+    def _write_schema(path: Path, output_type: type[BaseModel]) -> None:
+        try:
+            path.write_text(
+                json.dumps(output_type.model_json_schema(), indent=2) + "\n",
+                encoding="utf-8",
+            )
+            path.chmod(0o600)
+        except OSError as error:
+            raise CodexCLISchemaFileError(
+                f"could not write Codex output schema: {error}"
+            ) from error
+
+    @staticmethod
+    def _write_sanitized_events(path: Path, stdout: bytes) -> None:
+        safe_events: list[str] = []
+        home = str(Path.home())
+        temporary = path.with_name(f".{path.name}.tmp")
+        try:
+            for line in stdout.decode("utf-8").splitlines():
+                if not line.strip():
+                    continue
+                value = JSON_OBJECT_ADAPTER.validate_json(line)
+                event_type = value.get("type")
+                if event_type == "item.completed":
+                    raw_item = value.get("item")
+                    item = (
+                        JSON_OBJECT_ADAPTER.validate_python(raw_item)
+                        if isinstance(raw_item, dict)
+                        else {}
+                    )
+                    if item.get("type") != "agent_message":
+                        continue
+                elif event_type not in {
+                    "thread.started",
+                    "turn.started",
+                    "turn.completed",
+                    "turn.failed",
+                    "error",
+                }:
+                    continue
+                serialized = json.dumps(value, separators=(",", ":"))
+                serialized = serialized.replace(home, "[HOME]")
+                serialized = re.sub(r"sk-[A-Za-z0-9_-]{8,}", "[REDACTED]", serialized)
+                safe_events.append(serialized)
+            temporary.write_text("\n".join(safe_events) + "\n", encoding="utf-8")
+            temporary.chmod(0o600)
+            temporary.replace(path)
+            path.chmod(0o600)
+        except (OSError, UnicodeDecodeError, ValidationError) as error:
+            raise CodexCLISchemaFileError(
+                f"could not preserve sanitized Codex events: {error}"
+            ) from error
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _command(
+        self,
+        directory: Path,
+        schema_path: Path,
+        output_path: Path,
+        prompt: str,
+    ) -> tuple[str, ...]:
+        return (
+            str(self._capabilities.executable_path),
+            "exec",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--ephemeral",
+            "--json",
+            "--sandbox",
+            "read-only",
+            "-c",
+            'approval_policy="never"',
+            "--output-schema",
+            str(schema_path),
+            "--output-last-message",
+            str(output_path),
+            "--model",
+            self._model,
+            "--cd",
+            str(directory),
+            "--skip-git-repo-check",
+            prompt,
+        )
+
+    @staticmethod
+    def _environment() -> dict[str, str]:
+        allowed = (
+            "PATH",
+            "HOME",
+            "CODEX_HOME",
+            "LANG",
+            "LC_ALL",
+            "TMPDIR",
+            "CODEX_CA_CERTIFICATE",
+            "SSL_CERT_FILE",
+        )
+        environment = {key: os.environ[key] for key in allowed if key in os.environ}
+        environment.setdefault("LANG", "C.UTF-8")
+        return environment
+
+    @staticmethod
+    def _raise_terminal_failure(result: ProcessResult, events: ParsedCodexEvents) -> None:
+        stderr = result.stderr.decode("utf-8", errors="replace")[:2_000]
+        combined = " ".join((*events.error_messages, stderr)).lower()
+        if "usage limit" in combined or "rate limit" in combined or "credits" in combined:
+            raise CodexCLIUsageLimitError("Codex CLI reported a plan usage or credit limit")
+        if (
+            "not logged in" in combined
+            or "authentication" in combined
+            or "unauthorized" in combined
+        ):
+            raise CodexCLIAuthenticationExpiredError("Codex CLI authentication was rejected")
+        if "sandbox" in combined and (events.terminal_failed or result.exit_code != 0):
+            raise CodexCLISandboxError("Codex CLI could not establish the required sandbox")
+        if "refus" in combined:
+            raise CodexCLIRefusalError("Codex CLI refused the structured provider request")
+        if events.terminal_failed or result.exit_code != 0:
+            raise CodexCLINonzeroExitError(
+                f"Codex CLI exited with status {result.exit_code}: {stderr or 'turn failed'}"
+            )
