@@ -1,5 +1,5 @@
 class SimPilotBridge extends GSController {
-    protocol_version = 1;
+    protocol_version = 2;
     sequence = 0;
     instance_id = null;
     loaded = false;
@@ -9,7 +9,7 @@ class SimPilotBridge extends GSController {
     last_snapshot_id = null;
     command_ledger = null;
     ledger_limit = 64;
-    capability_fingerprint = "a4868cb5227ad0e126764cb2312b52573218087ab6f5d145a7c8a60877db55ca";
+    capability_fingerprint = "c7e830e62f9898d01704396f91785c9e4a6e9abf87cc08799f8f49a4d4103ec6";
 
     constructor() {
         this.command_ledger = [];
@@ -60,8 +60,8 @@ class SimPilotBridge extends GSController {
             component = "sim_pilot_bridge",
             openttd_version = "15.3",
             gamescript_api_version = "15",
-            script_version = 1,
-            adapter_version = "openttd-gamescript-v1",
+            script_version = 2,
+            adapter_version = "openttd-gamescript-v2",
             loaded = this.loaded,
             save_generation = this.save_generation,
             start_generation = this.start_generation
@@ -70,13 +70,15 @@ class SimPilotBridge extends GSController {
 
     function SendCapabilities(correlation) {
         this.Send("capabilities", correlation, this.active_company, {
-            capability_version = 1,
+            capability_version = 2,
             readable_resources = [
                 "paused", "map_width", "map_height", "town_count", "industry_count",
                 "company_name", "company_cash", "company_loan", "vehicle_count",
                 "station_count"
             ],
-            readable_entities = ["company", "town_summary", "industry_summary"],
+            readable_entities = [
+                "company", "town", "industry", "station", "vehicle", "order", "cargo"
+            ],
             event_types = [],
             supported_actions = ["set_company_name"],
             company_contexts = ["existing_company"],
@@ -88,7 +90,11 @@ class SimPilotBridge extends GSController {
             state_deltas = false,
             maximum_outbound_bytes = 1450,
             maximum_inbound_bytes = 8999,
-            write_opt_in_required = true
+            write_opt_in_required = true,
+            world_snapshots = true,
+            world_collections = [
+                "companies", "towns", "industries", "stations", "vehicles", "orders", "cargos"
+            ]
         });
     }
 
@@ -108,7 +114,7 @@ class SimPilotBridge extends GSController {
             this.SendError(null, "protocol_mismatch", "invalid bridge envelope", null, null);
             return;
         }
-        if (message.protocol_version != this.protocol_version) {
+        if (message.protocol_version != this.protocol_version && message.protocol_version != 1) {
             this.SendError(message.message_id, "protocol_mismatch", "unsupported protocol", null, null);
             return;
         }
@@ -146,6 +152,7 @@ class SimPilotBridge extends GSController {
             reason = message.payload.rawin("reason") ? message.payload.reason : "requested"
         });
         this.SendSnapshot();
+        this.SendWorldSnapshot();
     }
 
     function SendSnapshot() {
@@ -162,6 +169,208 @@ class SimPilotBridge extends GSController {
             company = company,
             save_generation = this.save_generation
         });
+    }
+
+    function SendWorldSnapshot() {
+        local capture_started = GSDate.GetCurrentDate();
+        local world_id = this.instance_id + ":world:" + (this.sequence + 1);
+        local collections = this.BuildWorldCollections();
+        local counts = {};
+        local total = 0;
+        foreach (name, items in collections) {
+            counts[name] <- items.len();
+            total += items.len();
+        }
+        this.Send("world_manifest", null, this.active_company, {
+            snapshot_id = world_id,
+            capture_started_game_date = capture_started,
+            collection_counts = counts
+        });
+        local sent = 0;
+        foreach (name, items in collections) {
+            local count = items.len();
+            for (local index = 0; index < count; index++) {
+                this.Send("world_collection_page", null, this.active_company, {
+                    snapshot_id = world_id,
+                    collection = name,
+                    page_index = index,
+                    page_count = count,
+                    items = [items[index]]
+                });
+                sent++;
+                if (sent % 8 == 0) this.Sleep(1);
+            }
+        }
+        this.Send("world_snapshot_complete", null, this.active_company, {
+            snapshot_id = world_id,
+            capture_completed_game_date = GSDate.GetCurrentDate(),
+            total_items = total
+        });
+    }
+
+    function BuildWorldCollections() {
+        local result = {
+            companies = [], towns = [], industries = [], stations = [],
+            vehicles = [], orders = [], cargos = []
+        };
+        foreach (cargo_id, unused in GSCargoList()) {
+            result.cargos.append({
+                entity_type = "cargo", id = cargo_id, name = GSCargo.GetName(cargo_id),
+                scope = "world", scope_entity_id = null, waiting = null, produced = null,
+                accepted = null, transported = null, transported_percent = null
+            });
+        }
+        foreach (company_id, unused in GSCompanyList()) {
+            local loan = 0;
+            local station_count = 0;
+            local hq = GSCompany.GetCompanyHQ(company_id);
+            {
+                local mode = GSCompanyMode(company_id);
+                if (GSCompanyMode.IsValid()) {
+                    loan = GSCompany.GetLoanAmount();
+                    station_count = GSStationList(GSStation.STATION_ANY).Count();
+                }
+            }
+            result.companies.append({
+                entity_type = "company", id = company_id, name = GSCompany.GetName(company_id),
+                cash = GSCompany.GetBankBalance(company_id), loan = loan,
+                company_value = GSCompany.GetQuarterlyCompanyValue(company_id, 1),
+                income = GSCompany.GetQuarterlyIncome(company_id, 0),
+                expenses = GSCompany.GetQuarterlyExpenses(company_id, 0),
+                performance = GSCompany.GetQuarterlyPerformanceRating(company_id, 1),
+                headquarters_tile = GSMap.IsValidTile(hq) ? hq : null,
+                station_count = station_count
+            });
+        }
+        foreach (town_id, unused in GSTownList()) {
+            local rating = null;
+            if (this.active_company != null &&
+                    GSCompany.ResolveCompanyID(this.active_company) != GSCompany.COMPANY_INVALID) {
+                rating = GSTown.GetDetailedRating(town_id, this.active_company);
+            }
+            result.towns.append({
+                entity_type = "town", id = town_id, name = GSTown.GetName(town_id),
+                population = GSTown.GetPopulation(town_id), tile = GSTown.GetLocation(town_id),
+                growth_rate = GSTown.GetGrowthRate(town_id), rating = rating
+            });
+            foreach (cargo_id, unused_cargo in GSCargoList()) {
+                local produced = GSTown.GetLastMonthProduction(town_id, cargo_id);
+                if (produced > 0) {
+                    result.cargos.append({
+                        entity_type = "cargo", id = cargo_id, name = GSCargo.GetName(cargo_id),
+                        scope = "town", scope_entity_id = town_id, waiting = null,
+                        produced = produced, accepted = null, transported = null,
+                        transported_percent = GSTown.GetLastMonthTransportedPercentage(
+                            town_id, cargo_id
+                        )
+                    });
+                }
+            }
+        }
+        foreach (industry_id, unused in GSIndustryList()) {
+            local accepted = [];
+            local produced_cargos = [];
+            foreach (cargo_id, unused_cargo in GSCargoList()) {
+                if (GSIndustry.IsCargoAccepted(industry_id, cargo_id) !=
+                        GSIndustry.CAS_NOT_ACCEPTED) accepted.append(cargo_id);
+                local amount = GSIndustry.GetLastMonthProduction(industry_id, cargo_id);
+                if (amount > 0) {
+                    produced_cargos.append(cargo_id);
+                    result.cargos.append({
+                        entity_type = "cargo", id = cargo_id, name = GSCargo.GetName(cargo_id),
+                        scope = "industry", scope_entity_id = industry_id, waiting = null,
+                        produced = amount, accepted = null,
+                        transported = GSIndustry.GetLastMonthTransported(industry_id, cargo_id),
+                        transported_percent = GSIndustry.GetLastMonthTransportedPercentage(
+                            industry_id, cargo_id
+                        )
+                    });
+                }
+            }
+            result.industries.append({
+                entity_type = "industry", id = industry_id,
+                industry_type = GSIndustry.GetIndustryType(industry_id),
+                name = GSIndustry.GetName(industry_id), tile = GSIndustry.GetLocation(industry_id),
+                nearby_station_count = GSIndustry.GetAmountOfStationsAround(industry_id),
+                accepted_cargo_ids = accepted, produced_cargo_ids = produced_cargos
+            });
+        }
+        if (this.active_company != null &&
+                GSCompany.ResolveCompanyID(this.active_company) != GSCompany.COMPANY_INVALID) {
+            local mode = GSCompanyMode(this.active_company);
+            if (GSCompanyMode.IsValid()) this.BuildCompanyEntities(result);
+        }
+        return result;
+    }
+
+    function BuildCompanyEntities(result) {
+        foreach (station_id, unused in GSStationList(GSStation.STATION_ANY)) {
+            local facilities = [];
+            if (GSStation.HasStationType(station_id, GSStation.STATION_TRAIN)) facilities.append("rail");
+            if (GSStation.HasStationType(station_id, GSStation.STATION_TRUCK_STOP)) facilities.append("truck");
+            if (GSStation.HasStationType(station_id, GSStation.STATION_BUS_STOP)) facilities.append("bus");
+            if (GSStation.HasStationType(station_id, GSStation.STATION_AIRPORT)) facilities.append("airport");
+            if (GSStation.HasStationType(station_id, GSStation.STATION_DOCK)) facilities.append("dock");
+            result.stations.append({
+                entity_type = "station", id = station_id,
+                name = GSBaseStation.GetName(station_id), owner = GSBaseStation.GetOwner(station_id),
+                tile = GSBaseStation.GetLocation(station_id), facilities = facilities
+            });
+            foreach (cargo_id, unused_cargo in GSCargoList()) {
+                local waiting = GSStation.GetCargoWaiting(station_id, cargo_id);
+                if (waiting > 0) {
+                    result.cargos.append({
+                        entity_type = "cargo", id = cargo_id, name = GSCargo.GetName(cargo_id),
+                        scope = "station", scope_entity_id = station_id, waiting = waiting,
+                        produced = null, accepted = null, transported = null,
+                        transported_percent = null
+                    });
+                }
+            }
+        }
+        foreach (vehicle_id, unused in GSVehicleList()) {
+            if (!GSVehicle.IsPrimaryVehicle(vehicle_id)) continue;
+            local current = GSOrder.ResolveOrderPosition(vehicle_id, GSOrder.ORDER_CURRENT);
+            result.vehicles.append({
+                entity_type = "vehicle", id = vehicle_id, owner = GSVehicle.GetOwner(vehicle_id),
+                vehicle_type = GSVehicle.GetVehicleType(vehicle_id),
+                engine_type = GSVehicle.GetEngineType(vehicle_id), name = GSVehicle.GetName(vehicle_id),
+                age_days = GSVehicle.GetAge(vehicle_id),
+                profit_this_year = GSVehicle.GetProfitThisYear(vehicle_id),
+                profit_last_year = GSVehicle.GetProfitLastYear(vehicle_id),
+                state = GSVehicle.GetState(vehicle_id),
+                tile = GSMap.IsValidTile(GSVehicle.GetLocation(vehicle_id)) ?
+                    GSVehicle.GetLocation(vehicle_id) : null,
+                in_depot = GSVehicle.IsInDepot(vehicle_id),
+                current_order_index = current < 0 ? null : current
+            });
+            local order_count = GSOrder.GetOrderCount(vehicle_id);
+            for (local index = 0; index < order_count; index++) {
+                local kind = "other";
+                local destination = null;
+                local station = null;
+                local flags = null;
+                if (GSOrder.IsConditionalOrder(vehicle_id, index)) {
+                    kind = "conditional";
+                } else if (!GSOrder.IsVoidOrder(vehicle_id, index)) {
+                    destination = GSOrder.GetOrderDestination(vehicle_id, index);
+                    flags = GSOrder.GetOrderFlags(vehicle_id, index);
+                    if (GSOrder.IsGotoStationOrder(vehicle_id, index)) {
+                        kind = "station";
+                        station = GSStation.GetStationID(destination);
+                        if (!GSStation.IsValidStation(station)) station = null;
+                    } else if (GSOrder.IsGotoDepotOrder(vehicle_id, index)) {
+                        kind = "depot";
+                    } else if (GSOrder.IsGotoWaypointOrder(vehicle_id, index)) {
+                        kind = "waypoint";
+                    }
+                }
+                result.orders.append({
+                    entity_type = "order", vehicle_id = vehicle_id, index = index, kind = kind,
+                    destination_tile = destination, destination_station_id = station, flags = flags
+                });
+            }
+        }
     }
 
     function BuildCompanySnapshot(company) {
@@ -402,7 +611,8 @@ class SimPilotBridge extends GSController {
 
     function Load(version, data) {
         this.loaded = true;
-        if (data == null || !data.rawin("protocol_version") || data.protocol_version != 1) {
+        if (data == null || !data.rawin("protocol_version") ||
+                (data.protocol_version != 1 && data.protocol_version != 2)) {
             this.sequence = 0;
             this.instance_id = null;
             this.save_generation = 0;

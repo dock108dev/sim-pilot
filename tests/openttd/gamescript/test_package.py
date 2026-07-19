@@ -13,9 +13,12 @@ def test_package_declares_the_verified_openttd_api_and_protocol() -> None:
 
     assert 'GetName() { return "SimPilotBridge"; }' in info
     assert 'GetAPIVersion() { return "15"; }' in info
-    assert "protocol_version = 1;" in main
+    assert "protocol_version = 2;" in main
     assert "ledger_limit = 64;" in main
     assert '"set_company_name"' in main
+    assert '"world_manifest"' in main
+    assert '"world_collection_page"' in main
+    assert "c7e830e62f9898d01704396f91785c9e4a6e9abf87cc08799f8f49a4d4103ec6" in main
     assert "function HasExactKeys(value, keys)" in main
 
 

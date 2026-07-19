@@ -6,20 +6,33 @@ from collections import deque
 
 from sim_pilot.openttd.gamescript.messages import (
     BridgeCapabilities,
+    BridgeCargoEntity,
+    BridgeCompanyEntity,
     BridgeCompanySnapshot,
+    BridgeIndustryEntity,
     BridgeMessage,
+    BridgeOrderEntity,
     BridgeSnapshot,
+    BridgeStationEntity,
+    BridgeTownEntity,
+    BridgeVehicleEntity,
+    BridgeWorldEntity,
     CommandAcceptedPayload,
     CommandCompletedPayload,
     HelloPayload,
     MessageType,
     ResyncResponsePayload,
+    WorldCollection,
+    WorldCollectionPagePayload,
+    WorldManifestPayload,
+    WorldSnapshotCompletePayload,
 )
 from sim_pilot.openttd.models import OpenTTDConnectionMetadata
 
 
-def capabilities() -> BridgeCapabilities:
+def capabilities(*, world: bool = False) -> BridgeCapabilities:
     return BridgeCapabilities(
+        capability_version=2 if world else 1,
         readable_resources=(
             "paused",
             "map_width",
@@ -40,6 +53,8 @@ def capabilities() -> BridgeCapabilities:
         reconciliation=True,
         save_load=True,
         full_snapshots=True,
+        world_snapshots=world,
+        world_collections=tuple(item.value for item in WorldCollection) if world else (),
     )
 
 
@@ -121,6 +136,88 @@ def sync_messages(
             instance_id=instance_id,
         ),
     ]
+
+
+def world_sync_messages() -> list[str]:
+    values: dict[WorldCollection, BridgeWorldEntity] = {
+        WorldCollection.COMPANIES: BridgeCompanyEntity(
+            id=0, name="Fixture Transport", cash=425000, loan=50000, station_count=1
+        ),
+        WorldCollection.TOWNS: BridgeTownEntity(
+            id=1, name="Town", population=100, tile=257, growth_rate=10, rating=500
+        ),
+        WorldCollection.INDUSTRIES: BridgeIndustryEntity(
+            id=2, industry_type=3, name="Mine", tile=514, nearby_station_count=1
+        ),
+        WorldCollection.STATIONS: BridgeStationEntity(
+            id=4, name="Town Station", owner=0, tile=258, facilities=("rail",)
+        ),
+        WorldCollection.VEHICLES: BridgeVehicleEntity(
+            id=5,
+            owner=0,
+            vehicle_type=0,
+            engine_type=1,
+            name="Train 1",
+            age_days=20,
+            profit_this_year=100,
+            profit_last_year=90,
+            state=0,
+            tile=259,
+            in_depot=False,
+            current_order_index=0,
+        ),
+        WorldCollection.ORDERS: BridgeOrderEntity(
+            vehicle_id=5,
+            index=0,
+            kind="station",
+            destination_tile=258,
+            destination_station_id=4,
+            flags=0,
+        ),
+        WorldCollection.CARGOS: BridgeCargoEntity(id=0, name="Passengers"),
+    }
+    counts = {collection.value: 1 for collection in WorldCollection}
+    result = sync_messages()
+    result[1] = message(2, MessageType.CAPABILITIES, capabilities(world=True))
+    result.append(
+        message(
+            5,
+            MessageType.WORLD_MANIFEST,
+            WorldManifestPayload(
+                snapshot_id="world-1",
+                capture_started_game_date=712223,
+                collection_counts=counts,
+            ),
+        )
+    )
+    sequence = 6
+    for collection in WorldCollection:
+        result.append(
+            message(
+                sequence,
+                MessageType.WORLD_COLLECTION_PAGE,
+                WorldCollectionPagePayload(
+                    snapshot_id="world-1",
+                    collection=collection,
+                    page_index=0,
+                    page_count=1,
+                    items=(values[collection],),
+                ),
+            )
+        )
+        sequence += 1
+    result.append(
+        message(
+            sequence,
+            MessageType.WORLD_SNAPSHOT_COMPLETE,
+            WorldSnapshotCompletePayload(
+                snapshot_id="world-1",
+                capture_completed_game_date=712224,
+                total_items=len(WorldCollection),
+            ),
+        )
+    )
+    return result
 
 
 class FakeBridgeTransport:

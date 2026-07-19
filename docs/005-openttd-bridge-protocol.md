@@ -1,7 +1,23 @@
-# OpenTTD GameScript Bridge Protocol v1
+# OpenTTD GameScript Bridge Protocol v1 and v2
 
 **Status:** Implemented
-**Version:** 1.0
+**Version:** 2.0
+
+## Protocol v2 world observation
+
+Phase 8A adds protocol v2 without broadening the action catalog. The script emits the existing
+summary snapshot followed by a `world_manifest`, bounded one-item `world_collection_page` messages,
+and `world_snapshot_complete`. Collections are companies, towns, industries, stations, vehicles,
+orders, and scoped cargo records. The manifest declares exact counts; the client rejects missing,
+duplicate, out-of-range, mismatched, or incorrectly typed pages before publishing a complete world
+snapshot. Captures record their starting and completion game dates because GameScript scans are
+cooperative rather than atomic.
+
+Protocol v1 messages remain parseable for compatibility, but rich world observation requires the
+exact `openttd-gamescript-v2` adapter. Script package version 2 loads version-1 saved state and
+retains instance identity, generation counters, selected company, and the command ledger. The sole
+GameScript action remains `set_company_name` with the same test-mode, fingerprint, deduplication,
+fresh-snapshot verification, and recovery rules.
 
 ## Scope and compatibility
 
@@ -11,9 +27,9 @@ and Sim Pilot adapter `openttd-gamescript-v1`. It uses the existing authenticate
 Admin TCP connection: one `OpenTTDAdminClient` owns authentication, packet
 polling, RCON responses, GameScript packet routing, reconnect, and shutdown.
 
-Protocol v1 is strict. Unknown fields, message types, payload variants, or
-protocol versions are rejected. There is no minor-version compatibility within
-v1; a schema change requires a new negotiated protocol version. GameScript to
+Each protocol version is strict. Unknown fields, message types, payload variants, or
+protocol versions are rejected. There is no minor-version compatibility; Phase 8A therefore adds
+v2 instead of altering v1. GameScript to
 Admin JSON is limited to 1,450 UTF-8 bytes and Admin to GameScript JSON to 8,999
 bytes. Serialization uses sorted keys and compact separators.
 

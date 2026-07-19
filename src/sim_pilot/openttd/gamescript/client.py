@@ -18,9 +18,16 @@ from sim_pilot.openttd.gamescript.messages import (
     ADMIN_TO_GAMESCRIPT_MAX_BYTES,
     BRIDGE_PROTOCOL_VERSION,
     BridgeCapabilities,
+    BridgeCargoEntity,
+    BridgeCompanyEntity,
     BridgeErrorPayload,
+    BridgeIndustryEntity,
     BridgeMessage,
+    BridgeOrderEntity,
     BridgeSnapshot,
+    BridgeStationEntity,
+    BridgeTownEntity,
+    BridgeVehicleEntity,
     CommandAcceptedPayload,
     CommandCompletedPayload,
     CommandRequestPayload,
@@ -28,9 +35,17 @@ from sim_pilot.openttd.gamescript.messages import (
     MessageType,
     ResyncRequestPayload,
     SetCompanyNameParameters,
+    WorldCollection,
+    WorldCollectionPagePayload,
+    WorldManifestPayload,
+    WorldSnapshotCompletePayload,
     parse_bridge_message,
 )
-from sim_pilot.openttd.gamescript.models import BridgeHealth, SynchronizationState
+from sim_pilot.openttd.gamescript.models import (
+    BridgeHealth,
+    BridgeWorldSnapshot,
+    SynchronizationState,
+)
 from sim_pilot.openttd.models import OpenTTDConnectionMetadata
 
 
@@ -72,6 +87,8 @@ class GameScriptBridgeClient:
         self._outgoing_sequence = 0
         self._seen_message_ids: set[str] = set()
         self._hello: HelloPayload | None = None
+        self._world_manifest: WorldManifestPayload | None = None
+        self._world_pages: dict[WorldCollection, dict[int, WorldCollectionPagePayload]] = {}
         self._reject_instance_change = reject_instance_change
 
     async def synchronize(self, *, reason: str = "connect") -> BridgeHealth:
@@ -98,6 +115,7 @@ class GameScriptBridgeClient:
             got_capabilities = False
             got_response = False
             got_snapshot = False
+            got_world = False
             while True:
                 message = await self._receive(allow_resync_baseline=True)
                 if message.message_type is MessageType.HELLO:
@@ -116,7 +134,24 @@ class GameScriptBridgeClient:
                 elif message.message_type is MessageType.STATE_SNAPSHOT:
                     self._accept_snapshot(message)
                     got_snapshot = True
-                if got_hello and got_capabilities and got_response and got_snapshot:
+                elif message.message_type is MessageType.WORLD_MANIFEST:
+                    self._accept_world_manifest(message)
+                elif message.message_type is MessageType.WORLD_COLLECTION_PAGE:
+                    self._accept_world_page(message)
+                elif message.message_type is MessageType.WORLD_SNAPSHOT_COMPLETE:
+                    self._accept_world_complete(message)
+                    got_world = True
+                needs_world = bool(
+                    self.health.capabilities is not None
+                    and self.health.capabilities.world_snapshots
+                )
+                if (
+                    got_hello
+                    and got_capabilities
+                    and got_response
+                    and got_snapshot
+                    and (got_world or not needs_world)
+                ):
                     self._set_state(SynchronizationState.SYNCHRONIZED)
                     return self.health
         except BridgeIncompatibleError:
@@ -251,7 +286,7 @@ class GameScriptBridgeClient:
             message = parse_bridge_message(raw)
         except ValueError as error:
             raise BridgeIncompatibleError(f"invalid bridge message: {error}") from error
-        if message.protocol_version != BRIDGE_PROTOCOL_VERSION:
+        if message.protocol_version not in {1, BRIDGE_PROTOCOL_VERSION}:
             raise BridgeIncompatibleError(f"unsupported bridge protocol {message.protocol_version}")
         if message.message_id in self._seen_message_ids:
             raise BridgeSequenceError(f"duplicate bridge message {message.message_id}")
@@ -330,11 +365,107 @@ class GameScriptBridgeClient:
             }
         )
 
+    def _accept_world_manifest(self, message: BridgeMessage) -> None:
+        if not isinstance(message.payload, WorldManifestPayload):
+            raise BridgeIncompatibleError("world manifest payload has the wrong schema")
+        self._world_manifest = message.payload
+        self._world_pages = {}
+
+    def _accept_world_page(self, message: BridgeMessage) -> None:
+        if not isinstance(message.payload, WorldCollectionPagePayload):
+            raise BridgeIncompatibleError("world collection page has the wrong schema")
+        manifest = self._world_manifest
+        page = message.payload
+        if manifest is None or page.snapshot_id != manifest.snapshot_id:
+            raise BridgeSequenceError("world page does not match the active manifest")
+        pages = self._world_pages.setdefault(page.collection, {})
+        if page.page_index in pages:
+            raise BridgeSequenceError("duplicate world collection page")
+        if page.page_index >= page.page_count:
+            raise BridgeSequenceError("world collection page index is out of range")
+        pages[page.page_index] = page
+
+    def _accept_world_complete(self, message: BridgeMessage) -> None:
+        if not isinstance(message.payload, WorldSnapshotCompletePayload):
+            raise BridgeIncompatibleError("world completion payload has the wrong schema")
+        manifest = self._world_manifest
+        completed = message.payload
+        if manifest is None or completed.snapshot_id != manifest.snapshot_id:
+            raise BridgeSequenceError("world completion does not match the active manifest")
+        entities: dict[WorldCollection, list[object]] = {
+            collection: [] for collection in WorldCollection
+        }
+        for collection in WorldCollection:
+            expected = manifest.collection_counts.get(collection.value, 0)
+            pages = self._world_pages.get(collection, {})
+            expected_pages = (
+                0 if expected == 0 else next(iter(pages.values())).page_count if pages else 0
+            )
+            if expected_pages != len(pages) or set(pages) != set(range(expected_pages)):
+                raise BridgeSequenceError(f"incomplete {collection.value} world pages")
+            for index in range(expected_pages):
+                entities[collection].extend(pages[index].items)
+            if len(entities[collection]) != expected:
+                raise BridgeSequenceError(f"{collection.value} count does not match manifest")
+        total = sum(len(items) for items in entities.values())
+        if total != completed.total_items:
+            raise BridgeSequenceError("world completion item count does not match pages")
+        self.health = self.health.model_copy(
+            update={
+                "world_snapshot": BridgeWorldSnapshot(
+                    snapshot_id=completed.snapshot_id,
+                    capture_started_game_date=manifest.capture_started_game_date,
+                    capture_completed_game_date=completed.capture_completed_game_date,
+                    companies=tuple(
+                        item
+                        for item in entities[WorldCollection.COMPANIES]
+                        if isinstance(item, BridgeCompanyEntity)
+                    ),
+                    towns=tuple(
+                        item
+                        for item in entities[WorldCollection.TOWNS]
+                        if isinstance(item, BridgeTownEntity)
+                    ),
+                    industries=tuple(
+                        item
+                        for item in entities[WorldCollection.INDUSTRIES]
+                        if isinstance(item, BridgeIndustryEntity)
+                    ),
+                    stations=tuple(
+                        item
+                        for item in entities[WorldCollection.STATIONS]
+                        if isinstance(item, BridgeStationEntity)
+                    ),
+                    vehicles=tuple(
+                        item
+                        for item in entities[WorldCollection.VEHICLES]
+                        if isinstance(item, BridgeVehicleEntity)
+                    ),
+                    orders=tuple(
+                        item
+                        for item in entities[WorldCollection.ORDERS]
+                        if isinstance(item, BridgeOrderEntity)
+                    ),
+                    cargos=tuple(
+                        item
+                        for item in entities[WorldCollection.CARGOS]
+                        if isinstance(item, BridgeCargoEntity)
+                    ),
+                )
+            }
+        )
+
     def _consume_unsolicited(self, message: BridgeMessage) -> None:
         if message.message_type is MessageType.HEARTBEAT:
             return
         if message.message_type is MessageType.STATE_SNAPSHOT:
             self._accept_snapshot(message)
+        elif message.message_type is MessageType.WORLD_MANIFEST:
+            self._accept_world_manifest(message)
+        elif message.message_type is MessageType.WORLD_COLLECTION_PAGE:
+            self._accept_world_page(message)
+        elif message.message_type is MessageType.WORLD_SNAPSHOT_COMPLETE:
+            self._accept_world_complete(message)
 
     def _set_state(
         self,

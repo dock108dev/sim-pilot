@@ -13,6 +13,7 @@ from tests.openttd.gamescript.helpers import (
     message,
     snapshot,
     sync_messages,
+    world_sync_messages,
 )
 
 
@@ -30,6 +31,21 @@ def test_initial_negotiation_and_snapshot_synchronize() -> None:
     assert client.health.capabilities is not None
     assert client.health.capabilities.state_deltas is False
     assert transport.subscriptions == 1
+
+
+def test_protocol_v2_assembles_a_complete_paginated_world() -> None:
+    async def scenario() -> GameScriptBridgeClient:
+        client = GameScriptBridgeClient(FakeBridgeTransport(world_sync_messages()), company_id=0)
+        await client.synchronize()
+        return client
+
+    client = asyncio.run(scenario())
+    world = client.health.world_snapshot
+    assert world is not None
+    assert world.complete is True
+    assert world.capture_completed_game_date == 712224
+    assert [town.name for town in world.towns] == ["Town"]
+    assert [vehicle.name for vehicle in world.vehicles] == ["Train 1"]
 
 
 def test_sequence_gap_duplicate_and_identity_change_fail_outside_resync() -> None:

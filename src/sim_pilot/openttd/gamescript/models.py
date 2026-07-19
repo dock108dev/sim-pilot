@@ -8,7 +8,34 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from sim_pilot.openttd.gamescript.messages import BridgeCapabilities, BridgeSnapshot
+from sim_pilot.openttd.gamescript.messages import (
+    BridgeCapabilities,
+    BridgeCargoEntity,
+    BridgeCompanyEntity,
+    BridgeIndustryEntity,
+    BridgeOrderEntity,
+    BridgeSnapshot,
+    BridgeStationEntity,
+    BridgeTownEntity,
+    BridgeVehicleEntity,
+)
+
+
+class BridgeWorldSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    schema_version: Literal[1] = 1
+    snapshot_id: str
+    capture_started_game_date: int = Field(ge=0)
+    capture_completed_game_date: int = Field(ge=0)
+    complete: bool = True
+    companies: tuple[BridgeCompanyEntity, ...] = ()
+    towns: tuple[BridgeTownEntity, ...] = ()
+    industries: tuple[BridgeIndustryEntity, ...] = ()
+    stations: tuple[BridgeStationEntity, ...] = ()
+    vehicles: tuple[BridgeVehicleEntity, ...] = ()
+    orders: tuple[BridgeOrderEntity, ...] = ()
+    cargos: tuple[BridgeCargoEntity, ...] = ()
 
 
 class SynchronizationState(StrEnum):
@@ -43,6 +70,7 @@ class BridgeHealth(BaseModel):
     capability_fingerprint: str | None = None
     capabilities: BridgeCapabilities | None = None
     snapshot: BridgeSnapshot | None = None
+    world_snapshot: BridgeWorldSnapshot | None = None
     degraded_reason: str | None = None
 
     @classmethod

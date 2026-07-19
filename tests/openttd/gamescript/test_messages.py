@@ -56,13 +56,13 @@ def test_unknown_fields_types_versions_and_payload_mismatch_fail_closed() -> Non
 
 
 def test_hello_rejects_an_incompatible_adapter_version() -> None:
-    with pytest.raises(ValidationError, match="openttd-gamescript-v1"):
+    with pytest.raises(ValidationError, match="openttd-gamescript-v"):
         HelloPayload.model_validate(
             {
                 "loaded": False,
                 "save_generation": 0,
                 "start_generation": 1,
-                "adapter_version": "openttd-gamescript-v2",
+                "adapter_version": "openttd-gamescript-v3",
             },
             strict=True,
         )
@@ -91,5 +91,5 @@ def test_payload_size_malformed_json_and_correlation_are_validated() -> None:
 
 def test_capability_fingerprint_is_stable() -> None:
     assert capabilities().fingerprint == (
-        "a4868cb5227ad0e126764cb2312b52573218087ab6f5d145a7c8a60877db55ca"
+        "770cdf80bdf2ce59ec613deabab545ab2279048e5371f562d957e7a98c6b73cc"
     )

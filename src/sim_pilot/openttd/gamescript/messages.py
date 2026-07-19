@@ -9,10 +9,10 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-BRIDGE_PROTOCOL_VERSION = 1
+BRIDGE_PROTOCOL_VERSION = 2
 GAMESCRIPT_TO_ADMIN_MAX_BYTES = 1450
 ADMIN_TO_GAMESCRIPT_MAX_BYTES = 8999
-SIM_PILOT_ADAPTER_VERSION = "openttd-gamescript-v1"
+SIM_PILOT_ADAPTER_VERSION = "openttd-gamescript-v2"
 
 
 class BridgeModel(BaseModel):
@@ -24,6 +24,9 @@ class MessageType(StrEnum):
     CAPABILITIES = "capabilities"
     HEARTBEAT = "heartbeat"
     STATE_SNAPSHOT = "state_snapshot"
+    WORLD_MANIFEST = "world_manifest"
+    WORLD_COLLECTION_PAGE = "world_collection_page"
+    WORLD_SNAPSHOT_COMPLETE = "world_snapshot_complete"
     COMMAND_REQUEST = "command_request"
     COMMAND_ACCEPTED = "command_accepted"
     COMMAND_REJECTED = "command_rejected"
@@ -53,15 +56,17 @@ class HelloPayload(BridgeModel):
     component: Literal["sim_pilot_bridge"] = "sim_pilot_bridge"
     openttd_version: Literal["15.3"] = "15.3"
     gamescript_api_version: Literal["15"] = "15"
-    script_version: Literal[1] = 1
-    adapter_version: Literal["openttd-gamescript-v1"] = SIM_PILOT_ADAPTER_VERSION
+    script_version: Literal[1, 2] = 2
+    adapter_version: Literal["openttd-gamescript-v1", "openttd-gamescript-v2"] = (
+        SIM_PILOT_ADAPTER_VERSION
+    )
     loaded: bool
     save_generation: int = Field(ge=0)
     start_generation: int = Field(ge=1)
 
 
 class BridgeCapabilities(BridgeModel):
-    capability_version: Literal[1] = 1
+    capability_version: Literal[1, 2] = 1
     readable_resources: tuple[str, ...]
     readable_entities: tuple[str, ...]
     event_types: tuple[str, ...] = ()
@@ -76,6 +81,8 @@ class BridgeCapabilities(BridgeModel):
     maximum_outbound_bytes: Literal[1450] = 1450
     maximum_inbound_bytes: Literal[8999] = 8999
     write_opt_in_required: Literal[True] = True
+    world_snapshots: bool = False
+    world_collections: tuple[str, ...] = ()
 
     @property
     def fingerprint(self) -> str:
@@ -106,6 +113,146 @@ class BridgeSnapshot(BridgeModel):
     industry_count: int = Field(ge=0)
     company: BridgeCompanySnapshot | None
     save_generation: int = Field(ge=0)
+
+
+class WorldCollection(StrEnum):
+    COMPANIES = "companies"
+    TOWNS = "towns"
+    INDUSTRIES = "industries"
+    STATIONS = "stations"
+    VEHICLES = "vehicles"
+    ORDERS = "orders"
+    CARGOS = "cargos"
+
+
+class BridgeCompanyEntity(BridgeModel):
+    entity_type: Literal["company"] = "company"
+    id: int = Field(ge=0, le=14)
+    name: str = Field(min_length=1)
+    cash: int
+    loan: int = Field(ge=0)
+    company_value: int | None = None
+    income: int | None = None
+    expenses: int | None = None
+    performance: int | None = Field(default=None, ge=0)
+    headquarters_tile: int | None = Field(default=None, ge=0)
+    station_count: int = Field(default=0, ge=0)
+
+
+class BridgeTownEntity(BridgeModel):
+    entity_type: Literal["town"] = "town"
+    id: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    population: int = Field(ge=0)
+    tile: int = Field(ge=0)
+    growth_rate: int | None = Field(default=None, ge=0)
+    rating: int | None = Field(default=None, ge=-1000, le=1000)
+
+
+class BridgeIndustryEntity(BridgeModel):
+    entity_type: Literal["industry"] = "industry"
+    id: int = Field(ge=0)
+    industry_type: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    tile: int = Field(ge=0)
+    nearby_station_count: int = Field(ge=0)
+    accepted_cargo_ids: tuple[int, ...] = ()
+    produced_cargo_ids: tuple[int, ...] = ()
+
+
+class BridgeStationEntity(BridgeModel):
+    entity_type: Literal["station"] = "station"
+    id: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    owner: int = Field(ge=0, le=14)
+    tile: int = Field(ge=0)
+    facilities: tuple[str, ...] = ()
+
+
+class BridgeVehicleEntity(BridgeModel):
+    entity_type: Literal["vehicle"] = "vehicle"
+    id: int = Field(ge=0)
+    owner: int = Field(ge=0, le=14)
+    vehicle_type: int = Field(ge=0)
+    engine_type: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    age_days: int = Field(ge=0)
+    profit_this_year: int
+    profit_last_year: int
+    state: int = Field(ge=0)
+    tile: int | None = Field(default=None, ge=0)
+    in_depot: bool
+    current_order_index: int | None = Field(default=None, ge=0)
+
+
+class BridgeOrderEntity(BridgeModel):
+    entity_type: Literal["order"] = "order"
+    vehicle_id: int = Field(ge=0)
+    index: int = Field(ge=0)
+    kind: str = Field(min_length=1)
+    destination_tile: int | None = Field(default=None, ge=0)
+    destination_station_id: int | None = Field(default=None, ge=0)
+    flags: int | None = Field(default=None, ge=0)
+
+
+class BridgeCargoEntity(BridgeModel):
+    entity_type: Literal["cargo"] = "cargo"
+    id: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    scope: Literal["world", "town", "industry", "station"] = "world"
+    scope_entity_id: int | None = Field(default=None, ge=0)
+    waiting: int | None = Field(default=None, ge=0)
+    produced: int | None = Field(default=None, ge=0)
+    accepted: bool | None = None
+    transported: int | None = Field(default=None, ge=0)
+    transported_percent: int | None = Field(default=None, ge=0, le=100)
+
+
+BridgeWorldEntity = Annotated[
+    BridgeCompanyEntity
+    | BridgeTownEntity
+    | BridgeIndustryEntity
+    | BridgeStationEntity
+    | BridgeVehicleEntity
+    | BridgeOrderEntity
+    | BridgeCargoEntity,
+    Field(discriminator="entity_type"),
+]
+
+
+class WorldManifestPayload(BridgeModel):
+    snapshot_id: str = Field(min_length=1, max_length=128)
+    capture_started_game_date: int = Field(ge=0)
+    collection_counts: dict[str, int]
+
+
+class WorldCollectionPagePayload(BridgeModel):
+    snapshot_id: str = Field(min_length=1, max_length=128)
+    collection: WorldCollection
+    page_index: int = Field(ge=0)
+    page_count: int = Field(ge=0)
+    items: tuple[BridgeWorldEntity, ...]
+
+    @model_validator(mode="after")
+    def validate_collection_items(self) -> Self:
+        expected: dict[WorldCollection, type[BridgeModel]] = {
+            WorldCollection.COMPANIES: BridgeCompanyEntity,
+            WorldCollection.TOWNS: BridgeTownEntity,
+            WorldCollection.INDUSTRIES: BridgeIndustryEntity,
+            WorldCollection.STATIONS: BridgeStationEntity,
+            WorldCollection.VEHICLES: BridgeVehicleEntity,
+            WorldCollection.ORDERS: BridgeOrderEntity,
+            WorldCollection.CARGOS: BridgeCargoEntity,
+        }
+        if any(not isinstance(item, expected[self.collection]) for item in self.items):
+            raise ValueError(f"{self.collection.value} page contains the wrong entity type")
+        return self
+
+
+class WorldSnapshotCompletePayload(BridgeModel):
+    snapshot_id: str = Field(min_length=1, max_length=128)
+    capture_completed_game_date: int = Field(ge=0)
+    total_items: int = Field(ge=0)
 
 
 class SetCompanyNameParameters(BridgeModel):
@@ -168,6 +315,9 @@ BridgePayload = Annotated[
     | BridgeCapabilities
     | HeartbeatPayload
     | BridgeSnapshot
+    | WorldManifestPayload
+    | WorldCollectionPagePayload
+    | WorldSnapshotCompletePayload
     | CommandRequestPayload
     | CommandAcceptedPayload
     | CommandCompletedPayload
@@ -184,6 +334,9 @@ _PAYLOAD_TYPES: dict[MessageType, type[BridgeModel]] = {
     MessageType.CAPABILITIES: BridgeCapabilities,
     MessageType.HEARTBEAT: HeartbeatPayload,
     MessageType.STATE_SNAPSHOT: BridgeSnapshot,
+    MessageType.WORLD_MANIFEST: WorldManifestPayload,
+    MessageType.WORLD_COLLECTION_PAGE: WorldCollectionPagePayload,
+    MessageType.WORLD_SNAPSHOT_COMPLETE: WorldSnapshotCompletePayload,
     MessageType.COMMAND_REQUEST: CommandRequestPayload,
     MessageType.COMMAND_ACCEPTED: CommandAcceptedPayload,
     MessageType.COMMAND_REJECTED: BridgeErrorPayload,
@@ -198,7 +351,7 @@ _PAYLOAD_TYPES: dict[MessageType, type[BridgeModel]] = {
 
 
 class BridgeMessage(BridgeModel):
-    protocol_version: Literal[1] = BRIDGE_PROTOCOL_VERSION
+    protocol_version: Literal[1, 2] = BRIDGE_PROTOCOL_VERSION
     sequence: int = Field(ge=1)
     message_id: str = Field(min_length=1, max_length=128)
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
