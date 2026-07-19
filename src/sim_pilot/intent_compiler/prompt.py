@@ -2,7 +2,7 @@
 
 from sim_pilot.intent_compiler.models import CompilerCapabilityCatalog
 
-PROMPT_VERSION = "intent-compiler-v2"
+PROMPT_VERSION = "intent-compiler-v3"
 
 SUPPORTED_RESOURCES = (
     "tick",
@@ -92,6 +92,12 @@ Put notification requests in notifications. Put deterministic stop expressions i
 using '<resource> <operator> <number>', where operator is >, >=, <, <=, or ==.
 
 Never invent a resource, action, threshold, project type, runtime capability, or missing number.
+When the user requires a particular action as the method for reaching an objective, preserve that
+method as an allowed_action constraint. If that same action is forbidden, preserve both rules so
+deterministic validation can reject the contradiction; never silently discard the required method.
+maintenance_level accepts only 0, 0.5, or 1. If maintenance wording uses a percentage-like value
+such as 90 without clearly identifying maintenance_level, request clarification instead of scaling
+or emitting an impossible threshold.
 If material information is missing, return no specification and describe it in ambiguities. If the
 request is outside supported capabilities, return no specification and describe it in
 unsupported_requests. Report every minor interpretation in assumptions. Use warnings for supported
@@ -119,6 +125,9 @@ is {catalog.name}. Supported resources: {", ".join(catalog.resources)}. Supporte
 Use only reach_resource, maintain_resource, run_until, and complete_project objectives and the
 existing TaskSpecification schema. Never invent capabilities. If a request requires any action or
 resource outside this catalog, return no specification and put the request in unsupported_requests.
+For numeric resources, use reach_resource without a direction parameter and use run_until only
+when the instruction explicitly asks to wait or monitor until the threshold is reached. A supported
+observed resource may be a passive run_until objective even when no advertised action changes it.
 For an instruction to set a supported string resource, compile a run_until equality objective and
 use the matching action in allowed_action constraints when appropriate. Preserve explicit approval
 and forbidden-action language. Report material missing information in ambiguities. Return structured

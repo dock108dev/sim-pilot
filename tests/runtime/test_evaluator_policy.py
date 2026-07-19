@@ -55,7 +55,7 @@ def test_objective_completion(cash: int, complete: bool) -> None:
     assert result.complete is complete
 
 
-def test_maintain_run_until_and_project_completion_objectives() -> None:
+def test_maintain_and_run_until_objectives() -> None:
     evaluator = ProgressEvaluator()
     maintain = TaskSpecification(
         objective=Objective(
@@ -73,6 +73,11 @@ def test_maintain_run_until_and_project_completion_objectives() -> None:
         ),
         authority=AuthorityPolicy(),
     )
+    assert evaluator.evaluate(maintain, observation(infrastructure=75)).complete
+    assert evaluator.evaluate(run_until, observation(tick=10)).complete
+
+
+def test_project_completion_requires_project_evidence_during_task() -> None:
     project = TaskSpecification(
         objective=Objective(
             type=ObjectiveType.COMPLETE_PROJECT,
@@ -81,10 +86,18 @@ def test_maintain_run_until_and_project_completion_objectives() -> None:
         ),
         authority=AuthorityPolicy(),
     )
+    evaluator = ProgressEvaluator()
+    initial = observation(active_projects=[])
+    active = observation(active_projects=[{"type": "housing"}])
 
-    assert evaluator.evaluate(maintain, observation(infrastructure=75)).complete
-    assert evaluator.evaluate(run_until, observation(tick=10)).complete
-    assert evaluator.evaluate(project, observation(active_projects=[])).complete
+    assert not evaluator.evaluate(project, initial).complete
+    assert "has not started" in evaluator.evaluate(project, initial).progress_summary
+    assert not evaluator.evaluate(project, active, observation_history=(initial,)).complete
+    assert evaluator.evaluate(
+        project,
+        initial,
+        observation_history=(initial, active),
+    ).complete
 
 
 def test_stop_condition_blocks() -> None:
@@ -94,6 +107,24 @@ def test_stop_condition_blocks() -> None:
     )
     assert result.current_status is EvaluationStatus.BLOCKED
     assert result.stop_condition_met
+
+
+def test_satisfied_objective_wins_over_duplicate_stop_condition() -> None:
+    run_until = TaskSpecification(
+        objective=Objective(
+            type=ObjectiveType.RUN_UNTIL,
+            description="Run until debt is at or below 25,000.",
+            parameters={"resource": "debt", "target": 25_000, "direction": "below"},
+        ),
+        authority=AuthorityPolicy(),
+        stop_conditions=("debt <= 25000",),
+    )
+
+    result = ProgressEvaluator().evaluate(run_until, observation(debt=0))
+
+    assert result.current_status is EvaluationStatus.COMPLETED
+    assert result.complete
+    assert not result.stop_condition_met
 
 
 def adapter_validation(cost: float = 100.0, valid: bool = True) -> ValidationResult:

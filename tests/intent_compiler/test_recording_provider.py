@@ -69,7 +69,7 @@ def test_recording_provider_writes_complete_atomic_json(tmp_path: Path) -> None:
     assert len(paths) == 1
     assert paths[0].suffix == ".json"
     recording = CompilerRecording.model_validate_json(paths[0].read_text())
-    assert recording.prompt_version == "intent-compiler-v2"
+    assert recording.prompt_version == "intent-compiler-v3"
     assert "Sim Pilot Intent Compiler" in recording.prompt
     assert recording.instruction == "Reach one million cash."
     assert recording.response == provider_result.response

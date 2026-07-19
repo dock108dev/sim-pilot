@@ -458,7 +458,11 @@ class RuntimeEngine:
                     update={"iterations": runtime_state.iterations + 1}
                 )
                 drafts: list[EventDraft] = []
-                evaluation = self.evaluator.evaluate(current.task.specification, observation)
+                evaluation = self.evaluator.evaluate(
+                    current.task.specification,
+                    observation,
+                    observation_history=self._observation_history(current.task.id),
+                )
                 drafts.append(
                     EventDraft(
                         RuntimeEventType.EVALUATION_RECORDED,
@@ -1101,6 +1105,17 @@ class RuntimeEngine:
             RuntimeEventType.OBSERVATION_RECORDED,
             cast("dict[str, JsonValue]", observation.model_dump(mode="json")),
         )
+
+    def _observation_history(self, task_id: UUID) -> tuple[Observation, ...]:
+        observations: list[Observation] = []
+        for event in self.event_store.list_events(task_id):
+            if event.event_type is not RuntimeEventType.OBSERVATION_RECORDED:
+                continue
+            try:
+                observations.append(Observation.model_validate_json(json.dumps(event.payload)))
+            except ValueError:
+                continue
+        return tuple(observations)
 
     @staticmethod
     def _snapshot(adapter: SimulationAdapter, observation: Observation) -> AdapterSnapshot:

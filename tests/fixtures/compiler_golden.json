@@ -98,5 +98,15 @@
     "instruction": "Run until cash reaches one million. Do not take loans. Keep at least 100000 available. Ask before spending more than 50000.",
     "response": {"specification": {"objective": {"type": "run_until", "description": "Run until cash reaches one million.", "parameters": {"resource": "cash", "target": 1000000, "direction": "above"}}, "constraints": [{"type": "forbidden_action", "description": "Do not take loans.", "parameters": {"action": "take_loan"}}, {"type": "minimum_reserve", "description": "Keep at least 100000 cash.", "parameters": {"amount": 100000}}], "authority": {"maximum_single_spend": "50000", "forbidden_actions": ["take_loan"]}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
     "status": "valid"
+  },
+  {
+    "instruction": "Take a loan to reach 800000 cash, but loans are forbidden.",
+    "response": {"specification": {"objective": {"type": "reach_resource", "description": "Reach 800000 cash.", "parameters": {"resource": "cash", "target": 800000}}, "constraints": [{"type": "allowed_action", "description": "Use a loan to reach the target.", "parameters": {"actions": ["take_loan"]}}, {"type": "forbidden_action", "description": "Loans are forbidden.", "parameters": {"action": "take_loan"}}], "authority": {"forbidden_actions": ["take_loan"]}, "notifications": [], "stop_conditions": []}, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": []},
+    "status": "invalid"
+  },
+  {
+    "instruction": "Fix things up until maintenance is at least 90.",
+    "response": {"specification": null, "assumptions": [], "warnings": [], "unsupported_requests": [], "ambiguities": ["Clarify whether maintenance means the discrete maintenance level or infrastructure health at 90 percent."]},
+    "status": "clarification_required"
   }
 ]

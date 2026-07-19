@@ -74,3 +74,13 @@ read-only sandboxing, disabled approval, ignored user configuration and project 
 schema-bound final output. Provider selection still defaults to `none`; scripted tests remain the
 CI path. The Codex surface is development-only pending separate production suitability and live
 compatibility evaluation.
+
+## Amendment: Product-evaluation semantic corrections
+
+The first live product evaluation advances the prompt contract to `intent-compiler-v3`. Explicitly
+required action methods are preserved as allowed-action constraints, allowing deterministic
+validation to reject a method that the same instruction forbids. Percentage-like maintenance
+wording that does not map unambiguously to the simulation's discrete 0, 0.5, or 1 maintenance
+levels requires clarification. Numeric OpenTTD observations use the exact objective parameter
+shape and may be represented as passive monitoring objectives even when no advertised action
+directly changes the observed resource.

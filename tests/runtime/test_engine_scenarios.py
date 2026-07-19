@@ -125,6 +125,64 @@ def test_scenario_a_completes_cash_objective_with_ordered_events() -> None:
     asyncio.run(scenario())
 
 
+def test_complete_project_requires_start_and_completion_during_task() -> None:
+    async def scenario() -> None:
+        specification = TaskSpecification(
+            objective=Objective(
+                type=ObjectiveType.COMPLETE_PROJECT,
+                description="Complete a housing project.",
+                parameters={"project_type": "housing"},
+            ),
+            authority=AuthorityPolicy(),
+        )
+        provider = ScriptedDecisionProvider(
+            [
+                execute_decision("build_housing", units=1),
+                execute_decision("advance_time", ticks=5),
+            ]
+        )
+        adapter = TrackingAdapter()
+
+        outcome = await RuntimeEngine().run(
+            make_task(specification=specification),
+            adapter,
+            provider,
+        )
+
+        assert outcome.status is TaskStatus.COMPLETED
+        assert provider.request_count == 2
+        assert adapter.execution_count == 2
+        assert adapter.simulation.state.housing == 601
+
+    asyncio.run(scenario())
+
+
+def test_already_satisfied_run_until_completes_without_a_decision() -> None:
+    async def scenario() -> None:
+        specification = TaskSpecification(
+            objective=Objective(
+                type=ObjectiveType.RUN_UNTIL,
+                description="Run until debt is at or below 25,000.",
+                parameters={"resource": "debt", "target": 25_000, "direction": "below"},
+            ),
+            authority=AuthorityPolicy(forbidden_actions=("take_loan",)),
+            stop_conditions=("debt <= 25000",),
+        )
+        provider = ScriptedDecisionProvider([])
+
+        outcome = await RuntimeEngine().run(
+            make_task(specification=specification),
+            TrackingAdapter(),
+            provider,
+        )
+
+        assert outcome.status is TaskStatus.COMPLETED
+        assert provider.request_count == 0
+        assert outcome.reason == "debt=0; target=25000."
+
+    asyncio.run(scenario())
+
+
 def test_scenario_b_forbidden_loan_is_never_executed() -> None:
     async def scenario() -> None:
         constraint = Constraint(

@@ -8,7 +8,7 @@ from sim_pilot.domain import (
     ObjectiveType,
     TaskSpecification,
 )
-from sim_pilot.intent_compiler.prompt import OPENTTD_CAPABILITIES
+from sim_pilot.intent_compiler.prompt import OPENTTD_CAPABILITIES, compiler_prompt
 from sim_pilot.intent_compiler.validation import validate_specification
 
 
@@ -56,3 +56,21 @@ def test_openttd_catalog_rejects_route_construction_action() -> None:
     errors = validate_specification(specification, OPENTTD_CAPABILITIES)
 
     assert any(error.code == "invalid_action" for error in errors)
+
+
+def test_openttd_catalog_accepts_passive_company_value_monitoring() -> None:
+    specification = TaskSpecification(
+        objective=Objective(
+            type=ObjectiveType.RUN_UNTIL,
+            description="Monitor until company value reaches five million.",
+            parameters={
+                "resource": "company_value",
+                "target": 5_000_000,
+                "direction": "above",
+            },
+        ),
+        authority=AuthorityPolicy(),
+    )
+
+    assert validate_specification(specification, OPENTTD_CAPABILITIES) == ()
+    assert "passive run_until objective" in compiler_prompt(OPENTTD_CAPABILITIES)

@@ -4,6 +4,14 @@ All notable changes to Sim Pilot are documented in this file.
 
 ## Unreleased
 
+### Product evaluation corrections
+
+- Recorded the first 31-case live-model baseline and prepared the founder usage checklist.
+- Corrected project-completion evidence and already-satisfied run-until handling.
+- Split manual evaluation ratings across compiler, decision, runtime, and overall behavior.
+- Advanced the compiler prompt to `intent-compiler-v3` for required/forbidden method conflicts,
+  percent-like maintenance ambiguity, and valid passive OpenTTD monitoring shapes.
+
 ### Codex CLI local provider
 
 - Added explicitly selected Codex CLI compiler and decision providers backed by authenticated

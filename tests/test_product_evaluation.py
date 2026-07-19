@@ -168,7 +168,10 @@ def test_evaluation_is_resumable_private_and_preserves_manual_review(tmp_path: P
 
     review_path = output / "manual_review.json"
     review = json.loads(review_path.read_text())
-    review[0]["manual_rating"] = "correct"
+    review[0]["compiler_rating"] = "correct"
+    review[0]["decision_rating"] = "annoying"
+    review[0]["runtime_rating"] = "acceptable"
+    review[0]["overall_rating"] = "acceptable"
     review[0]["reviewer_notes"] = "Clear and faithful."
     review_path.write_text(json.dumps(review))
 
@@ -186,7 +189,10 @@ def test_evaluation_is_resumable_private_and_preserves_manual_review(tmp_path: P
     assert second == first
     assert len(compiler_calls) == 1
     preserved = json.loads(review_path.read_text())
-    assert preserved[0]["manual_rating"] == "correct"
+    assert preserved[0]["compiler_rating"] == "correct"
+    assert preserved[0]["decision_rating"] == "annoying"
+    assert preserved[0]["runtime_rating"] == "acceptable"
+    assert preserved[0]["overall_rating"] == "acceptable"
     assert preserved[0]["reviewer_notes"] == "Clear and faithful."
 
 

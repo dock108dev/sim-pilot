@@ -12,6 +12,7 @@ from sim_pilot.intent_compiler import (
     IntentCompiler,
     ValidationStatus,
 )
+from sim_pilot.intent_compiler.prompt import INTENT_COMPILER_PROMPT
 from sim_pilot.intent_compiler.providers import OpenAICompilerProvider, ScriptedCompilerProvider
 from tests.intent_compiler.helpers import response, valid_specification
 
@@ -29,7 +30,7 @@ def test_valid_compilation_reports_prompt_assumptions_and_warnings() -> None:
         )
         result = await IntentCompiler(provider).compile("Reach one million cash.")
         assert result.report.validation_status is ValidationStatus.VALID
-        assert result.report.prompt_version == "intent-compiler-v2"
+        assert result.report.prompt_version == "intent-compiler-v3"
         assert result.specification == valid_specification()
         assert provider.request_count == 1
 
@@ -142,3 +143,8 @@ def test_openai_provider_returns_model_and_token_usage(
 def test_openai_compiler_rejects_invalid_output_token_limit() -> None:
     with pytest.raises(ValueError, match="output token limit"):
         OpenAICompilerProvider(model="test-model", max_output_tokens=0)
+
+
+def test_prompt_preserves_method_conflicts_and_clarifies_percent_like_maintenance() -> None:
+    assert "preserve both rules" in INTENT_COMPILER_PROMPT
+    assert "percentage-like value" in INTENT_COMPILER_PROMPT

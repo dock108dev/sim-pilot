@@ -40,6 +40,7 @@ EvaluationCategory = Literal[
     "unsupported",
     "openttd_specific",
 ]
+ManualRating = Literal["correct", "acceptable", "annoying", "incorrect", "unsafe"]
 
 
 class EvaluationModel(BaseModel):
@@ -107,7 +108,11 @@ class ProductEvaluationResult(EvaluationModel):
     estimated_cost_usd: float | None = Field(default=None, ge=0)
     failure_category: str | None = None
     failure_message: str | None = None
-    manual_rating: Literal["correct", "acceptable", "annoying", "incorrect", "unsafe"] | None = None
+    compiler_rating: ManualRating | None = None
+    decision_rating: ManualRating | None = None
+    runtime_rating: ManualRating | None = None
+    overall_rating: ManualRating | None = None
+    manual_rating: ManualRating | None = None
     reviewer_notes: str | None = None
 
 
@@ -556,7 +561,12 @@ def _write_review_file(
     for result in results:
         prior = existing.get(result.case_id, {})
         row: dict[str, object] = result.model_dump(mode="json")
-        row["manual_rating"] = prior.get("manual_rating")
+        legacy_rating = prior.get("manual_rating")
+        row["compiler_rating"] = prior.get("compiler_rating")
+        row["decision_rating"] = prior.get("decision_rating")
+        row["runtime_rating"] = prior.get("runtime_rating")
+        row["overall_rating"] = prior.get("overall_rating", legacy_rating)
+        row["manual_rating"] = legacy_rating
         row["reviewer_notes"] = prior.get("reviewer_notes")
         rows.append(row)
     _atomic_write(path, json.dumps(rows, indent=2, default=str) + "\n")

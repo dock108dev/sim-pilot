@@ -214,7 +214,7 @@ version, structured response, latency, provider, model, and token usage when ava
 instructions and prompts may contain sensitive data, recording is disabled by default and requires
 an explicit local output directory.
 
-Prompt version `intent-compiler-v2` defines all supported objective and constraint contracts,
+Prompt version `intent-compiler-v3` defines all supported objective and constraint contracts,
 authority fields, and unsupported behavior. The compiler receives an environment capability
 catalog: reference-simulation capabilities remain the default, while OpenTTD capabilities are
 selected explicitly and are never added globally to the reference prompt. A semantic prompt change
@@ -358,10 +358,14 @@ Task 3 objective parameter contracts are:
 - `ReachResource`: `resource`, numeric `target`
 - `MaintainResource`: `resource`, numeric `target`, `direction` (`above` or `below`)
 - `RunUntil`: `resource`, numeric `target`, `direction` (`above` or `below`)
-- `CompleteProject`: `project_type`; complete when no matching active project remains
+- `CompleteProject`: `project_type`; complete only after a matching project was observed active
+  during this task and a later observation shows no matching active project
 
 Task 3 stop conditions use the deterministic string grammar
 `<resource> <operator> <number>`, where operator is `>`, `>=`, `<`, `<=`, or `==`.
+Objective success is evaluated first. When a compiler emits the same threshold as both a
+`RunUntil` objective and a stop condition, satisfying that threshold completes the task rather than
+blocking it. A distinct satisfied stop condition remains an intervention boundary.
 
 ---
 
