@@ -70,6 +70,11 @@ from sim_pilot.persistence.sqlite import (
     create_sqlite_engine,
     upgrade_database,
 )
+from sim_pilot.product_evaluation import (
+    EvaluationRunConfiguration,
+    ProductEvaluationCase,
+    run_product_evaluation,
+)
 from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
@@ -102,13 +107,18 @@ openttd_app = typer.Typer(help="Observe a local OpenTTD 15.3 game through its ad
 openttd_action_app = typer.Typer(help="Run a directly validated and verified OpenTTD action.")
 openttd_bridge_app = typer.Typer(help="Operate the versioned OpenTTD GameScript bridge.")
 openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled bridge action.")
+evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation exercises.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
+app.add_typer(evaluate_app, name="evaluate")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_bridge_app, name="bridge")
 openttd_bridge_app.add_typer(openttd_bridge_action_app, name="action")
 task_app.add_typer(recovery_app, name="recovery")
+
+DEFAULT_PRODUCT_EVALUATION_FIXTURE = Path("tests/fixtures/product_evaluation_instructions.json")
+PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS = 2048
 
 
 @dataclass
@@ -311,6 +321,119 @@ async def _capture_openttd_observation() -> Observation:
         return await adapter.observe()
     finally:
         await adapter.shutdown()
+
+
+@evaluate_app.command("product")
+def evaluate_product(
+    compiler_provider: Annotated[
+        CompilerProviderName,
+        typer.Option(
+            "--compiler-provider",
+            help="Hosted compiler provider; must be explicitly set to openai.",
+        ),
+    ] = CompilerProviderName.NONE,
+    decision_provider: Annotated[
+        DecisionProviderName,
+        typer.Option(
+            "--decision-provider",
+            help="Hosted runtime provider; must be explicitly set to openai.",
+        ),
+    ] = DecisionProviderName.NONE,
+    record_dir: Annotated[
+        Path,
+        typer.Option(
+            "--record-dir",
+            file_okay=False,
+            help="Private directory for case results, raw exchanges, and manual review.",
+        ),
+    ] = Path("data/product-evaluation"),
+    fixture: Annotated[
+        Path,
+        typer.Option("--fixture", exists=True, dir_okay=False),
+    ] = DEFAULT_PRODUCT_EVALUATION_FIXTURE,
+    compiler_model_name: Annotated[str | None, typer.Option("--compiler-model")] = None,
+    decision_model_name: Annotated[str | None, typer.Option("--decision-model")] = None,
+    input_cost_per_million: Annotated[
+        float,
+        typer.Option("--input-cost-per-million", min=0),
+    ] = 0.0,
+    output_cost_per_million: Annotated[
+        float,
+        typer.Option("--output-cost-per-million", min=0),
+    ] = 0.0,
+    max_runtime_iterations: Annotated[
+        int,
+        typer.Option("--max-runtime-iterations", min=1, max=20),
+    ] = 8,
+    case: Annotated[
+        list[str] | None,
+        typer.Option("--case", help="Run only the named case; repeat to select several."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Replace completed case results instead of resuming."),
+    ] = False,
+) -> None:
+    """Run the bounded product proving dataset; never selects a hosted provider implicitly."""
+    if compiler_provider is not CompilerProviderName.OPENAI:
+        _fail(ValueError("--compiler-provider openai is required"), INVALID_INPUT)
+    if decision_provider is not DecisionProviderName.OPENAI:
+        _fail(ValueError("--decision-provider openai is required"), INVALID_INPUT)
+    compiler_name = compiler_model(compiler_model_name)
+    decision_name = decision_model(decision_model_name)
+    configuration = EvaluationRunConfiguration(
+        compiler_provider="openai",
+        decision_provider="openai",
+        compiler_model=compiler_name,
+        decision_model=decision_name,
+        input_cost_per_million_usd=input_cost_per_million,
+        output_cost_per_million_usd=output_cost_per_million,
+        max_runtime_iterations=max_runtime_iterations,
+        max_output_tokens_per_call=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+    )
+
+    def compiler_factory(item: ProductEvaluationCase) -> CompilerProvider:
+        catalog = OPENTTD_CAPABILITIES if item.adapter == "openttd" else REFERENCE_CAPABILITIES
+        prompt = compiler_prompt(catalog)
+        provider: CompilerProvider = OpenAICompilerProvider(
+            model=compiler_name,
+            prompt=prompt,
+            max_retries=0,
+            max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+        )
+        return RecordingCompilerProvider(
+            provider,
+            record_dir / "raw" / item.id / "compiler",
+            prompt=prompt,
+        )
+
+    def decision_factory(item: ProductEvaluationCase) -> DecisionProvider:
+        provider: DecisionProvider = OpenAIDecisionProvider(
+            model=decision_name,
+            timeout_seconds=decision_timeout_seconds(),
+            transient_retries=0,
+            max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+        )
+        return RecordingDecisionProvider(
+            provider,
+            record_dir / "raw" / item.id / "decisions",
+        )
+
+    try:
+        aggregate = asyncio.run(
+            run_product_evaluation(
+                fixture_path=fixture,
+                output_directory=record_dir,
+                compiler_provider_factory=compiler_factory,
+                decision_provider_factory=decision_factory,
+                configuration=configuration,
+                force=force,
+                case_ids=frozenset(case or ()),
+            )
+        )
+    except (OSError, ValidationError, ValueError) as error:
+        _fail(error, INVALID_INPUT)
+    _emit(aggregate)
 
 
 @openttd_app.command("capabilities")

@@ -428,6 +428,34 @@ SIM_PILOT_LIVE_DECISION=1 uv run pytest -m live \
   tests/decision_provider/test_live_openai.py -s
 ```
 
+### Product evaluation exercise
+
+The Task 7.5 product exercise uses 31 player-like instructions spanning supported, informal,
+ambiguous, contradictory, unsupported, and OpenTTD-specific requests. It cannot choose a hosted
+provider implicitly: both provider flags are required. The run is resumable, disables provider
+retries, limits each structured response to 2,048 output tokens, and never executes OpenTTD cases.
+
+After explicit owner authorization, run it with the approved model names and current per-million
+token prices:
+
+```bash
+uv run sim-pilot evaluate product \
+  --compiler-provider openai \
+  --decision-provider openai \
+  --compiler-model MODEL \
+  --decision-model MODEL \
+  --input-cost-per-million INPUT_PRICE \
+  --output-cost-per-million OUTPUT_PRICE \
+  --max-runtime-iterations 8 \
+  --record-dir ./data/product-evaluation
+```
+
+The private output directory contains a manifest, one atomic result per case, raw successful
+provider exchanges, aggregate metrics, and `manual_review.json`. Results include failed calls;
+rerunning resumes from existing case files unless `--force` is supplied. Cost fields are estimates
+calculated from provider token telemetry and the prices supplied on the command line. Do not commit
+the output directory because it contains prompts and user instructions.
+
 `task create --spec task.json` accepts a serialized `TaskSpecification`. Without `--spec`, the
 command creates the deterministic cash-target demo. Approval commands take an approval ID.
 Recovery commands are:

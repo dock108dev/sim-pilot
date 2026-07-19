@@ -51,6 +51,7 @@ class _Responses(Protocol):
         model: str,
         input: list[dict[str, str]],
         text_format: type[Decision],
+        max_output_tokens: int | None = None,
     ) -> _Response: ...
 
 
@@ -70,13 +71,17 @@ class OpenAIDecisionProvider:
         transient_retries: int = 1,
         api_key: str | None = None,
         client: object | None = None,
+        max_output_tokens: int | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("decision model must not be empty")
         if timeout_seconds <= 0 or transient_retries < 0:
             raise ValueError("decision timeout must be positive and retries non-negative")
+        if max_output_tokens is not None and max_output_tokens <= 0:
+            raise ValueError("decision output token limit must be positive")
         self._model = model
         self._transient_retries = transient_retries
+        self._max_output_tokens = max_output_tokens
         if client is not None:
             self._client = cast("_Client", client)
             return
@@ -99,14 +104,23 @@ class OpenAIDecisionProvider:
         response: _Response | None = None
         for attempt in range(self._transient_retries + 1):
             try:
-                response = await self._client.responses.parse(
-                    model=self._model,
-                    input=[
-                        {"role": "developer", "content": DECISION_PROMPT},
-                        {"role": "user", "content": context.canonical_json()},
-                    ],
-                    text_format=Decision,
-                )
+                input_items = [
+                    {"role": "developer", "content": DECISION_PROMPT},
+                    {"role": "user", "content": context.canonical_json()},
+                ]
+                if self._max_output_tokens is None:
+                    response = await self._client.responses.parse(
+                        model=self._model,
+                        input=input_items,
+                        text_format=Decision,
+                    )
+                else:
+                    response = await self._client.responses.parse(
+                        model=self._model,
+                        input=input_items,
+                        text_format=Decision,
+                        max_output_tokens=self._max_output_tokens,
+                    )
                 break
             except AuthenticationError as error:
                 raise DecisionAuthenticationError(

@@ -56,10 +56,13 @@ class FakeResponses:
         model: str,
         input: list[dict[str, str]],
         text_format: type[Decision],
+        max_output_tokens: int | None = None,
     ) -> FakeResponse:
         assert model == "test-model"
         assert text_format is Decision
         assert input[0]["role"] == "developer"
+        if max_output_tokens is not None:
+            assert max_output_tokens == 2048
         self.calls += 1
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
@@ -110,6 +113,22 @@ def test_structured_decision_and_metadata_are_returned() -> None:
         assert result.metadata.token_usage is not None
         assert result.metadata.token_usage.total_tokens == 150
         assert result.metadata.latency_ms is not None
+        assert client.responses.calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_decision_output_token_limit_is_forwarded() -> None:
+    async def scenario() -> None:
+        client = FakeClient([FakeResponse(_decision())])
+        provider = OpenAIDecisionProvider(
+            model="test-model",
+            timeout_seconds=5,
+            transient_retries=0,
+            client=client,
+            max_output_tokens=2048,
+        )
+        await provider.decide(make_context())
         assert client.responses.calls == 1
 
     asyncio.run(scenario())

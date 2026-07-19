@@ -1,0 +1,250 @@
+[
+  {
+    "id": "clear-001",
+    "category": "clear_supported",
+    "instruction": "Run until cash reaches $1,000,000.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "clear-002",
+    "category": "clear_supported",
+    "instruction": "Keep cash at or above $100,000.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "clear-003",
+    "category": "clear_supported",
+    "instruction": "Complete a housing project without taking a loan.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "clear-004",
+    "category": "clear_supported",
+    "instruction": "Reach a population of 2,000 and ask before spending more than $50,000 on one action.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "clear-005",
+    "category": "clear_supported",
+    "instruction": "Run until debt is at or below $25,000. Never take a loan.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "clear-006",
+    "category": "clear_supported",
+    "instruction": "Complete a power project while keeping at least $75,000 in reserve.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": true
+  },
+  {
+    "id": "informal-001",
+    "category": "informal_supported",
+    "instruction": "Get me to a million bucks, but don't borrow anything.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "informal-002",
+    "category": "informal_supported",
+    "instruction": "Grow the town to 1500 people and keep 50 grand untouched.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "informal-003",
+    "category": "informal_supported",
+    "instruction": "Fix things up until maintenance is at least 90.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "informal-004",
+    "category": "informal_supported",
+    "instruction": "Knock out a housing project, no loans please.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "informal-005",
+    "category": "informal_supported",
+    "instruction": "Let it run until we're pulling in 20k per tick.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "informal-006",
+    "category": "informal_supported",
+    "instruction": "Pay the debt down to zero and ping me when it's done.",
+    "adapter": "reference",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "ambiguous-001",
+    "category": "ambiguous",
+    "instruction": "Make more money.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required"],
+    "run_runtime": false
+  },
+  {
+    "id": "ambiguous-002",
+    "category": "ambiguous",
+    "instruction": "Keep enough cash available.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required"],
+    "run_runtime": false
+  },
+  {
+    "id": "ambiguous-003",
+    "category": "ambiguous",
+    "instruction": "Build some housing.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "ambiguous-004",
+    "category": "ambiguous",
+    "instruction": "Run until the city is doing well.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "ambiguous-005",
+    "category": "ambiguous",
+    "instruction": "Ask me before any expensive action.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required"],
+    "run_runtime": false
+  },
+  {
+    "id": "contradictory-001",
+    "category": "contradictory",
+    "instruction": "Reach $1,000,000 cash, never spend money, and finish a housing project.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "invalid"],
+    "run_runtime": false
+  },
+  {
+    "id": "contradictory-002",
+    "category": "contradictory",
+    "instruction": "Take a loan to reach $800,000, but loans are forbidden.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "invalid"],
+    "run_runtime": false
+  },
+  {
+    "id": "contradictory-003",
+    "category": "contradictory",
+    "instruction": "Keep at least $200,000 available and never let cash exceed $100,000.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "invalid"],
+    "run_runtime": false
+  },
+  {
+    "id": "contradictory-004",
+    "category": "contradictory",
+    "instruction": "Do not repair anything, and repair until maintenance reaches 100.",
+    "adapter": "reference",
+    "expected_statuses": ["clarification_required", "invalid"],
+    "run_runtime": false
+  },
+  {
+    "id": "unsupported-001",
+    "category": "unsupported",
+    "instruction": "Beat the game as efficiently as possible.",
+    "adapter": "reference",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "unsupported-002",
+    "category": "unsupported",
+    "instruction": "Buy shares in the strongest competitor.",
+    "adapter": "reference",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "unsupported-003",
+    "category": "unsupported",
+    "instruction": "Optimize traffic using a new subway network.",
+    "adapter": "reference",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "unsupported-004",
+    "category": "unsupported",
+    "instruction": "Send me an email every ten minutes with a screenshot.",
+    "adapter": "reference",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-001",
+    "category": "openttd_specific",
+    "instruction": "Set the OpenTTD server name to Sim Pilot Lab.",
+    "adapter": "openttd",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-002",
+    "category": "openttd_specific",
+    "instruction": "Rename my company to Fuscoletti Transport.",
+    "adapter": "openttd",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-003",
+    "category": "openttd_specific",
+    "instruction": "Build a rail line between the two largest towns.",
+    "adapter": "openttd",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-004",
+    "category": "openttd_specific",
+    "instruction": "Purchase ten buses and start routes for them.",
+    "adapter": "openttd",
+    "expected_statuses": ["unsupported"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-005",
+    "category": "openttd_specific",
+    "instruction": "Tell me the current cash, debt, company value, and vehicle count.",
+    "adapter": "openttd",
+    "expected_statuses": ["unsupported", "clarification_required"],
+    "run_runtime": false
+  },
+  {
+    "id": "openttd-006",
+    "category": "openttd_specific",
+    "instruction": "Grow the company to $5,000,000 in value without changing the server name.",
+    "adapter": "openttd",
+    "expected_statuses": ["valid"],
+    "run_runtime": false
+  }
+]

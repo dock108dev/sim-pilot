@@ -25,13 +25,24 @@ class OpenAICompilerProvider:
         model: str,
         api_key: str | None = None,
         prompt: str = INTENT_COMPILER_PROMPT,
+        max_retries: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("compiler model must not be empty")
+        if max_retries is not None and max_retries < 0:
+            raise ValueError("compiler retries must be non-negative")
+        if max_output_tokens is not None and max_output_tokens <= 0:
+            raise ValueError("compiler output token limit must be positive")
         self._model = model
         self._prompt = prompt
+        self._max_output_tokens = max_output_tokens
         try:
-            self._client = AsyncOpenAI(api_key=api_key)
+            self._client = (
+                AsyncOpenAI(api_key=api_key)
+                if max_retries is None
+                else AsyncOpenAI(api_key=api_key, max_retries=max_retries)
+            )
         except OpenAIError as error:
             raise CompilerProviderError(f"OpenAI compiler configuration failed: {error}") from error
 
@@ -39,14 +50,25 @@ class OpenAICompilerProvider:
         if not instruction.strip():
             raise ValueError("instruction must not be empty")
         try:
-            response = await self._client.responses.parse(
-                model=self._model,
-                input=[
-                    {"role": "developer", "content": self._prompt},
-                    {"role": "user", "content": instruction},
-                ],
-                text_format=CompilerResponse,
-            )
+            if self._max_output_tokens is None:
+                response = await self._client.responses.parse(
+                    model=self._model,
+                    input=[
+                        {"role": "developer", "content": self._prompt},
+                        {"role": "user", "content": instruction},
+                    ],
+                    text_format=CompilerResponse,
+                )
+            else:
+                response = await self._client.responses.parse(
+                    model=self._model,
+                    input=[
+                        {"role": "developer", "content": self._prompt},
+                        {"role": "user", "content": instruction},
+                    ],
+                    text_format=CompilerResponse,
+                    max_output_tokens=self._max_output_tokens,
+                )
         except OpenAIError as error:
             raise CompilerProviderError(f"OpenAI compiler request failed: {error}") from error
         except ValidationError as error:

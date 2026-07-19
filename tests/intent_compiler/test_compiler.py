@@ -106,6 +106,7 @@ def test_openai_provider_returns_model_and_token_usage(
     class FakeResponses:
         async def parse(self, **kwargs: object) -> SimpleNamespace:
             assert kwargs["model"] == "test-model"
+            assert kwargs["max_output_tokens"] == 2048
             return SimpleNamespace(
                 output_parsed=expected_response,
                 usage=SimpleNamespace(
@@ -126,9 +127,9 @@ def test_openai_provider_returns_model_and_token_usage(
     )
 
     async def scenario() -> None:
-        result = await OpenAICompilerProvider(model="test-model", api_key="test-key").compile(
-            "Reach one million cash."
-        )
+        result = await OpenAICompilerProvider(
+            model="test-model", api_key="test-key", max_output_tokens=2048
+        ).compile("Reach one million cash.")
         assert result.response == expected_response
         assert result.metadata.provider == "openai"
         assert result.metadata.model == "test-model"
@@ -136,3 +137,8 @@ def test_openai_provider_returns_model_and_token_usage(
         assert result.metadata.token_usage.total_tokens == 150
 
     asyncio.run(scenario())
+
+
+def test_openai_compiler_rejects_invalid_output_token_limit() -> None:
+    with pytest.raises(ValueError, match="output token limit"):
+        OpenAICompilerProvider(model="test-model", max_output_tokens=0)
