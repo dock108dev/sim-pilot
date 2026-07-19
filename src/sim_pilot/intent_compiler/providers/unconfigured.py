@@ -10,5 +10,6 @@ class NoProviderConfigured:
         if not instruction.strip():
             raise ValueError("instruction must not be empty")
         raise CompilerProviderError(
-            "no compiler provider configured; select --provider openai for a hosted request"
+            "no compiler provider configured; select --provider openai or --provider codex "
+            "for a hosted request"
         )
