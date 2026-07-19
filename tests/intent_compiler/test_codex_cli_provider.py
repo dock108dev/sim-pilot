@@ -1,6 +1,7 @@
 """Codex CLI compiler provider through the shared fake process transport."""
 
 import asyncio
+import json
 from pathlib import Path
 
 from sim_pilot.intent_compiler import IntentCompiler, ValidationStatus
@@ -15,7 +16,7 @@ from tests.provider_support.codex_cli.helpers import FakeProcessRunner, capabili
 
 def test_codex_compiler_returns_canonical_response_and_metadata(tmp_path: Path) -> None:
     expected = response(valid_specification())
-    runner = FakeProcessRunner(expected.model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": expected.model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,
@@ -28,13 +29,13 @@ def test_codex_compiler_returns_canonical_response_and_metadata(tmp_path: Path) 
 
     assert result.report.validation_status is ValidationStatus.VALID
     assert result.specification == valid_specification()
-    assert runner.commands[0][-1].endswith("Player instruction:\nReach one million cash.")
+    assert "Player instruction:\nReach one million cash." in runner.commands[0][-1]
     assert "Do not inspect files" in runner.commands[0][-1]
 
 
 def test_codex_compiler_schema_round_trips_canonical_response(tmp_path: Path) -> None:
     expected = response(valid_specification())
-    runner = FakeProcessRunner(expected.model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": expected.model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,
@@ -55,7 +56,7 @@ def test_codex_compiler_schema_round_trips_canonical_response(tmp_path: Path) ->
 
 def test_codex_compiler_metadata_flows_through_recording_wrapper(tmp_path: Path) -> None:
     expected = response(valid_specification())
-    runner = FakeProcessRunner(expected.model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": expected.model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,

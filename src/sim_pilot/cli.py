@@ -21,6 +21,7 @@ from sim_pilot.config import (
     codex_executable,
     codex_maximum_stderr_bytes,
     codex_maximum_stdout_bytes,
+    codex_model,
     codex_preserve_debug_directory,
     codex_temporary_directory_root,
     codex_timeout_seconds,
@@ -189,7 +190,7 @@ def _intent_compiler(
         provider = OpenAICompilerProvider(model=compiler_model(model_name), prompt=prompt)
     elif provider_name is CompilerProviderName.CODEX:
         provider = CodexCLICompilerProvider(
-            model=compiler_model(model_name),
+            model=codex_model(model_name),
             prompt=prompt,
             timeout_seconds=codex_timeout_seconds(),
             executable=codex_executable(),
@@ -271,7 +272,7 @@ def _decision_provider(
         )
     if provider_name is DecisionProviderName.OPENAI:
         provider = OpenAIDecisionProvider(
-            model=decision_model(model_name),
+            model=codex_model(model_name),
             timeout_seconds=decision_timeout_seconds(),
         )
     elif provider_name is DecisionProviderName.CODEX:
@@ -366,14 +367,14 @@ def evaluate_product(
         CompilerProviderName,
         typer.Option(
             "--compiler-provider",
-            help="Hosted compiler provider; must be explicitly set to openai.",
+            help="Hosted compiler provider; explicitly select codex or openai.",
         ),
     ] = CompilerProviderName.NONE,
     decision_provider: Annotated[
         DecisionProviderName,
         typer.Option(
             "--decision-provider",
-            help="Hosted runtime provider; must be explicitly set to openai.",
+            help="Hosted runtime provider; explicitly select codex or openai.",
         ),
     ] = DecisionProviderName.NONE,
     record_dir: Annotated[
@@ -427,8 +428,16 @@ def evaluate_product(
             ValueError("--decision-provider codex or openai is required"),
             INVALID_INPUT,
         )
-    compiler_name = compiler_model(compiler_model_name)
-    decision_name = decision_model(decision_model_name)
+    compiler_name = (
+        codex_model(compiler_model_name)
+        if compiler_provider is CompilerProviderName.CODEX
+        else compiler_model(compiler_model_name)
+    )
+    decision_name = (
+        codex_model(decision_model_name)
+        if decision_provider is DecisionProviderName.CODEX
+        else decision_model(decision_model_name)
+    )
     compiler_provider_value: Literal["openai", "codex"] = (
         "codex" if compiler_provider is CompilerProviderName.CODEX else "openai"
     )

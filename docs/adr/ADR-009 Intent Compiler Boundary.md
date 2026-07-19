@@ -66,8 +66,9 @@ to the OpenAI provider. This is not offline inference: `codex exec` contacts the
 consumes the signed-in account's applicable allowance or credits without Sim Pilot issuing a
 direct API-key-billed request.
 
-The Codex implementation uses the same canonical compiler schema and deterministic semantic
-validation. A shared subprocess client first performs a non-model capability/authentication probe,
+The Codex implementation transports canonical compiler JSON inside a strict schema-bound envelope,
+then applies the same canonical Pydantic and deterministic semantic validation. A shared subprocess
+client first performs a non-model capability/authentication probe,
 then invokes Codex explicitly in an empty temporary directory with ephemeral mode, JSONL output,
 read-only sandboxing, disabled approval, ignored user configuration and project rules, and a
 schema-bound final output. Provider selection still defaults to `none`; scripted tests remain the

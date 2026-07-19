@@ -10,7 +10,13 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from sim_pilot.provider_support.codex_cli.client import AsyncioProcessRunner, CodexCLIClient
+from sim_pilot.domain.models import JsonValue
+from sim_pilot.intent_compiler import CompilerResponse
+from sim_pilot.provider_support.codex_cli.client import (
+    AsyncioProcessRunner,
+    CodexCLIClient,
+    codex_output_schema,
+)
 from sim_pilot.provider_support.codex_cli.errors import (
     CodexCLIAuthenticationExpiredError,
     CodexCLIInvalidStructuredOutputError,
@@ -72,6 +78,47 @@ def test_client_builds_isolated_non_shell_command_and_cleans_directory(tmp_path:
         .isdisjoint({"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"})
     )
     assert not runner.working_directories[0].exists()
+
+
+def test_client_transports_and_validates_canonical_json_payload(tmp_path: Path) -> None:
+    runner = FakeProcessRunner('{"payload":"{\\"value\\":\\"ok\\"}"}')
+    client = CodexCLIClient(
+        model="gpt-5.6",
+        temporary_directory_root=tmp_path,
+        runner=runner,
+        capabilities=capabilities(),
+    )
+
+    output, _, _ = asyncio.run(
+        client.execute_canonical(
+            prompt="bounded prompt",
+            output_type=ExampleOutput,
+            prompt_version="v1",
+        )
+    )
+
+    assert output == ExampleOutput(value="ok")
+    assert "one field named payload" in runner.commands[0][-1]
+    assert '"properties":{"value"' in runner.commands[0][-1]
+
+
+def test_client_rejects_invalid_canonical_json_payload(tmp_path: Path) -> None:
+    runner = FakeProcessRunner('{"payload":"{\\"wrong\\":true}"}')
+    client = CodexCLIClient(
+        model="gpt-5.6",
+        temporary_directory_root=tmp_path,
+        runner=runner,
+        capabilities=capabilities(),
+    )
+
+    with pytest.raises(CodexCLIInvalidStructuredOutputError, match="canonical payload"):
+        asyncio.run(
+            client.execute_canonical(
+                prompt="bounded prompt",
+                output_type=ExampleOutput,
+                prompt_version="v1",
+            )
+        )
 
 
 def test_client_preserves_owner_only_debug_directory_when_explicit(tmp_path: Path) -> None:
@@ -159,6 +206,25 @@ def test_canonical_schemas_are_closed_and_serializable() -> None:
     schema = ExampleOutput.model_json_schema()
     assert schema["additionalProperties"] is False
     assert json.loads(json.dumps(schema)) == schema
+
+
+def test_codex_schema_requires_every_declared_property_recursively() -> None:
+    schema = codex_output_schema(CompilerResponse)
+
+    def assert_required(value: JsonValue) -> None:
+        if isinstance(value, list):
+            for item in value:
+                assert_required(item)
+            return
+        if not isinstance(value, dict):
+            return
+        properties = value.get("properties")
+        if value.get("type") == "object" and isinstance(properties, dict):
+            assert value.get("required") == list(properties)
+        for item in value.values():
+            assert_required(item)
+
+    assert_required(schema)
 
 
 def test_client_rejects_malformed_jsonl_and_cleans_failed_directory(tmp_path: Path) -> None:

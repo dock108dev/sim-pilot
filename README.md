@@ -349,7 +349,7 @@ The Codex CLI provider invokes the authenticated local Codex CLI. It does not us
 OpenAI API provider or require `OPENAI_API_KEY`. It still sends requests to the Codex service and
 consumes the authenticated account's applicable Codex allowance or credits.
 
-Task 7.5P was developed against `codex-cli 0.141.0`. Confirm that a compatible executable is on
+Task 7.5P is live-verified against `codex-cli 0.144.6`. Confirm that a compatible executable is on
 `PATH` and authenticated without displaying credential files:
 
 ```bash
@@ -363,13 +363,13 @@ Compile or create a task using that login:
 ```bash
 uv run sim-pilot task compile \
   --provider codex \
-  --model gpt-5.6 \
+  --model gpt-5.6-sol \
   --instruction "Reach one million cash without taking loans"
 
 uv run sim-pilot task create \
   --instruction "Reach one million cash without taking loans" \
   --provider codex \
-  --model gpt-5.6 \
+  --model gpt-5.6-sol \
   --yes
 ```
 
@@ -380,7 +380,8 @@ JSONL telemetry, and a strict output schema. Temporary files are removed unless
 `SIM_PILOT_CODEX_RECORD_RAW_EVENTS=1`; that diagnostic mode keeps only a sanitized subset in a
 mode-`0600` file and also preserves the temporary directory.
 
-Optional configuration variables are `SIM_PILOT_CODEX_EXECUTABLE`,
+The Codex-specific default model is `gpt-5.6-sol`; override it with `--model` or
+`SIM_PILOT_CODEX_MODEL`. Other optional configuration variables are `SIM_PILOT_CODEX_EXECUTABLE`,
 `SIM_PILOT_CODEX_TIMEOUT_SECONDS` (default `120`), `SIM_PILOT_CODEX_TEMPORARY_ROOT`,
 `SIM_PILOT_CODEX_MAXIMUM_STDOUT_BYTES`, `SIM_PILOT_CODEX_MAXIMUM_STDERR_BYTES`, and
 `SIM_PILOT_CODEX_CAPABILITY_CACHE_SECONDS`. A configured temporary root inside a Git repository is
@@ -452,11 +453,11 @@ For local-development Codex decisions, select it independently from the compiler
 ```bash
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
   00000000-0000-0000-0000-000000000123 \
-  --decision-provider codex --decision-model gpt-5.6
+  --decision-provider codex --decision-model gpt-5.6-sol
 
 uv run sim-pilot --database /tmp/sim-pilot-demo.db task resume \
   00000000-0000-0000-0000-000000000123 \
-  --decision-provider codex --decision-model gpt-5.6
+  --decision-provider codex --decision-model gpt-5.6-sol
 ```
 
 No hosted fallback occurs from `none`.
@@ -521,8 +522,8 @@ Or use authenticated Codex CLI for both surfaces without API-key pricing inputs:
 uv run sim-pilot evaluate product \
   --compiler-provider codex \
   --decision-provider codex \
-  --compiler-model gpt-5.6 \
-  --decision-model gpt-5.6 \
+  --compiler-model gpt-5.6-sol \
+  --decision-model gpt-5.6-sol \
   --max-runtime-iterations 8 \
   --record-dir ./data/product-evaluation
 ```

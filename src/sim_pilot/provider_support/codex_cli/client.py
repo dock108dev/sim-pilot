@@ -13,10 +13,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Literal, Protocol, TypeVar
+from typing import Literal, Protocol, TypeVar, cast
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from sim_pilot.domain.models import JsonValue
 from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.provider_support.codex_cli.capabilities import CodexCLICapabilities, probe_codex_cli
 from sim_pilot.provider_support.codex_cli.errors import (
@@ -41,6 +42,29 @@ OutputT = TypeVar("OutputT", bound=BaseModel)
 JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, object])
 
 
+def codex_output_schema(output_type: type[BaseModel]) -> dict[str, JsonValue]:
+    """Make Pydantic's schema explicit enough for Codex strict structured output."""
+
+    def normalize(value: JsonValue) -> JsonValue:
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        normalized: dict[str, JsonValue] = {
+            str(key): normalize(item) for key, item in value.items()
+        }
+        properties = normalized.get("properties")
+        if normalized.get("type") == "object" and isinstance(properties, dict):
+            normalized["required"] = list(properties)
+        return normalized
+
+    schema = cast("JsonValue", output_type.model_json_schema())
+    normalized = normalize(schema)
+    if not isinstance(normalized, dict):
+        raise CodexCLISchemaFileError("Codex output schema root must be an object")
+    return normalized
+
+
 class CodexCLIResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -50,6 +74,14 @@ class CodexCLIResult(BaseModel):
     exit_code: int
     unknown_event_types: tuple[str, ...] = ()
     debug_directory: Path | None = None
+
+
+class CodexCanonicalEnvelope(BaseModel):
+    """Strict transport for canonical models containing arbitrary JSON maps."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    payload: str = Field(min_length=2)
 
 
 @dataclass(frozen=True)
@@ -279,6 +311,35 @@ class CodexCLIClient:
                         f"could not remove isolated Codex directory: {error}"
                     ) from error
 
+    async def execute_canonical(
+        self,
+        *,
+        prompt: str,
+        output_type: type[OutputT],
+        prompt_version: str,
+    ) -> tuple[OutputT, ProviderMetadata, ParsedCodexEvents]:
+        """Transport canonical JSON in a strict envelope, then validate it locally."""
+        canonical_schema = json.dumps(output_type.model_json_schema(), separators=(",", ":"))
+        envelope_prompt = (
+            f"{prompt}\n\n"
+            "Return an object with one field named payload. Its value must be a JSON string "
+            "containing the exact canonical response object requested above. The decoded payload "
+            "must validate against this canonical JSON Schema:\n"
+            f"{canonical_schema}"
+        )
+        envelope, metadata, events = await self.execute(
+            prompt=envelope_prompt,
+            output_type=CodexCanonicalEnvelope,
+            prompt_version=prompt_version,
+        )
+        try:
+            output = output_type.model_validate_json(envelope.payload, strict=True)
+        except ValidationError as error:
+            raise CodexCLIInvalidStructuredOutputError(
+                "Codex CLI canonical payload failed schema validation"
+            ) from error
+        return output, metadata, events
+
     def _create_directory(self) -> Path:
         root = Path(self._temporary_directory_root or tempfile.gettempdir()).resolve()
         if any((candidate / ".git").exists() for candidate in (root, *root.parents)):
@@ -303,7 +364,7 @@ class CodexCLIClient:
     def _write_schema(path: Path, output_type: type[BaseModel]) -> None:
         try:
             path.write_text(
-                json.dumps(output_type.model_json_schema(), indent=2) + "\n",
+                json.dumps(codex_output_schema(output_type), indent=2) + "\n",
                 encoding="utf-8",
             )
             path.chmod(0o600)

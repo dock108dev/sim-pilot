@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from sim_pilot.config import compiler_model
+from sim_pilot.config import codex_model
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import CodexCLICompilerProvider
 
@@ -21,7 +21,7 @@ pytestmark = [
 
 def test_live_codex_compiler_smoke() -> None:
     result = asyncio.run(
-        IntentCompiler(CodexCLICompilerProvider(model=compiler_model())).compile(
+        IntentCompiler(CodexCLICompilerProvider(model=codex_model())).compile(
             "Reach one million cash without taking loans."
         )
     )

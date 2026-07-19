@@ -28,6 +28,10 @@ def decision_model(value: str | None = None) -> str:
     return value or os.getenv("SIM_PILOT_DECISION_MODEL") or "gpt-5.6"
 
 
+def codex_model(value: str | None = None) -> str:
+    return value or os.getenv("SIM_PILOT_CODEX_MODEL") or "gpt-5.6-sol"
+
+
 def decision_timeout_seconds(value: float | None = None) -> float:
     if value is not None:
         configured = value

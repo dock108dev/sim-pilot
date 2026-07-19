@@ -27,11 +27,13 @@ explicit model, and that directory as `--cd`. It never uses a shell, `--add-dir`
 or repository context. The subprocess receives a small environment allowlist needed for CLI auth,
 locale, and certificates; API token variables are not inherited.
 
-Stdout, stderr, and duration are bounded. The client requires one terminal completion and one final
-agent message, validates both the JSONL message and final-output file against the canonical
-Pydantic model, and requires those values to agree. Unknown telemetry events are noted but cannot
-become the result. Token fields absent from the CLI remain `None`; Sim Pilot does not estimate them.
-No automatic retry occurs at this boundary.
+Stdout, stderr, and duration are bounded. Because the canonical models contain arbitrary JSON maps
+that Codex's strict schema subset cannot express directly, the subprocess returns a strict
+single-field envelope containing canonical JSON text. The client requires one terminal completion
+and one final agent message, validates both copies of that envelope and requires them to agree, then
+validates the enclosed JSON against the canonical Pydantic model. Unknown telemetry events are
+noted but cannot become the result. Token fields absent from the CLI remain `None`; Sim Pilot does
+not estimate them. No automatic retry occurs at this boundary.
 
 Raw JSONL is not stored by default. `SIM_PILOT_CODEX_RECORD_RAW_EVENTS=1` preserves only an
 allowlisted, sanitized subset using owner-only atomic writes and also preserves the otherwise
@@ -53,7 +55,7 @@ Normal defaults and CI remain network-free.
 | Repository or local-file inspection | Fresh temporary directory outside Git repositories; no checkout, mounts, or repository paths in prompts. |
 | Credential or environment exposure | Small environment allowlist, no API-key variables, no credential logging, and no authentication-file inspection. |
 | Sensitive stderr or telemetry leakage | Bounded stderr held in memory; raw events off by default and sanitized/owner-only when explicitly enabled. |
-| Schema bypass or malicious output | Dual canonical validation of the JSONL final message and schema output file, equality check, then existing semantic validation. |
+| Schema bypass or malicious output | Dual validation and equality checking of the strict transport envelope, canonical Pydantic validation of its JSON payload, then existing semantic validation. |
 | Hang, child leakage, or oversized output | Per-call timeout, bounded streams, terminate/kill escalation, and typed process errors. |
 | Temporary-file retention | Owner-only files and automatic cleanup; preservation requires an explicit debug flag. |
 | Allowance exhaustion or accidental spend | Explicit provider selection, no API-cost claim, typed usage-limit failure, and evaluation call/wall-time limits. |

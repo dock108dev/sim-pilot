@@ -65,7 +65,7 @@ class CodexCLIDecisionProvider:
             f"Decision context JSON:\n{context.canonical_json()}"
         )
         try:
-            decision, metadata, _ = await self._client.execute(
+            decision, metadata, _ = await self._client.execute_canonical(
                 prompt=bounded_prompt,
                 output_type=Decision,
                 prompt_version=PROMPT_VERSION,

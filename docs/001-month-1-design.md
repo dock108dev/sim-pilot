@@ -197,8 +197,9 @@ The OpenAI implementation uses provider-native Pydantic structured output and is
 allowed to import the OpenAI SDK. The local-development Codex implementation uses a shared,
 provider-independent `codex exec` subprocess client. It probes installed capabilities without a
 model request, runs in a fresh non-repository directory with ephemeral mode, ignored user/project
-rules, a read-only sandbox, approval disabled, JSONL telemetry, and a strict output schema. Its
-structured response still passes through the same deterministic compiler validation.
+rules, a read-only sandbox, approval disabled, JSONL telemetry, and a strict transport-envelope
+schema. The envelope's JSON payload passes through the canonical Pydantic model and the same
+deterministic compiler validation.
 
 Hosted access is never selected implicitly: the CLI defaults to `NoProviderConfigured`, and either
 `--provider openai` or `--provider codex` is required. The Codex choice reuses an authenticated
@@ -298,7 +299,8 @@ behavior.
 
 The Codex decision implementation uses the same isolated subprocess boundary as the compiler and
 receives only canonical bounded `DecisionContext` JSON. The JSONL final response must agree with
-the schema-bound final-output file before the existing semantic decision validation runs. Codex
+the schema-bound transport-envelope file; its JSON payload must then pass canonical Pydantic
+validation before the existing semantic decision validation runs. Codex
 does not receive adapter, persistence, policy, approval, or execution authority. The development
 provider does not automatically retry, avoiding ambiguous duplicate allowance consumption after a
 subprocess failure.

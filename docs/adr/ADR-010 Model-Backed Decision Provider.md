@@ -55,7 +55,8 @@ It therefore gains no additional runtime authority.
 
 The provider crosses a shared argument-list subprocess boundary in a fresh non-repository
 directory. Codex runs ephemerally with user/project rules ignored, read-only sandboxing, approval
-disabled, JSONL telemetry, and a strict output schema. Metadata records provider surface, CLI
+disabled, JSONL telemetry, and a strict transport-envelope schema whose JSON payload is validated
+as the canonical `Decision`. Metadata records provider surface, CLI
 version, model, invocation identifier, latency, prompt version, validation, and reported token
 usage. It does not contain authentication data or temporary-directory contents.
 

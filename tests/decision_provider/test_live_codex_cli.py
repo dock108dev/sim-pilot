@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from sim_pilot.config import decision_model
+from sim_pilot.config import codex_model
 from sim_pilot.decision_provider import CodexCLIDecisionProvider
 from tests.decision_provider.helpers import make_context
 
@@ -20,5 +20,5 @@ pytestmark = [
 
 
 def test_live_codex_decision_smoke() -> None:
-    result = asyncio.run(CodexCLIDecisionProvider(model=decision_model()).decide(make_context()))
+    result = asyncio.run(CodexCLIDecisionProvider(model=codex_model()).decide(make_context()))
     assert result.metadata.provider == "codex"

@@ -1,6 +1,7 @@
 """Codex CLI decision provider through the shared fake process transport."""
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,7 @@ def _decision(action_type: str = "advance_time") -> Decision:
 
 
 def test_codex_decision_is_validated_and_returns_metadata(tmp_path: Path) -> None:
-    runner = FakeProcessRunner(_decision().model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": _decision().model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,
@@ -44,7 +45,7 @@ def test_codex_decision_is_validated_and_returns_metadata(tmp_path: Path) -> Non
 
 
 def test_codex_decision_cannot_invent_an_action(tmp_path: Path) -> None:
-    runner = FakeProcessRunner(_decision("invent_train").model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": _decision("invent_train").model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,
@@ -58,7 +59,7 @@ def test_codex_decision_cannot_invent_an_action(tmp_path: Path) -> None:
 
 
 def test_codex_decision_metadata_flows_through_recording_wrapper(tmp_path: Path) -> None:
-    runner = FakeProcessRunner(_decision().model_dump_json())
+    runner = FakeProcessRunner(json.dumps({"payload": _decision().model_dump_json()}))
     client = CodexCLIClient(
         model="gpt-5.6",
         temporary_directory_root=tmp_path,

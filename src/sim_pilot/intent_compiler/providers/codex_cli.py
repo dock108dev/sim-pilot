@@ -56,7 +56,7 @@ class CodexCLICompilerProvider:
             f"Player instruction:\n{instruction}"
         )
         try:
-            response, metadata, _ = await self._client.execute(
+            response, metadata, _ = await self._client.execute_canonical(
                 prompt=bounded_prompt,
                 output_type=CompilerResponse,
                 prompt_version=PROMPT_VERSION,
