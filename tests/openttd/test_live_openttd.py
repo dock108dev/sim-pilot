@@ -24,6 +24,7 @@ from sim_pilot.domain import (
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.openttd import OpenTTDAdminClient, openttd_configuration
 from sim_pilot.persistence.sqlite import SQLiteUnitOfWork, create_sqlite_engine, upgrade_database
+from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import ReconciliationClassification, RuntimeEngine, ScriptedDecisionProvider
 from sim_pilot.runtime.errors import SimulatedCrash
 from sim_pilot.runtime.recovery import CrashPoint
@@ -69,7 +70,9 @@ def test_live_openttd_crash_after_action_reconciles_without_retry(tmp_path: Path
         upgrade_database(url)
         engine = create_sqlite_engine(url)
         return engine, RuntimeEngine(
-            unit_of_work_factory=lambda: SQLiteUnitOfWork(engine), crash_hook=hook
+            unit_of_work_factory=lambda: SQLiteUnitOfWork(engine),
+            crash_hook=hook,
+            reconciliation_dispatcher=default_reconciliation_dispatcher(),
         )
 
     async def scenario() -> None:

@@ -102,6 +102,7 @@ class OpenTTDAdapter:
     """Translate Admin Network state and one safe RCON setting into runtime contracts."""
 
     requires_fresh_observation_on_resume = True
+    adapter_type = "openttd"
 
     def __init__(
         self,

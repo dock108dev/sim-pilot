@@ -55,8 +55,8 @@ from sim_pilot.runtime.reconstruction import (
 )
 from sim_pilot.runtime.recovery import (
     CrashPoint,
+    ReconciliationDispatcher,
     ReconciliationReport,
-    reconcile_action,
 )
 from sim_pilot.runtime.verification import ActionVerifier
 
@@ -78,6 +78,7 @@ class RuntimeEngine:
         configuration: RuntimeConfiguration | None = None,
         cancellation_check: Callable[[UUID], bool] | None = None,
         crash_hook: Callable[[CrashPoint], None] | None = None,
+        reconciliation_dispatcher: ReconciliationDispatcher | None = None,
     ) -> None:
         if unit_of_work_factory is None:
             unit_of_work_factory = in_memory_unit_of_work_factory()
@@ -91,6 +92,7 @@ class RuntimeEngine:
         )
         self.cancellation_check = cancellation_check or never_cancel
         self.crash_hook = crash_hook
+        self.reconciliation_dispatcher = reconciliation_dispatcher or ReconciliationDispatcher()
         self.evaluator = ProgressEvaluator()
         self.policy = PolicyEngine()
         self.verifier = ActionVerifier()
@@ -123,7 +125,9 @@ class RuntimeEngine:
         attempt = context.unresolved_attempt
         if attempt is None:
             return None
-        return await reconcile_action(attempt, context.adapter_snapshot(), current_snapshot)
+        return await self.reconciliation_dispatcher.reconcile(
+            attempt, context.adapter_snapshot(), current_snapshot
+        )
 
     async def resolve_recovery(
         self,
@@ -137,7 +141,9 @@ class RuntimeEngine:
         attempt = context.unresolved_attempt
         if attempt is None:
             raise ValueError("task has no unresolved action attempt")
-        report = await reconcile_action(attempt, context.adapter_snapshot(), current_snapshot)
+        report = await self.reconciliation_dispatcher.reconcile(
+            attempt, context.adapter_snapshot(), current_snapshot
+        )
         payload: dict[str, JsonValue] = {
             "action_id": str(attempt.action_id),
             "classification": report.classification.value,
@@ -1125,7 +1131,13 @@ class RuntimeEngine:
         if not isinstance(schema_version, int):
             schema_version = 1
         return AdapterSnapshot(
-            adapter_type=f"{type(adapter).__module__}.{type(adapter).__qualname__}",
+            adapter_type=str(
+                getattr(
+                    adapter,
+                    "adapter_type",
+                    f"{type(adapter).__module__}.{type(adapter).__qualname__}",
+                )
+            ),
             simulation_schema_version=schema_version,
             observation_sequence=observation.sequence,
             seed="0",

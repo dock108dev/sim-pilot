@@ -87,6 +87,7 @@ from sim_pilot.product_evaluation import (
 )
 from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.provider_support.codex_cli.errors import CodexCLIError
+from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
 from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
@@ -172,7 +173,10 @@ def _context(ctx: typer.Context) -> CLIContext:
 
 def _runtime(ctx: typer.Context) -> tuple[Engine, RuntimeEngine]:
     engine = create_sqlite_engine(_context(ctx).url)
-    return engine, RuntimeEngine(unit_of_work_factory=lambda: SQLiteUnitOfWork(engine))
+    return engine, RuntimeEngine(
+        unit_of_work_factory=lambda: SQLiteUnitOfWork(engine),
+        reconciliation_dispatcher=default_reconciliation_dispatcher(),
+    )
 
 
 def _intent_compiler(

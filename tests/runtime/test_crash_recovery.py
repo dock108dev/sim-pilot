@@ -12,6 +12,10 @@ from sqlalchemy import Engine
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.domain import Action, Decision, DecisionType, TaskStatus
 from sim_pilot.persistence.sqlite import SQLiteUnitOfWork, create_sqlite_engine, upgrade_database
+from sim_pilot.reconciliation import (
+    default_reconciliation_dispatcher,
+    reconcile_reference_action,
+)
 from sim_pilot.runtime import RuntimeEngine, ScriptedDecisionProvider
 from sim_pilot.runtime.action_attempts import (
     ActionAttempt,
@@ -21,7 +25,7 @@ from sim_pilot.runtime.action_attempts import (
     action_fingerprint,
 )
 from sim_pilot.runtime.errors import SimulatedCrash
-from sim_pilot.runtime.recovery import CrashPoint, reconcile_reference_action
+from sim_pilot.runtime.recovery import CrashPoint
 from tests.runtime.helpers import make_action, make_task
 
 
@@ -35,7 +39,11 @@ def _runtime(
     url = f"sqlite:///{path}"
     upgrade_database(url)
     engine = create_sqlite_engine(url)
-    runtime = RuntimeEngine(unit_of_work_factory=lambda: SQLiteUnitOfWork(engine), crash_hook=hook)
+    runtime = RuntimeEngine(
+        unit_of_work_factory=lambda: SQLiteUnitOfWork(engine),
+        crash_hook=hook,
+        reconciliation_dispatcher=default_reconciliation_dispatcher(),
+    )
     return engine, runtime
 
 
