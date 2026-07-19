@@ -13,6 +13,21 @@ from sim_pilot.domain.models import (
     TaskSpecification,
 )
 from sim_pilot.domain.types import ConstraintType, DecisionType, ObjectiveType, TaskStatus
+from sim_pilot.domain.world import (
+    CapabilityCoverage,
+    CargoFlow,
+    Company,
+    Coordinates,
+    Industry,
+    Route,
+    Station,
+    Town,
+    Vehicle,
+    VehicleOrder,
+    WorldChange,
+    WorldSnapshot,
+    WorldSnapshotMetadata,
+)
 
 __all__ = [
     "Action",
@@ -29,4 +44,17 @@ __all__ = [
     "Task",
     "TaskSpecification",
     "TaskStatus",
+    "CapabilityCoverage",
+    "CargoFlow",
+    "Company",
+    "Coordinates",
+    "Industry",
+    "Route",
+    "Station",
+    "Town",
+    "Vehicle",
+    "VehicleOrder",
+    "WorldChange",
+    "WorldSnapshot",
+    "WorldSnapshotMetadata",
 ]

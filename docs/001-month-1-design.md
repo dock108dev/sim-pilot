@@ -517,6 +517,16 @@ Fields
 - summary
 - state
 
+OpenTTD Phase 8A may place a versioned, immutable `WorldSnapshot` inside `state` without changing
+the six-field `Observation` envelope. The snapshot is a canonical game-neutral projection: bridge
+payloads and raw GameScript identifiers do not cross the adapter boundary. It records explicit
+capability coverage, source provenance, world/save identity, capture date bounds, companies,
+towns, industries, stations, vehicles, inferred routes, scoped cargo flows, and deterministic typed
+changes from the prior compatible snapshot. Missing data remains unavailable or partial rather
+than being represented as zero. Runtime orchestration does not interpret these game-specific
+collections and persistence continues storing the complete observation JSON through the existing
+event and checkpoint contracts.
+
 ---
 
 ## Action
