@@ -254,3 +254,24 @@ class AnalysisResponse(AnalysisModel):
     unsupported_parts: tuple[str, ...] = ()
     explanation: AnalysisExplanation | None = None
     generated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_references(self) -> Self:
+        finding_ids = [item.finding_id for item in self.findings]
+        recommendation_ids = [item.recommendation_id for item in self.recommendations]
+        if len(set(finding_ids)) != len(finding_ids):
+            raise ValueError("finding IDs must be unique")
+        if len(set(recommendation_ids)) != len(recommendation_ids):
+            raise ValueError("recommendation IDs must be unique")
+        finding_set = set(finding_ids)
+        recommendation_set = set(recommendation_ids)
+        if any(
+            not set(item.recommendation_ids).issubset(recommendation_set) for item in self.findings
+        ):
+            raise ValueError("finding references an unknown recommendation")
+        if any(
+            not set(item.supporting_finding_ids).issubset(finding_set)
+            for item in self.recommendations
+        ):
+            raise ValueError("recommendation references an unknown finding")
+        return self

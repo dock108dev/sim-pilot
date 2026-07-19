@@ -278,3 +278,23 @@ def test_codex_cli_boundary_is_shared_and_never_uses_a_shell() -> None:
 
     assert not {path: modules for path, modules in violations.items() if modules}
     assert all("shell=True" not in path.read_text(encoding="utf-8") for path in files)
+
+
+def test_analysis_core_is_separate_from_action_and_integration_boundaries() -> None:
+    files = tuple((PACKAGE_ROOT / "analysis").rglob("*.py"))
+    forbidden = (
+        "sim_pilot.adapters",
+        "sim_pilot.runtime",
+        "sim_pilot.persistence",
+        "sim_pilot.intent_compiler",
+        "sim_pilot.decision_provider",
+        "sim_pilot.openttd",
+        "openai",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
