@@ -1,5 +1,8 @@
 # OpenTTD 15.3 Verified Admin Integration
 
+**Status:** Implemented
+**Version:** 1.0
+
 ## Supported boundary
 
 Task 6B supports OpenTTD **15.3** and Admin Network protocol **3**. The implementation was checked

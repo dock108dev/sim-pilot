@@ -1,5 +1,8 @@
 # OpenTTD GameScript Bridge Protocol v1
 
+**Status:** Implemented
+**Version:** 1.0
+
 ## Scope and compatibility
 
 The production bridge is a constrained bidirectional integration for OpenTTD

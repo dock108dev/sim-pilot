@@ -1,5 +1,8 @@
 # OpenTTD 15.3 GameScript Capability Discovery
 
+**Status:** Implemented — Constrained Go
+**Version:** 1.0
+
 ## 1. Executive conclusion
 
 **Decision: constrained go.** OpenTTD 15.3 has an official, working,

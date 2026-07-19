@@ -1,7 +1,7 @@
 # RFC-002: Reference Simulation Specification
 
-**Status:** Draft
-**Version:** 0.1
+**Status:** Implemented
+**Version:** 1.0
 
 ---
 

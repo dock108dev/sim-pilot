@@ -1,7 +1,7 @@
 # Sim Pilot Vision
 
-**Status:** Draft
-**Version:** 0.1
+**Status:** Accepted
+**Version:** 1.0
 
 ---
 

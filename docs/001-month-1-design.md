@@ -1,7 +1,7 @@
 # RFC-001: Milestone 1 Runtime Design
 
-**Status:** Draft
-**Version:** 0.1
+**Status:** Implemented
+**Version:** 1.0
 
 ---
 
