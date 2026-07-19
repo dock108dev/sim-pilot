@@ -191,9 +191,10 @@ All other items in the Admin-only unsupported list remain unavailable.
 ## Persistence and recovery
 
 Canonical observations and adapter metadata serialize through the existing event repository.
-They are evidence snapshots, not `SimulationCheckpoint` restoration data. A resumed OpenTTD task
-must create a new client, reconnect, observe fresh state, and compare it to the last persisted
-observation. Authoritative restoration and crash-window reconciliation remain future work.
+They are evidence snapshots, not authoritative game restoration data. A resumed OpenTTD task
+creates a new client, reconnects, observes fresh state, and compares it to the last persisted
+observation. The verified server- and company-name actions support state-comparable crash-window
+reconciliation through the adapter-type dispatcher; broader restoration remains unsupported.
 
 ## Tests and troubleshooting
 

@@ -67,3 +67,8 @@ errors. The provider does not automatically retry: authentication, usage, compat
 schema, and timeout failures fail closed, while runtime records the established durable failure
 events. This provider is development/evaluation infrastructure, not yet a production service
 boundary.
+
+Phase 7.6 corrects CLI composition so Codex decisions use `SIM_PILOT_CODEX_MODEL` while OpenAI
+decisions use `SIM_PILOT_DECISION_MODEL`. Provider metadata now includes a unique invocation ID in
+addition to the provider request ID. CLI output may display decision metadata only when the
+corresponding event was appended during the current command.

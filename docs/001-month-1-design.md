@@ -308,7 +308,7 @@ subprocess failure.
 CLI composition defaults to no decision provider. Hosted execution requires explicit
 `--decision-provider openai` or `--decision-provider codex`; environment variables configure a
 selected provider but never select one. Provider metadata in `DecisionGenerated` includes provider
-surface and version, model, request ID when available, token usage, latency, prompt version, and
+surface and version, invocation ID, model, request ID when available, token usage, latency, prompt version, and
 validation result. Full prompts are not persisted.
 
 Returns
@@ -649,6 +649,14 @@ recovery-required marker. Reconciliation outcomes are definitely not executed, d
 inferable, ambiguous, and adapter unavailable. Ambiguous or unavailable attempts are never retried
 automatically. Operator resolutions are accept current state, mark executed, mark not executed,
 abandon, and restore the prior checkpoint.
+
+Phase 7.6 dispatches reconciliation strictly by the persisted adapter type through an explicitly
+constructed registry. The generic runtime contains no reference- or OpenTTD-specific action logic.
+Reference and OpenTTD reconcilers are composed above the runtime; an unregistered adapter, a
+duplicate registration, or a mismatched fresh snapshot fails closed. The OpenTTD reconciler covers
+the verified `set_server_name` and `set_company_name` state comparisons. Company-name recovery
+also requires the GameScript instance, company context, and capability fingerprint to remain
+stable across the crash boundary.
 
 Task 4A uses SQLAlchemy Core for typed SQL construction and explicit transaction ownership. It does
 not expose ORM sessions or SQLAlchemy row models through runtime-facing interfaces. SQLite is

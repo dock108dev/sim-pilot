@@ -1,6 +1,6 @@
 # Founder Usage Checklist
 
-**Status:** Completed with two failed workflows
+**Status:** Phase 7.6 affected-workflow rerun passed
 
 **Execution date:** 2026-07-19
 
@@ -93,3 +93,24 @@ friction. Two failed product workflows require correction:
 
 The disposable server and company names were restored to `Sim Pilot Founder Test`. The founder
 database and disposable save remain local for follow-up diagnosis.
+
+## Phase 7.6 affected-workflow rerun
+
+**Rerun date:** 2026-07-19
+
+Only workflows touched by the stability fixes were repeated.
+
+| Done | Workflow | Corrected result | Rating |
+|---|---|---|---:|
+| [x] | Codex compile and create | Both used `gpt-5.6-sol` through Codex CLI 0.144.6 and produced valid `intent-compiler-v3` specifications. | 4 |
+| [x] | Codex run and resume | Runtime decisions executed successfully; three identical-context calls had unique invocation and request IDs. | 4 |
+| [x] | Repeated calls | One/two/ten-call offline suites passed for compiler and decision providers; three consecutive live decisions passed. | 4 |
+| [x] | Deterministic provider failure | An intentionally unsupported model exposed the actual JSONL 400 error; no prior decision metadata was printed. | 5 |
+| [x] | Fresh invocation after failure | A new task immediately succeeded through `gpt-5.6-sol`; no parser, output, recording, or metadata state leaked. | 5 |
+| [x] | Cancellation | A pending task remained cancellable after provider changes. | 4 |
+| [x] | OpenTTD reconnect and rename | Bridge synchronization and verified company rename passed on the disposable loopback server. | 4 |
+| [x] | OpenTTD crash recovery | Injected crash after `set_company_name`, process-level reconstruction, fresh reconnect, definite-executed reconciliation, manual mark-executed, resume, and completion all passed without retry. | 5 |
+| [x] | Restoration | The live test restored the original company name after verification. | 5 |
+
+The original failed rows remain above as historical founder-pass evidence. Their corrected status
+is authoritative in this rerun section and in `docs/012-phase-7.6-stability-report.md`.

@@ -1,6 +1,6 @@
 # Product Usability Findings
 
-**Status:** Founder pass complete  
+**Status:** Founder stability fixes complete
 **Date:** 2026-07-19  
 **Evidence:** `docs/008-founder-usage-checklist.md`
 
@@ -8,62 +8,29 @@
 
 The product is workable as an engineering prototype and demonstrates unusually strong safety,
 durability, and verification boundaries. It is not yet a natural player-facing tool. The median
-workflow is reliable but verbose, and two critical paths failed: hosted runtime decisions through
-Codex CLI and crash reconciliation for the GameScript company-name action.
+workflow is reliable but verbose. The original founder pass found two failed critical paths;
+Phase 7.6 corrected hosted Codex runtime decisions and GameScript company-name crash reconciliation.
 
-The 37-workflow pass produced a mean usefulness rating of 3.5/5. Configuration,
+The original 37-workflow pass produced a mean usefulness rating of 3.5/5. Configuration,
 offline defaults, approvals, cancellation, restart, direct OpenTTD writes, duplicate handling, and
-identity mismatch behavior were strong. Hosted execution and GameScript crash recovery were
-unusable in their tested forms.
+identity mismatch behavior were strong. The affected-workflow rerun now passes hosted execution
+and GameScript crash recovery; the original 3.5 score remains historical and was not recomputed.
 
 ## Prioritized issues
 
-### P0 — blocks use
+## Resolved in Phase 7.6
 
-#### Hosted Codex decision execution fails
-
-`task run --decision-provider codex` failed with:
-
-```text
-Codex CLI exited with status 1: Reading additional input from stdin...
-```
-
-Compilation through the same authenticated Codex installation succeeds. The decision failure is
-therefore specific to the decision invocation/input path, not general authentication. The runtime
-failed closed and durably recorded the failure, but the CLI then printed metadata from the most
-recent scripted decision, which can mislead an operator into associating stale evidence with the
-failed hosted call.
-
-Required correction:
-
-- make decision subprocess input compatible with the installed Codex CLI;
-- add a live one-decision regression test for the exact runtime context size/path;
-- display decision metadata only when correlated with the current run attempt.
-
-### P1 — materially damages trust
-
-#### GameScript company-name recovery is advertised but not implemented
-
-After an injected crash immediately after a verified `set_company_name` write, fresh observation
-confirmed that the company name changed. `inspect_recovery` routed the action to reference-
-simulation replay and raised `unsupported reference adapter snapshot`. The bridge advertises
-reconciliation, so this mismatch is a trust defect.
-
-Required correction:
-
-- add action-specific `set_company_name` reconciliation;
-- compare prior and fresh company name plus bridge/save identity;
-- classify definitely executed, definitely not executed, identity mismatch, or ambiguous;
-- never resend the command during inspection or resume;
-- add durable live and offline regression coverage.
-
-#### Failure output can show stale decision metadata
-
-A hosted provider failure was followed by the previous scripted `decision_generated` event. The
-task state was safe, but the output was semantically false for the current invocation.
-
-Required correction: correlate displayed metadata to events appended during the current command,
-or omit it when no decision was generated.
+- Codex decision composition now selects `SIM_PILOT_CODEX_MODEL` (`gpt-5.6-sol` by default), not
+  the OpenAI decision-model default.
+- Prompts travel through stdin instead of an argument plus non-terminal `/dev/null`; the harmless
+  additional-input notice no longer appears.
+- Nonzero exits report the actual JSONL provider error rather than unrelated stderr, and failed
+  commands cannot print metadata from an earlier event.
+- Every Codex call and recording carries a unique invocation ID in addition to the request ID.
+- Recovery dispatch is explicit by adapter type. The OpenTTD company-name crash path verifies
+  bridge identity and fresh state, never invokes reference replay, and never retries blindly.
+- The affected founder workflows and live OpenTTD crash scenario pass. Detailed evidence is in
+  `docs/012-phase-7.6-stability-report.md`.
 
 ### P2 — recurring friction
 
@@ -107,7 +74,7 @@ or omit it when no decision was generated.
 
 ## Recommendation
 
-Fix the two P0/P1 execution defects before the gameplay spike, then proceed to spike selection.
-Do not redesign the CLI first. The current safety architecture is worth preserving; the next proof
-should focus on whether the available bridge telemetry can deliver meaningful planning value, not
-on adding more administrative controls.
+The two founder-blocking execution defects are resolved. Phase 7.7 may begin, but it should remain
+a narrow product-value proof rather than an infrastructure expansion. Do not redesign the CLI
+first. The next proof should focus on whether existing bridge telemetry can deliver meaningful
+planning value, not on adding more administrative controls.

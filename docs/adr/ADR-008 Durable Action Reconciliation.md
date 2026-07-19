@@ -34,3 +34,13 @@ The runtime retains ADR-007's four repository interfaces and gains a durable aud
 external side-effect boundary. Sim Pilot does not claim exactly-once execution. An in-process
 adapter whose uncheckpointed state disappears with the process cannot be independently reconciled
 and is reported as adapter unavailable.
+
+## Amendment: adapter-type dispatch
+
+Phase 7.6 replaces action-name branching in the generic runtime with an injected reconciliation
+registry keyed by the persisted adapter type. Adapter-specific reconcilers live in the application
+composition layer, where they may depend on both runtime recovery records and adapter semantics;
+neither the runtime nor adapter packages import each other to perform dispatch. Every supported
+adapter identifier is registered explicitly, including a bounded compatibility alias for OpenTTD
+checkpoints written before canonical `adapter_type="openttd"` snapshots. Unknown, duplicate, and
+mismatched adapter registrations fail closed.

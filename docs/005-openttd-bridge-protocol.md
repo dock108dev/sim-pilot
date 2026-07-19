@@ -114,6 +114,11 @@ full resync. Restarting OpenTTD from the same save restores the same identity.
 A new game or missing/incompatible saved script state creates a different
 identity and blocks automatic task resume.
 
+For an interrupted `set_company_name`, Phase 7.6 reconnects and compares the prior, requested, and
+fresh company names only after confirming the same script instance, company context, and capability
+fingerprint. Requested means definitely executed, prior means definitely not executed, and any
+identity change or third value is ambiguous. Inspection never resends the command.
+
 Copying a save also copies its identity. Two simultaneously operated copies are
 therefore not distinguishable by instance ID alone; do not point one task at
 both copies. Script absence, heartbeat loss, incompatibility, sequence failure,

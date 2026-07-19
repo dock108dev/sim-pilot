@@ -27,6 +27,10 @@ explicit model, and that directory as `--cd`. It never uses a shell, `--add-dir`
 or repository context. The subprocess receives a small environment allowlist needed for CLI auth,
 locale, and certificates; API token variables are not inherited.
 
+The prompt is delivered through a bounded stdin pipe with the explicit `-` prompt marker; it is
+never placed in the argument list. This prevents Codex from interpreting a non-terminal stdin as
+an additional prompt source.
+
 Stdout, stderr, and duration are bounded. Because the canonical models contain arbitrary JSON maps
 that Codex's strict schema subset cannot express directly, the subprocess returns a strict
 single-field envelope containing canonical JSON text. The client requires one terminal completion
@@ -39,6 +43,11 @@ Raw JSONL is not stored by default. `SIM_PILOT_CODEX_RECORD_RAW_EVENTS=1` preser
 allowlisted, sanitized subset using owner-only atomic writes and also preserves the otherwise
 ephemeral debug directory. Full stderr is never persisted. Normal compiler/decision recording
 wrappers retain their existing semantic inputs, structured outputs, validation, and metadata.
+
+Every invocation receives a fresh UUID independent of the Codex thread/request ID. When debug
+directory preservation is explicitly enabled, an owner-only diagnostic record contains only the
+sanitized command, Codex version, invocation and request IDs, process ID, temporary directory,
+elapsed time, parser state, and termination reason. It never contains the prompt or full stderr.
 
 Product evaluation records Codex invocation counts and reported usage/latency. It reports direct API
 cost as none and allowance/credit consumption as not directly priced by Sim Pilot. Conservative

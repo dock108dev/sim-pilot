@@ -375,10 +375,12 @@ uv run sim-pilot task create \
 
 Each call uses an empty owner-only temporary directory outside the repository, ephemeral mode,
 ignored user/project rules, a read-only sandbox, approval policy `never`, bounded output and time,
-JSONL telemetry, and a strict output schema. Temporary files are removed unless
+stdin prompt delivery, JSONL telemetry, and a strict output schema. Temporary files are removed unless
 `SIM_PILOT_CODEX_PRESERVE_DEBUG_DIRECTORY=1` is set. Raw events are not retained unless
 `SIM_PILOT_CODEX_RECORD_RAW_EVENTS=1`; that diagnostic mode keeps only a sanitized subset in a
-mode-`0600` file and also preserves the temporary directory.
+mode-`0600` file and also preserves the temporary directory. A preserved debug directory also has
+an owner-only `codex-diagnostics.json` with command shape, version, invocation/request IDs, process
+ID, timing, parser state, and termination reason; it excludes the prompt and full stderr.
 
 The Codex-specific default model is `gpt-5.6-sol`; override it with `--model` or
 `SIM_PILOT_CODEX_MODEL`. Other optional configuration variables are `SIM_PILOT_CODEX_EXECUTABLE`,
@@ -461,8 +463,8 @@ uv run sim-pilot --database /tmp/sim-pilot-demo.db task resume \
 ```
 
 No hosted fallback occurs from `none`.
-Decision events and CLI output include model, prompt version, latency, validation result, request ID,
-and token usage when available. Provider failures are recorded and fail the task after the single
+Decision events and CLI output include invocation ID, model, prompt version, latency, validation
+result, request ID, and token usage when available. Provider failures are recorded and fail the task after the single
 configured OpenAI transient retry; the Codex subprocess boundary does not retry automatically.
 
 Recording is explicit and contains a redacted context plus the structured response:
