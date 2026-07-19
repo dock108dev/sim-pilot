@@ -6,6 +6,7 @@ import stat
 from collections import Counter
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from sim_pilot.cli import INVALID_INPUT, app
@@ -108,6 +109,20 @@ def configuration() -> EvaluationRunConfiguration:
     )
 
 
+def codex_configuration() -> EvaluationRunConfiguration:
+    return EvaluationRunConfiguration(
+        compiler_provider="codex",
+        decision_provider="codex",
+        compiler_model="fixture-model",
+        decision_model="fixture-model",
+        input_cost_per_million_usd=0,
+        output_cost_per_million_usd=0,
+        max_runtime_iterations=2,
+        max_output_tokens_per_call=None,
+        cost_reporting="plan_allowance",
+    )
+
+
 def test_product_fixture_covers_required_player_instruction_categories() -> None:
     cases = load_evaluation_cases(FIXTURE)
     categories = Counter(case.category for case in cases)
@@ -196,6 +211,41 @@ def test_paid_case_failure_is_retained_as_evaluation_evidence(tmp_path: Path) ->
     assert aggregate["failure_categories"] == {"RuntimeError": 1}
 
 
+def test_codex_evaluation_reports_plan_allowance_not_api_cost(tmp_path: Path) -> None:
+    output = tmp_path / "codex-results"
+
+    aggregate = asyncio.run(
+        run_product_evaluation(
+            fixture_path=FIXTURE,
+            output_directory=output,
+            compiler_provider_factory=lambda case: SuccessfulCompiler([]),
+            decision_provider_factory=lambda case: AdvanceDecisionProvider(),
+            configuration=codex_configuration(),
+            case_ids=frozenset({"informal-001"}),
+        )
+    )
+
+    result = json.loads((output / "results" / "informal-001.json").read_text())
+    assert result["estimated_cost_usd"] is None
+    assert aggregate["estimated_cost_usd"] is None
+    assert aggregate["provider_surface"] == "Codex CLI using authenticated ChatGPT access"
+    assert "authenticated plan" in str(aggregate["direct_api_cost"])
+
+
+def test_evaluation_rejects_selection_above_invocation_budget(tmp_path: Path) -> None:
+    limited = configuration().model_copy(update={"max_compiler_calls": 1})
+    with pytest.raises(ValueError, match="compiler-call limit"):
+        asyncio.run(
+            run_product_evaluation(
+                fixture_path=FIXTURE,
+                output_directory=tmp_path / "limited",
+                compiler_provider_factory=lambda case: SuccessfulCompiler([]),
+                decision_provider_factory=lambda case: AdvanceDecisionProvider(),
+                configuration=limited,
+            )
+        )
+
+
 def test_cli_refuses_to_select_hosted_evaluation_providers_implicitly(tmp_path: Path) -> None:
     runner = CliRunner()
 
@@ -205,5 +255,42 @@ def test_cli_refuses_to_select_hosted_evaluation_providers_implicitly(tmp_path: 
     )
 
     assert result.exit_code == INVALID_INPUT
-    assert "--compiler-provider openai is required" in result.output
+    assert "--compiler-provider codex or openai is required" in result.output
     assert not (tmp_path / "must-not-exist").exists()
+
+
+def test_cli_accepts_explicit_codex_evaluation_without_api_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    observed: dict[str, object] = {}
+
+    async def fake_run_product_evaluation(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {"case_count": 0, "provider_surface": "Codex CLI"}
+
+    monkeypatch.setattr("sim_pilot.cli.run_product_evaluation", fake_run_product_evaluation)
+    result = CliRunner().invoke(
+        app,
+        [
+            "evaluate",
+            "product",
+            "--compiler-provider",
+            "codex",
+            "--decision-provider",
+            "codex",
+            "--compiler-model",
+            "gpt-test",
+            "--decision-model",
+            "gpt-test",
+            "--record-dir",
+            str(tmp_path / "results"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    configuration = observed["configuration"]
+    assert isinstance(configuration, EvaluationRunConfiguration)
+    assert configuration.compiler_provider == "codex"
+    assert configuration.decision_provider == "codex"
+    assert configuration.cost_reporting == "plan_allowance"

@@ -340,10 +340,53 @@ Omit `--instruction` from `task compile` for an interactive prompt. Use `--yes` 
 includes assumptions, warnings, unsupported requests, ambiguities, deterministic validation
 errors, and `prompt_version`. Only a `valid` compilation can be persisted.
 
-The default provider is `none`, which fails without making a network request. Codex CLI's ChatGPT
-login is only for the development tool and is not used by Sim Pilot. Select `--provider openai`
-explicitly when hosted compilation is intended; the provider then uses independently configured
-OpenAI API credentials. Scripted compilation remains the deterministic test and fixture path.
+The default provider is `none`, which fails without making a network request. Select OpenAI or
+Codex explicitly; scripted compilation remains the deterministic test and fixture path.
+
+### Codex CLI local provider
+
+The Codex CLI provider invokes the authenticated local Codex CLI. It does not use Sim Pilot's
+OpenAI API provider or require `OPENAI_API_KEY`. It still sends requests to the Codex service and
+consumes the authenticated account's applicable Codex allowance or credits.
+
+Task 7.5P was developed against `codex-cli 0.141.0`. Confirm that a compatible executable is on
+`PATH` and authenticated without displaying credential files:
+
+```bash
+command -v codex
+codex --version
+codex login status
+```
+
+Compile or create a task using that login:
+
+```bash
+uv run sim-pilot task compile \
+  --provider codex \
+  --model gpt-5.6 \
+  --instruction "Reach one million cash without taking loans"
+
+uv run sim-pilot task create \
+  --instruction "Reach one million cash without taking loans" \
+  --provider codex \
+  --model gpt-5.6 \
+  --yes
+```
+
+Each call uses an empty owner-only temporary directory outside the repository, ephemeral mode,
+ignored user/project rules, a read-only sandbox, approval policy `never`, bounded output and time,
+JSONL telemetry, and a strict output schema. Temporary files are removed unless
+`SIM_PILOT_CODEX_PRESERVE_DEBUG_DIRECTORY=1` is set. Raw events are not retained unless
+`SIM_PILOT_CODEX_RECORD_RAW_EVENTS=1`; that diagnostic mode keeps only a sanitized subset in a
+mode-`0600` file and also preserves the temporary directory.
+
+Optional configuration variables are `SIM_PILOT_CODEX_EXECUTABLE`,
+`SIM_PILOT_CODEX_TIMEOUT_SECONDS` (default `120`), `SIM_PILOT_CODEX_TEMPORARY_ROOT`,
+`SIM_PILOT_CODEX_MAXIMUM_STDOUT_BYTES`, `SIM_PILOT_CODEX_MAXIMUM_STDERR_BYTES`, and
+`SIM_PILOT_CODEX_CAPABILITY_CACHE_SECONDS`. A configured temporary root inside a Git repository is
+rejected. Sim Pilot probes version, help, and login status before use without issuing a model call.
+An unsupported CLI reports the missing flags; an unauthenticated CLI directs you to `codex login`.
+Normal tests and commands using provider `none` or `scripted` never invoke Codex.
 
 To opt in to a local diagnostic recording, pass a directory:
 
@@ -404,10 +447,22 @@ uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
   00000000-0000-0000-0000-000000000123 --decision-provider openai
 ```
 
-Codex CLI's ChatGPT login is not a runtime API credential. No hosted fallback occurs from `none`.
+For local-development Codex decisions, select it independently from the compiler:
+
+```bash
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task run \
+  00000000-0000-0000-0000-000000000123 \
+  --decision-provider codex --decision-model gpt-5.6
+
+uv run sim-pilot --database /tmp/sim-pilot-demo.db task resume \
+  00000000-0000-0000-0000-000000000123 \
+  --decision-provider codex --decision-model gpt-5.6
+```
+
+No hosted fallback occurs from `none`.
 Decision events and CLI output include model, prompt version, latency, validation result, request ID,
 and token usage when available. Provider failures are recorded and fail the task after the single
-configured transient retry; semantic invalidity is not retried.
+configured OpenAI transient retry; the Codex subprocess boundary does not retry automatically.
 
 Recording is explicit and contains a redacted context plus the structured response:
 
@@ -426,6 +481,16 @@ is opt-in and is never part of normal CI:
 ```bash
 SIM_PILOT_LIVE_DECISION=1 uv run pytest -m live \
   tests/decision_provider/test_live_openai.py -s
+```
+
+Real Codex smoke tests are separately gated and consume plan allowance. Run them only after explicit
+authorization:
+
+```bash
+SIM_PILOT_LIVE_CODEX=1 SIM_PILOT_LIVE_CODEX_COMPILER=1 \
+  uv run pytest -m live tests/intent_compiler/test_live_codex_cli.py -s
+SIM_PILOT_LIVE_CODEX=1 SIM_PILOT_LIVE_CODEX_DECISION=1 \
+  uv run pytest -m live tests/decision_provider/test_live_codex_cli.py -s
 ```
 
 ### Product evaluation exercise
@@ -450,11 +515,30 @@ uv run sim-pilot evaluate product \
   --record-dir ./data/product-evaluation
 ```
 
+Or use authenticated Codex CLI for both surfaces without API-key pricing inputs:
+
+```bash
+uv run sim-pilot evaluate product \
+  --compiler-provider codex \
+  --decision-provider codex \
+  --compiler-model gpt-5.6 \
+  --decision-model gpt-5.6 \
+  --max-runtime-iterations 8 \
+  --record-dir ./data/product-evaluation
+```
+
 The private output directory contains a manifest, one atomic result per case, raw successful
 provider exchanges, aggregate metrics, and `manual_review.json`. Results include failed calls;
 rerunning resumes from existing case files unless `--force` is supplied. Cost fields are estimates
 calculated from provider token telemetry and the prices supplied on the command line. Do not commit
 the output directory because it contains prompts and user instructions.
+
+Codex evaluation instead reports its provider surface, compiler/decision/total invocation counts,
+reported token usage and latency, and `Direct API cost: none`. Codex allowance or credit usage is
+subject to the authenticated plan and is not directly priced by Sim Pilot. Conservative defaults
+cap compiler calls at 31, decision calls at 48, total calls at 79, runtime iterations at 8, each
+Codex call at 120 seconds, and the evaluation at one hour. `--stop-on-usage-limit` is enabled by
+default. Individual cases remain resumable.
 
 `task create --spec task.json` accepts a serialized `TaskSpecification`. Without `--spec`, the
 command creates the deterministic cash-target demo. Approval commands take an approval ID.

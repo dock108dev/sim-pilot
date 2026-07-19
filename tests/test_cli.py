@@ -15,6 +15,11 @@ from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from sim_pilot.openttd.config import OpenTTDConfiguration
 from sim_pilot.openttd.gamescript.models import BridgeHealth, SynchronizationState
 from sim_pilot.openttd.models import OpenTTDAdapterCapabilities, OpenTTDObservationState
+from sim_pilot.provider_support.codex_cli.errors import (
+    CodexCLICompatibilityError,
+    CodexCLIExecutableNotFoundError,
+    CodexCLIUnauthenticatedError,
+)
 from tests.intent_compiler.helpers import response, valid_specification
 from tests.openttd.gamescript.helpers import capabilities, snapshot
 from tests.openttd.helpers import FakeOpenTTDClient, state
@@ -71,8 +76,9 @@ def test_compile_and_create_from_instruction(
         provider_name: CompilerProviderName,
         recording_directory: Path | None,
         adapter_name: object,
+        model_name: str | None,
     ) -> IntentCompiler:
-        del provider_name, recording_directory, adapter_name
+        del provider_name, recording_directory, adapter_name, model_name
         return compiler
 
     monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)
@@ -129,8 +135,9 @@ def test_instruction_creation_requires_valid_compilation(
         provider_name: CompilerProviderName,
         recording_directory: Path | None,
         adapter_name: object,
+        model_name: str | None,
     ) -> IntentCompiler:
-        del provider_name, recording_directory, adapter_name
+        del provider_name, recording_directory, adapter_name, model_name
         return compiler
 
     monkeypatch.setattr("sim_pilot.cli._intent_compiler", compiler_factory)
@@ -160,7 +167,7 @@ def test_compiler_provider_must_be_selected_explicitly() -> None:
     )
     assert result.exit_code == 20
     assert "no compiler provider configured" in result.output
-    assert "--provider openai" in result.output
+    assert "--provider openai or --provider codex" in result.output
 
 
 def test_runtime_decision_provider_defaults_to_none_without_hosted_call(
@@ -255,6 +262,110 @@ def test_openai_runtime_provider_requires_explicit_selection(
     assert len(constructed) == 1
     assert constructed[0]["model"]
     assert constructed[0]["timeout_seconds"] == 30
+
+
+def test_codex_compiler_is_explicit_and_uses_selected_model_without_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    constructed: list[dict[str, object]] = []
+
+    def fake_codex_provider(**kwargs: object) -> ScriptedCompilerProvider:
+        constructed.append(kwargs)
+        return ScriptedCompilerProvider([response(valid_specification())])
+
+    monkeypatch.setattr("sim_pilot.cli.CodexCLICompilerProvider", fake_codex_provider)
+    result = CliRunner().invoke(
+        app,
+        [
+            "task",
+            "compile",
+            "--provider",
+            "codex",
+            "--model",
+            "gpt-test",
+            "--instruction",
+            "Reach one million cash.",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert constructed[0]["model"] == "gpt-test"
+
+
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (CodexCLIExecutableNotFoundError("missing executable"), "missing executable"),
+        (CodexCLIUnauthenticatedError("run codex login"), "run codex login"),
+        (CodexCLICompatibilityError("upgrade Codex CLI"), "upgrade Codex CLI"),
+    ],
+)
+def test_codex_compiler_capability_failures_have_deterministic_cli_exit(
+    monkeypatch: pytest.MonkeyPatch, error: Exception, message: str
+) -> None:
+    def fail_provider(**kwargs: object) -> None:
+        del kwargs
+        raise error
+
+    monkeypatch.setattr("sim_pilot.cli.CodexCLICompilerProvider", fail_provider)
+    result = CliRunner().invoke(
+        app,
+        [
+            "task",
+            "compile",
+            "--provider",
+            "codex",
+            "--instruction",
+            "Reach one million cash.",
+        ],
+    )
+
+    assert result.exit_code == 20
+    assert message in result.output
+
+
+def test_codex_decision_is_explicit_and_uses_selected_model_without_api_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    constructed: list[dict[str, object]] = []
+
+    def fake_codex_provider(**kwargs: object) -> ReferenceDemoDecisionProvider:
+        constructed.append(kwargs)
+        return ReferenceDemoDecisionProvider()
+
+    monkeypatch.setattr("sim_pilot.cli.CodexCLIDecisionProvider", fake_codex_provider)
+    runner = CliRunner()
+    database = str(tmp_path / "codex-selection.db")
+    task_id = UUID(int=905)
+    prefix = ["--database", database]
+    assert runner.invoke(app, [*prefix, "db", "upgrade"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [*prefix, "task", "create", "--task-id", str(task_id), "--target-cash", "510000"],
+        ).exit_code
+        == 0
+    )
+    result = runner.invoke(
+        app,
+        [
+            *prefix,
+            "task",
+            "run",
+            str(task_id),
+            "--decision-provider",
+            "codex",
+            "--decision-model",
+            "gpt-test",
+            "--iterations",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert constructed[0]["model"] == "gpt-test"
 
 
 def test_openttd_capabilities_is_offline_and_provider_independent(

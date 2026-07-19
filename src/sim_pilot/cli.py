@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn
 from uuid import UUID, uuid4
 
 import typer
@@ -17,12 +17,20 @@ from sim_pilot.adapters.base import AdapterSnapshot, SimulationAdapter
 from sim_pilot.adapters.openttd import OpenTTDAdapter, OpenTTDReadOnlyAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.config import (
+    codex_capability_cache_seconds,
+    codex_executable,
+    codex_maximum_stderr_bytes,
+    codex_maximum_stdout_bytes,
+    codex_preserve_debug_directory,
+    codex_temporary_directory_root,
+    codex_timeout_seconds,
     compiler_model,
     database_url,
     decision_model,
     decision_timeout_seconds,
 )
 from sim_pilot.decision_provider import (
+    CodexCLIDecisionProvider,
     OpenAIDecisionProvider,
     RecordingDecisionProvider,
 )
@@ -51,6 +59,7 @@ from sim_pilot.intent_compiler.prompt import (
     compiler_prompt,
 )
 from sim_pilot.intent_compiler.providers import (
+    CodexCLICompilerProvider,
     NoProviderConfigured,
     OpenAICompilerProvider,
     RecordingCompilerProvider,
@@ -76,6 +85,7 @@ from sim_pilot.product_evaluation import (
     run_product_evaluation,
 )
 from sim_pilot.provider_metadata import ProviderMetadata
+from sim_pilot.provider_support.codex_cli.errors import CodexCLIError
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
 from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
@@ -129,12 +139,14 @@ class CLIContext:
 class CompilerProviderName(StrEnum):
     NONE = "none"
     OPENAI = "openai"
+    CODEX = "codex"
 
 
 class DecisionProviderName(StrEnum):
     NONE = "none"
     SCRIPTED = "scripted"
     OPENAI = "openai"
+    CODEX = "codex"
 
 
 class AdapterName(StrEnum):
@@ -166,6 +178,7 @@ def _intent_compiler(
     provider_name: CompilerProviderName,
     recording_directory: Path | None,
     adapter_name: AdapterName = AdapterName.REFERENCE,
+    model_name: str | None = None,
 ) -> IntentCompiler:
     catalog = (
         OPENTTD_CAPABILITIES if adapter_name is AdapterName.OPENTTD else REFERENCE_CAPABILITIES
@@ -173,7 +186,19 @@ def _intent_compiler(
     prompt = compiler_prompt(catalog)
     provider: CompilerProvider
     if provider_name is CompilerProviderName.OPENAI:
-        provider = OpenAICompilerProvider(model=compiler_model(), prompt=prompt)
+        provider = OpenAICompilerProvider(model=compiler_model(model_name), prompt=prompt)
+    elif provider_name is CompilerProviderName.CODEX:
+        provider = CodexCLICompilerProvider(
+            model=compiler_model(model_name),
+            prompt=prompt,
+            timeout_seconds=codex_timeout_seconds(),
+            executable=codex_executable(),
+            temporary_directory_root=codex_temporary_directory_root(),
+            preserve_debug_directory=codex_preserve_debug_directory(),
+            maximum_stdout_bytes=codex_maximum_stdout_bytes(),
+            maximum_stderr_bytes=codex_maximum_stderr_bytes(),
+            capability_cache_seconds=codex_capability_cache_seconds(),
+        )
     else:
         provider = NoProviderConfigured()
     if recording_directory is not None:
@@ -237,16 +262,28 @@ class ReferenceDemoDecisionProvider:
 def _decision_provider(
     provider_name: DecisionProviderName,
     recording_directory: Path | None,
+    model_name: str | None = None,
 ) -> DecisionProvider:
     provider: DecisionProvider
     if provider_name is DecisionProviderName.NONE:
         raise DecisionProviderNotConfiguredError(
-            "no decision provider configured; select --decision-provider openai or scripted"
+            "no decision provider configured; select --decision-provider codex, openai, or scripted"
         )
     if provider_name is DecisionProviderName.OPENAI:
         provider = OpenAIDecisionProvider(
-            model=decision_model(),
+            model=decision_model(model_name),
             timeout_seconds=decision_timeout_seconds(),
+        )
+    elif provider_name is DecisionProviderName.CODEX:
+        provider = CodexCLIDecisionProvider(
+            model=decision_model(model_name),
+            timeout_seconds=codex_timeout_seconds(),
+            executable=codex_executable(),
+            temporary_directory_root=codex_temporary_directory_root(),
+            preserve_debug_directory=codex_preserve_debug_directory(),
+            maximum_stdout_bytes=codex_maximum_stdout_bytes(),
+            maximum_stderr_bytes=codex_maximum_stderr_bytes(),
+            capability_cache_seconds=codex_capability_cache_seconds(),
         )
     else:
         provider = ReferenceDemoDecisionProvider()
@@ -365,6 +402,11 @@ def evaluate_product(
         int,
         typer.Option("--max-runtime-iterations", min=1, max=20),
     ] = 8,
+    max_compiler_calls: Annotated[int, typer.Option(min=1, max=100)] = 31,
+    max_decision_calls: Annotated[int, typer.Option(min=0, max=500)] = 48,
+    max_total_calls: Annotated[int, typer.Option(min=1, max=500)] = 79,
+    total_wall_clock_seconds: Annotated[float, typer.Option(min=1)] = 3_600,
+    stop_on_usage_limit: Annotated[bool, typer.Option()] = True,
     case: Annotated[
         list[str] | None,
         typer.Option("--case", help="Run only the named case; repeat to select several."),
@@ -375,32 +417,74 @@ def evaluate_product(
     ] = False,
 ) -> None:
     """Run the bounded product proving dataset; never selects a hosted provider implicitly."""
-    if compiler_provider is not CompilerProviderName.OPENAI:
-        _fail(ValueError("--compiler-provider openai is required"), INVALID_INPUT)
-    if decision_provider is not DecisionProviderName.OPENAI:
-        _fail(ValueError("--decision-provider openai is required"), INVALID_INPUT)
+    if compiler_provider not in {CompilerProviderName.OPENAI, CompilerProviderName.CODEX}:
+        _fail(
+            ValueError("--compiler-provider codex or openai is required"),
+            INVALID_INPUT,
+        )
+    if decision_provider not in {DecisionProviderName.OPENAI, DecisionProviderName.CODEX}:
+        _fail(
+            ValueError("--decision-provider codex or openai is required"),
+            INVALID_INPUT,
+        )
     compiler_name = compiler_model(compiler_model_name)
     decision_name = decision_model(decision_model_name)
+    compiler_provider_value: Literal["openai", "codex"] = (
+        "codex" if compiler_provider is CompilerProviderName.CODEX else "openai"
+    )
+    decision_provider_value: Literal["openai", "codex"] = (
+        "codex" if decision_provider is DecisionProviderName.CODEX else "openai"
+    )
     configuration = EvaluationRunConfiguration(
-        compiler_provider="openai",
-        decision_provider="openai",
+        compiler_provider=compiler_provider_value,
+        decision_provider=decision_provider_value,
         compiler_model=compiler_name,
         decision_model=decision_name,
         input_cost_per_million_usd=input_cost_per_million,
         output_cost_per_million_usd=output_cost_per_million,
         max_runtime_iterations=max_runtime_iterations,
-        max_output_tokens_per_call=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+        max_output_tokens_per_call=(
+            None
+            if CompilerProviderName.CODEX is compiler_provider
+            or DecisionProviderName.CODEX is decision_provider
+            else PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS
+        ),
+        cost_reporting=(
+            "plan_allowance"
+            if CompilerProviderName.CODEX is compiler_provider
+            or DecisionProviderName.CODEX is decision_provider
+            else "api_estimate"
+        ),
+        max_compiler_calls=max_compiler_calls,
+        max_decision_calls=max_decision_calls,
+        max_total_calls=max_total_calls,
+        total_wall_clock_seconds=total_wall_clock_seconds,
+        stop_on_usage_limit=stop_on_usage_limit,
     )
 
     def compiler_factory(item: ProductEvaluationCase) -> CompilerProvider:
         catalog = OPENTTD_CAPABILITIES if item.adapter == "openttd" else REFERENCE_CAPABILITIES
         prompt = compiler_prompt(catalog)
-        provider: CompilerProvider = OpenAICompilerProvider(
-            model=compiler_name,
-            prompt=prompt,
-            max_retries=0,
-            max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
-        )
+        provider: CompilerProvider
+        if compiler_provider is CompilerProviderName.CODEX:
+            provider = CodexCLICompilerProvider(
+                model=compiler_name,
+                prompt=prompt,
+                timeout_seconds=codex_timeout_seconds(),
+                executable=codex_executable(),
+                temporary_directory_root=codex_temporary_directory_root(),
+                preserve_debug_directory=codex_preserve_debug_directory(),
+                maximum_stdout_bytes=codex_maximum_stdout_bytes(),
+                maximum_stderr_bytes=codex_maximum_stderr_bytes(),
+                capability_cache_seconds=codex_capability_cache_seconds(),
+            )
+        else:
+            provider = OpenAICompilerProvider(
+                model=compiler_name,
+                prompt=prompt,
+                max_retries=0,
+                max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+            )
         return RecordingCompilerProvider(
             provider,
             record_dir / "raw" / item.id / "compiler",
@@ -408,12 +492,25 @@ def evaluate_product(
         )
 
     def decision_factory(item: ProductEvaluationCase) -> DecisionProvider:
-        provider: DecisionProvider = OpenAIDecisionProvider(
-            model=decision_name,
-            timeout_seconds=decision_timeout_seconds(),
-            transient_retries=0,
-            max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
-        )
+        provider: DecisionProvider
+        if decision_provider is DecisionProviderName.CODEX:
+            provider = CodexCLIDecisionProvider(
+                model=decision_name,
+                timeout_seconds=codex_timeout_seconds(),
+                executable=codex_executable(),
+                temporary_directory_root=codex_temporary_directory_root(),
+                preserve_debug_directory=codex_preserve_debug_directory(),
+                maximum_stdout_bytes=codex_maximum_stdout_bytes(),
+                maximum_stderr_bytes=codex_maximum_stderr_bytes(),
+                capability_cache_seconds=codex_capability_cache_seconds(),
+            )
+        else:
+            provider = OpenAIDecisionProvider(
+                model=decision_name,
+                timeout_seconds=decision_timeout_seconds(),
+                transient_retries=0,
+                max_output_tokens=PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS,
+            )
         return RecordingDecisionProvider(
             provider,
             record_dir / "raw" / item.id / "decisions",
@@ -431,7 +528,7 @@ def evaluate_product(
                 case_ids=frozenset(case or ()),
             )
         )
-    except (OSError, ValidationError, ValueError) as error:
+    except (OSError, CodexCLIError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)
     _emit(aggregate)
 
@@ -771,6 +868,7 @@ def task_create(
         CompilerProviderName,
         typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
     ] = CompilerProviderName.NONE,
+    model: Annotated[str | None, typer.Option("--model")] = None,
     record_dir: Annotated[
         Path | None,
         typer.Option(
@@ -787,7 +885,7 @@ def task_create(
             raise ValueError("--spec and --instruction are mutually exclusive")
         if instruction is not None:
             result = asyncio.run(
-                _intent_compiler(provider, record_dir, adapter).compile(instruction)
+                _intent_compiler(provider, record_dir, adapter, model).compile(instruction)
             )
             _emit(result)
             if result.report.validation_status is not ValidationStatus.VALID:
@@ -826,7 +924,14 @@ def task_create(
         finally:
             engine.dispose()
         _emit(created)
-    except (OSError, CompilerError, ValidationError, ValueError, PersistenceError) as error:
+    except (
+        OSError,
+        CodexCLIError,
+        CompilerError,
+        ValidationError,
+        ValueError,
+        PersistenceError,
+    ) as error:
         _fail(error, INVALID_INPUT)
 
 
@@ -837,6 +942,7 @@ def task_compile(
         CompilerProviderName,
         typer.Option("--provider", help="Compiler provider; hosted access is always explicit."),
     ] = CompilerProviderName.NONE,
+    model: Annotated[str | None, typer.Option("--model")] = None,
     record_dir: Annotated[
         Path | None,
         typer.Option(
@@ -849,9 +955,9 @@ def task_compile(
 ) -> None:
     text = instruction if instruction is not None else typer.prompt("Prompt")
     try:
-        result = asyncio.run(_intent_compiler(provider, record_dir, adapter).compile(text))
+        result = asyncio.run(_intent_compiler(provider, record_dir, adapter, model).compile(text))
         _emit(result)
-    except (OSError, CompilerError, ValidationError, ValueError) as error:
+    except (OSError, CodexCLIError, CompilerError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)
     if result.report.validation_status is not ValidationStatus.VALID:
         raise typer.Exit(INVALID_INPUT)
@@ -862,9 +968,12 @@ async def _run_task(
     task_id: UUID,
     iterations: int | None,
     decision_provider_name: DecisionProviderName,
+    decision_model_name: str | None,
     recording_directory: Path | None,
 ) -> int:
-    decision_provider = _decision_provider(decision_provider_name, recording_directory)
+    decision_provider = _decision_provider(
+        decision_provider_name, recording_directory, decision_model_name
+    )
     engine, runtime = _runtime(ctx)
     try:
         outcome = await runtime.resume(
@@ -914,6 +1023,7 @@ def task_run(
             help="Runtime decision provider; hosted access is always explicit.",
         ),
     ] = DecisionProviderName.NONE,
+    decision_model_name: Annotated[str | None, typer.Option("--decision-model")] = None,
     record_dir: Annotated[
         Path | None,
         typer.Option(
@@ -924,8 +1034,17 @@ def task_run(
     ] = None,
 ) -> None:
     try:
-        code = asyncio.run(_run_task(ctx, task_id, iterations, decision_provider, record_dir))
-    except DecisionProviderError as error:
+        code = asyncio.run(
+            _run_task(
+                ctx,
+                task_id,
+                iterations,
+                decision_provider,
+                decision_model_name,
+                record_dir,
+            )
+        )
+    except (CodexCLIError, DecisionProviderError) as error:
         _fail(error, INVALID_INPUT)
     except (PersistenceError, DurablePersistenceError, ReconstructionConsistencyError) as error:
         _fail(error)
@@ -944,12 +1063,13 @@ def task_resume(
             help="Runtime decision provider; hosted access is always explicit.",
         ),
     ] = DecisionProviderName.NONE,
+    decision_model_name: Annotated[str | None, typer.Option("--decision-model")] = None,
     record_dir: Annotated[
         Path | None,
         typer.Option("--record-dir", file_okay=False),
     ] = None,
 ) -> None:
-    task_run(ctx, task_id, iterations, decision_provider, record_dir)
+    task_run(ctx, task_id, iterations, decision_provider, decision_model_name, record_dir)
 
 
 @task_app.command("show")

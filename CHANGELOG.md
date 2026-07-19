@@ -2,6 +2,19 @@
 
 All notable changes to Sim Pilot are documented in this file.
 
+## Unreleased
+
+### Codex CLI local provider
+
+- Added explicitly selected Codex CLI compiler and decision providers backed by authenticated
+  `codex exec`, with no `OPENAI_API_KEY` or direct OpenAI API call.
+- Added non-billable capability probing, isolated ephemeral read-only subprocess execution, strict
+  structured output, bounded JSONL telemetry, typed failures, and opt-in sanitized diagnostics.
+- Added Codex product-evaluation support with call and wall-clock limits, resumable cases, and
+  allowance-aware reporting that does not fabricate API cost.
+- Normal defaults and CI remain network-free; live Codex tests require separate opt-in flags and
+  explicit owner authorization.
+
 ## 0.1.0 — 2026-07-19
 
 Initial product-prototype baseline.

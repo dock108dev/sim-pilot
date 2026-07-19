@@ -194,11 +194,18 @@ model identifier, and optional token usage. This telemetry envelope does not alt
 semantics or the frozen `TaskSpecification` contract.
 
 The OpenAI implementation uses provider-native Pydantic structured output and is the only module
-allowed to import the OpenAI SDK. Hosted access is never selected implicitly: the CLI defaults to
-`NoProviderConfigured`, and `--provider openai` is required for an OpenAI request. Codex CLI or
-ChatGPT login state is development-tool authentication and is not consumed as runtime API
-authentication. Scripted providers cover automated tests; live provider tests are opt-in and never
-required by CI.
+allowed to import the OpenAI SDK. The local-development Codex implementation uses a shared,
+provider-independent `codex exec` subprocess client. It probes installed capabilities without a
+model request, runs in a fresh non-repository directory with ephemeral mode, ignored user/project
+rules, a read-only sandbox, approval disabled, JSONL telemetry, and a strict output schema. Its
+structured response still passes through the same deterministic compiler validation.
+
+Hosted access is never selected implicitly: the CLI defaults to `NoProviderConfigured`, and either
+`--provider openai` or `--provider codex` is required. The Codex choice reuses an authenticated
+Codex CLI session without reading `OPENAI_API_KEY` or using the OpenAI API provider. It is not
+offline inference: it contacts the Codex service and consumes the authenticated account's Codex
+allowance or credits. Scripted providers cover automated tests; all live provider tests are opt-in
+and never required by CI.
 
 An opt-in `RecordingCompilerProvider` decorates any configured provider and writes one atomic JSON
 record per successful request. Records contain the original instruction, complete prompt, prompt
@@ -289,10 +296,18 @@ invalidity does not retry. Exhausted hosted failures atomically record `Decision
 `TaskFailed`, then follow normal adapter shutdown. Scripted exhaustion retains its existing blocked
 behavior.
 
+The Codex decision implementation uses the same isolated subprocess boundary as the compiler and
+receives only canonical bounded `DecisionContext` JSON. The JSONL final response must agree with
+the schema-bound final-output file before the existing semantic decision validation runs. Codex
+does not receive adapter, persistence, policy, approval, or execution authority. The development
+provider does not automatically retry, avoiding ambiguous duplicate allowance consumption after a
+subprocess failure.
+
 CLI composition defaults to no decision provider. Hosted execution requires explicit
-`--decision-provider openai`; environment variables configure a selected provider but never select
-one. Provider metadata in `DecisionGenerated` includes provider, model, request ID when available,
-token usage, latency, prompt version, and validation result. Full prompts are not persisted.
+`--decision-provider openai` or `--decision-provider codex`; environment variables configure a
+selected provider but never select one. Provider metadata in `DecisionGenerated` includes provider
+surface and version, model, request ID when available, token usage, latency, prompt version, and
+validation result. Full prompts are not persisted.
 
 Returns
 
@@ -581,8 +596,8 @@ class SimulationAdapter(Protocol):
 15. Shut down the adapter on every exit path.
 
 The runtime depends only on the decision-provider interface. The scripted implementation returns
-one decision per request and fails deterministically when exhausted. Task 6A adds an OpenAI
-implementation behind the same interface without changing the execution sequence.
+one decision per request and fails deterministically when exhausted. OpenAI and local-development
+Codex CLI implementations sit behind the same interface without changing the execution sequence.
 
 Policy evaluation and adapter validation do not mutate state. The adapter owns simulation-specific
 validity; the policy engine owns constraints and authority. `maximum_single_spend` is the autonomous
@@ -1001,11 +1016,12 @@ Validate
 | OQ-005 | Event payload schema versioning | Resolved: schema version 1 event records |
 | OQ-006 | Checkpoint cadence | Resolved: initial, verified state change, and initialized terminal |
 | OQ-007 | Safeguard recovery | Resolved: minimal counters/fingerprints stored on task snapshot |
-| OQ-008 | Default compiler provider | Resolved: none; hosted access requires `--provider openai` |
+| OQ-008 | Default compiler provider | Resolved: none; hosted access requires explicit `--provider openai` or `--provider codex` |
 | OQ-009 | Compiler request telemetry | Resolved: typed result envelope plus opt-in atomic JSON recorder |
-| OQ-010 | Runtime decision provider | Resolved: bounded context plus explicit scripted/OpenAI/unconfigured providers |
+| OQ-010 | Runtime decision provider | Resolved: bounded context plus explicit scripted/OpenAI/Codex/unconfigured providers |
 | OQ-011 | Decision provider recording | Resolved: opt-in redacted atomic JSON; recording failure blocks execution |
 | OQ-012 | OpenTTD gameplay bridge | Resolved: constrained snapshot-only GameScript protocol v1 with `set_company_name` as the sole supported action |
+| OQ-013 | Codex CLI provider surface | Resolved: development-only isolated `codex exec`; schema-bound output, JSONL telemetry, no API-key fallback |
 
 ## Task 7B OpenTTD bridge interface
 

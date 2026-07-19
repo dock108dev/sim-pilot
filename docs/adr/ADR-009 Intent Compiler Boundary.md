@@ -1,6 +1,6 @@
 # ADR-009: Intent Compiler and Hosted Provider Boundary
 
-- Status: Accepted
+- Status: Accepted — amended 2026-07-19
 - Date: 2026-07-16
 
 ## Context
@@ -56,3 +56,20 @@ versioning and golden-test review obligation.
 Provider telemetry remains outside `TaskSpecification` and durable runtime persistence. Offline
 development and CI fail clearly instead of silently initiating hosted requests. Recording adds
 local diagnostic artifacts only when explicitly requested.
+
+## Amendment: Codex CLI local provider
+
+Task 7.5P adds `CodexCLICompilerProvider` as a second explicit hosted surface for local development
+and product evaluation. The OpenAI API provider remains supported. Selecting `--provider codex`
+reuses the authenticated local Codex CLI session; it neither reads `OPENAI_API_KEY` nor falls back
+to the OpenAI provider. This is not offline inference: `codex exec` contacts the Codex service and
+consumes the signed-in account's applicable allowance or credits without Sim Pilot issuing a
+direct API-key-billed request.
+
+The Codex implementation uses the same canonical compiler schema and deterministic semantic
+validation. A shared subprocess client first performs a non-model capability/authentication probe,
+then invokes Codex explicitly in an empty temporary directory with ephemeral mode, JSONL output,
+read-only sandboxing, disabled approval, ignored user configuration and project rules, and a
+schema-bound final output. Provider selection still defaults to `none`; scripted tests remain the
+CI path. The Codex surface is development-only pending separate production suitability and live
+compatibility evaluation.

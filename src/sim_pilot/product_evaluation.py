@@ -9,7 +9,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Literal
 from uuid import NAMESPACE_URL, uuid5
 
@@ -64,7 +64,7 @@ class EvaluationCall(EvaluationModel):
     request_id: str | None = None
     latency_ms: float = Field(ge=0)
     token_usage: ProviderTokenUsage | None = None
-    estimated_cost_usd: float = Field(ge=0)
+    estimated_cost_usd: float | None = Field(default=None, ge=0)
 
 
 class EvaluationRuntimeResult(EvaluationModel):
@@ -104,7 +104,7 @@ class ProductEvaluationResult(EvaluationModel):
     total_latency_ms: float = Field(ge=0)
     total_input_tokens: int = Field(ge=0)
     total_output_tokens: int = Field(ge=0)
-    estimated_cost_usd: float = Field(ge=0)
+    estimated_cost_usd: float | None = Field(default=None, ge=0)
     failure_category: str | None = None
     failure_message: str | None = None
     manual_rating: Literal["correct", "acceptable", "annoying", "incorrect", "unsafe"] | None = None
@@ -112,23 +112,65 @@ class ProductEvaluationResult(EvaluationModel):
 
 
 class EvaluationRunConfiguration(EvaluationModel):
-    compiler_provider: Literal["openai"]
-    decision_provider: Literal["openai"]
+    compiler_provider: Literal["openai", "codex"]
+    decision_provider: Literal["openai", "codex"]
     compiler_model: str = Field(min_length=1)
     decision_model: str = Field(min_length=1)
     input_cost_per_million_usd: float = Field(ge=0)
     output_cost_per_million_usd: float = Field(ge=0)
     max_runtime_iterations: int = Field(gt=0)
-    max_output_tokens_per_call: int = Field(gt=0)
+    max_output_tokens_per_call: int | None = Field(default=None, gt=0)
+    cost_reporting: Literal["api_estimate", "plan_allowance"] = "api_estimate"
+    max_compiler_calls: int = Field(default=31, gt=0)
+    max_decision_calls: int = Field(default=48, ge=0)
+    max_total_calls: int = Field(default=79, gt=0)
+    total_wall_clock_seconds: float = Field(default=3_600, gt=0)
+    stop_on_usage_limit: bool = True
+
+
+class EvaluationLimitError(RuntimeError):
+    """The explicitly configured evaluation invocation budget was reached."""
+
+
+class _EvaluationBudget:
+    def __init__(self, configuration: EvaluationRunConfiguration) -> None:
+        self._configuration = configuration
+        self._started = monotonic()
+        self.compiler_calls = 0
+        self.decision_calls = 0
+
+    def before_compiler(self) -> None:
+        self._check_time()
+        if self.compiler_calls >= self._configuration.max_compiler_calls:
+            raise EvaluationLimitError("maximum compiler-call count reached")
+        self._check_total()
+        self.compiler_calls += 1
+
+    def before_decision(self) -> None:
+        self._check_time()
+        if self.decision_calls >= self._configuration.max_decision_calls:
+            raise EvaluationLimitError("maximum decision-call count reached")
+        self._check_total()
+        self.decision_calls += 1
+
+    def _check_total(self) -> None:
+        if self.compiler_calls + self.decision_calls >= self._configuration.max_total_calls:
+            raise EvaluationLimitError("maximum total provider-call count reached")
+
+    def _check_time(self) -> None:
+        if monotonic() - self._started >= self._configuration.total_wall_clock_seconds:
+            raise EvaluationLimitError("total evaluation wall-clock limit reached")
 
 
 class _TrackingCompilerProvider:
-    def __init__(self, provider: CompilerProvider) -> None:
+    def __init__(self, provider: CompilerProvider, budget: _EvaluationBudget) -> None:
         self._provider = provider
+        self._budget = budget
         self.calls: list[tuple[ProviderMetadata, float]] = []
         self.attempts = 0
 
     async def compile(self, instruction: str) -> CompilerProviderResult:
+        self._budget.before_compiler()
         self.attempts += 1
         started = perf_counter()
         result = await self._provider.compile(instruction)
@@ -138,12 +180,14 @@ class _TrackingCompilerProvider:
 
 
 class _TrackingDecisionProvider:
-    def __init__(self, provider: DecisionProvider) -> None:
+    def __init__(self, provider: DecisionProvider, budget: _EvaluationBudget) -> None:
         self._provider = provider
+        self._budget = budget
         self.calls: list[tuple[ProviderMetadata, float]] = []
         self.attempts = 0
 
     async def decide(self, context: DecisionContext) -> DecisionProviderResult:
+        self._budget.before_decision()
         self.attempts += 1
         started = perf_counter()
         result = await self._provider.decide(context)
@@ -188,13 +232,22 @@ def _atomic_write(path: Path, content: str) -> None:
 def _estimated_cost(
     usage: ProviderTokenUsage | None,
     configuration: EvaluationRunConfiguration,
-) -> float:
-    if usage is None:
-        return 0.0
+) -> float | None:
+    if configuration.cost_reporting == "plan_allowance" or usage is None:
+        return None
     return (
         usage.input_tokens * configuration.input_cost_per_million_usd
         + usage.output_tokens * configuration.output_cost_per_million_usd
     ) / 1_000_000
+
+
+def _provider_surface(configuration: EvaluationRunConfiguration) -> str:
+    providers = {configuration.compiler_provider, configuration.decision_provider}
+    if providers == {"codex"}:
+        return "Codex CLI using authenticated ChatGPT access"
+    if providers == {"openai"}:
+        return "OpenAI API"
+    return "Mixed: OpenAI API and Codex CLI using authenticated ChatGPT access"
 
 
 def _call(
@@ -219,13 +272,17 @@ def _safe_error(error: Exception) -> str:
     return re.sub(r"sk-[A-Za-z0-9_-]{8,}", "[REDACTED]", message)[:500]
 
 
-def _result_totals(calls: Iterable[EvaluationCall]) -> tuple[float, int, int, float]:
+def _result_totals(calls: Iterable[EvaluationCall]) -> tuple[float, int, int, float | None]:
     materialized = tuple(calls)
     return (
         sum(item.latency_ms for item in materialized),
         sum(item.token_usage.input_tokens for item in materialized if item.token_usage),
         sum(item.token_usage.output_tokens for item in materialized if item.token_usage),
-        sum(item.estimated_cost_usd for item in materialized),
+        (
+            None
+            if any(item.estimated_cost_usd is None for item in materialized)
+            else sum(item.estimated_cost_usd or 0 for item in materialized)
+        ),
     )
 
 
@@ -234,9 +291,10 @@ async def _evaluate_case(
     compiler_provider: CompilerProvider,
     decision_provider: DecisionProvider,
     configuration: EvaluationRunConfiguration,
+    budget: _EvaluationBudget,
 ) -> ProductEvaluationResult:
-    tracked_compiler = _TrackingCompilerProvider(compiler_provider)
-    tracked_decisions = _TrackingDecisionProvider(decision_provider)
+    tracked_compiler = _TrackingCompilerProvider(compiler_provider, budget)
+    tracked_decisions = _TrackingDecisionProvider(decision_provider, budget)
     compilation: CompilationResult | None = None
     runtime_result = EvaluationRuntimeResult(attempted=False)
     failure_category: str | None = None
@@ -323,6 +381,8 @@ async def _evaluate_case(
         ]
     )
     latency, input_tokens, output_tokens, cost = _result_totals(calls)
+    if configuration.cost_reporting == "plan_allowance":
+        cost = None
     report = compilation.report if compilation is not None else None
     status = report.validation_status if report is not None else None
     return ProductEvaluationResult(
@@ -361,7 +421,10 @@ async def _evaluate_case(
     )
 
 
-def _aggregate(results: tuple[ProductEvaluationResult, ...]) -> dict[str, object]:
+def _aggregate(
+    results: tuple[ProductEvaluationResult, ...],
+    configuration: EvaluationRunConfiguration,
+) -> dict[str, object]:
     total = len(results)
     calls = tuple(call for result in results for call in result.calls)
     runtimes = tuple(result.runtime for result in results if result.runtime.attempted)
@@ -383,6 +446,10 @@ def _aggregate(results: tuple[ProductEvaluationResult, ...]) -> dict[str, object
     unsupported_expected = tuple(
         result for result in results if ValidationStatus.UNSUPPORTED in result.expected_statuses
     )
+    costs = tuple(
+        result.estimated_cost_usd for result in results if result.estimated_cost_usd is not None
+    )
+    cost_available = len(costs) == len(results)
 
     def percentile(percent: float) -> float:
         if not latencies:
@@ -463,10 +530,14 @@ def _aggregate(results: tuple[ProductEvaluationResult, ...]) -> dict[str, object
         "p95_call_latency_ms": percentile(0.95),
         "input_tokens": sum(result.total_input_tokens for result in results),
         "output_tokens": sum(result.total_output_tokens for result in results),
-        "estimated_cost_usd": sum(result.estimated_cost_usd for result in results),
-        "average_estimated_cost_usd": (
-            sum(result.estimated_cost_usd for result in results) / total if total else 0.0
+        "provider_surface": _provider_surface(configuration),
+        "direct_api_cost": (
+            "none; Codex allowance or credit usage is subject to the authenticated plan"
+            if configuration.cost_reporting == "plan_allowance"
+            else "estimated from token telemetry"
         ),
+        "estimated_cost_usd": sum(costs) if cost_available else None,
+        "average_estimated_cost_usd": (sum(costs) / total if total and cost_available else None),
         "failure_categories": dict(failures),
     }
 
@@ -508,6 +579,20 @@ async def run_product_evaluation(
         if unknown:
             raise ValueError(f"unknown evaluation case ids: {', '.join(sorted(unknown))}")
         cases = tuple(case for case in cases if case.id in case_ids)
+    maximum_required_compiler_calls = len(cases)
+    maximum_required_decision_calls = sum(
+        configuration.max_runtime_iterations for case in cases if case.run_runtime
+    )
+    if maximum_required_compiler_calls > configuration.max_compiler_calls:
+        raise ValueError("selected cases exceed the configured compiler-call limit")
+    if maximum_required_decision_calls > configuration.max_decision_calls:
+        raise ValueError("selected cases exceed the configured decision-call limit")
+    if (
+        maximum_required_compiler_calls + maximum_required_decision_calls
+        > configuration.max_total_calls
+    ):
+        raise ValueError("selected cases exceed the configured total provider-call limit")
+    budget = _EvaluationBudget(configuration)
     _secure_directory(output_directory)
     results_directory = output_directory / "results"
     _secure_directory(results_directory)
@@ -517,8 +602,8 @@ async def run_product_evaluation(
         "fixture": str(fixture_path),
         "fixture_sha256": fixture_digest,
         "selected_case_ids": [case.id for case in cases],
-        "maximum_provider_calls": len(cases)
-        + sum(configuration.max_runtime_iterations for case in cases if case.run_runtime),
+        "maximum_provider_calls": maximum_required_compiler_calls + maximum_required_decision_calls,
+        "provider_surface": _provider_surface(configuration),
         "recording_notice": (
             "Contains prompts, instructions, structured responses, and telemetry; "
             "contains no API keys."
@@ -537,12 +622,22 @@ async def run_product_evaluation(
             compiler_provider_factory(case),
             decision_provider_factory(case),
             configuration,
+            budget,
         )
         _atomic_write(destination, result.model_dump_json(indent=2) + "\n")
         results.append(result)
+        if (
+            configuration.stop_on_usage_limit
+            and result.failure_category is not None
+            and (
+                "UsageLimit" in result.failure_category
+                or "usage or credit limit" in (result.failure_message or "")
+            )
+        ):
+            break
 
     materialized = tuple(results)
-    aggregate = _aggregate(materialized)
+    aggregate = _aggregate(materialized, configuration)
     _atomic_write(output_directory / "aggregate.json", json.dumps(aggregate, indent=2) + "\n")
     _write_review_file(output_directory / "manual_review.json", materialized)
     return aggregate
