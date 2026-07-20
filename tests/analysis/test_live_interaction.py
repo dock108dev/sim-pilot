@@ -16,7 +16,7 @@ from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
 from sim_pilot.analysis.session import AnalysisSessionStore
-from sim_pilot.analysis_provider import CodexAnalysisCompiler
+from sim_pilot.analysis_provider import CodexAnalysisCompiler, CodexExplanationProvider
 from sim_pilot.cli import capture_openttd_world_snapshot
 from sim_pilot.config import codex_model, codex_timeout_seconds
 from sim_pilot.domain.world import WorldSnapshot
@@ -137,3 +137,40 @@ def test_live_phase9_codex_compilation_remains_bounded() -> None:
     assert response is not None
     assert response.answer
     assert all(not item.executable for item in response.recommendations)
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.getenv("SIM_PILOT_LIVE_OPENTTD_INTERACTION") != "1"
+    or os.getenv("SIM_PILOT_LIVE_CODEX_INTERACTION") != "1",
+    reason="set both Phase 9 live flags for one value-gated explanation invocation",
+)
+def test_live_phase9_codex_explanation_is_value_gated_and_faithful() -> None:
+    _assert_read_only()
+    world = asyncio.run(capture_openttd_world_snapshot())
+    _assert_expected_save(world)
+    compilation = asyncio.run(DeterministicAnalysisCompiler().compile("Why am I losing money?"))
+    assert compilation.request is not None
+    response = asyncio.run(
+        AnalysisQueryService(AnalysisService(default_analyzer_registry())).analyze_request(
+            compilation.request,
+            world,
+            explanation_provider=CodexExplanationProvider(
+                model=codex_model(), timeout_seconds=codex_timeout_seconds()
+            ),
+        )
+    )
+    assert response.answer
+    assert response.explanation_value.value in {
+        "improved_answer",
+        "neutral",
+        "rejected_by_validator",
+        "provider_failed",
+    }
+    if response.explanation is not None:
+        authoritative = {
+            item.finding_id: (item.metric_name, item.metric_value) for item in response.findings
+        }
+        for statement in response.explanation.statements:
+            for metric in statement.metric_references:
+                assert (metric.metric_name, metric.metric_value) == authoritative[metric.finding_id]
