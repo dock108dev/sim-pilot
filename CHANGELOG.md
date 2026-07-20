@@ -14,8 +14,8 @@ All notable changes to Sim Pilot are documented in this file.
 - Corrected compiler subject invariants, supplied a bounded analyzer compatibility catalog and
   comparison/follow-up context, fixed route ranking direction and filtered no-result behavior, and
   retained deterministic fallback when explanations violate evidence contracts.
-- The proposed next direction is interaction quality, not gameplay automation; broad company-health
-  answers remain too generic and verbose despite trustworthy underlying evidence.
+- The owner confirmed interaction quality as the next direction, not gameplay automation; the
+  answer-first Phase 8D assignment keeps observations, analyzers, runtime, and actions unchanged.
 
 ### OpenTTD world observation
 

@@ -1,7 +1,7 @@
 # Phase 8C Founder Intelligence Validation
 
 - Date: 2026-07-19 to 2026-07-20
-- Status: proposed product direction awaiting owner confirmation
+- Status: complete; owner confirmed Direction D on 2026-07-20
 - Boundary: read-only OpenTTD intelligence; no gameplay mutation
 - Save: `phase8a-live-complete.sav`
 - World: `spb-1636440848-1049736244`
@@ -15,7 +15,7 @@ large entity collections. The weakest capability is answering the question actua
 company-health queries frequently receive the same generic findings even when the player asks
 specifically about loss, debt, available cash, or change.
 
-The proposed primary direction is **Direction D — Improve Product Interaction**. This means
+The confirmed primary direction is **Direction D — Improve Product Interaction**. This means
 question-sensitive deterministic answers, direct premise correction, fewer repeated sections,
 better follow-up context, and honest insufficient-data outcomes. It does not mean adding a GUI or
 automation. Route building, purchases, order changes, scheduled monitoring, and autonomous
@@ -142,9 +142,10 @@ The first four gaps have future advisory value. None currently justifies gamepla
 | Personal desire to use | 2 |
 | Engineering cost to improve | 3 |
 
-## Proposed direction and tester decision
+## Confirmed direction and tester decision
 
-Choose **Direction D — Improve Product Interaction**. The highest-value next capability is a small
+The owner confirmed **Direction D — Improve Product Interaction**. The highest-value next
+capability is a small
 question-specific answer layer that selects the decisive metric, corrects false premises, reports
 insufficient comparison evidence, and emits one direct answer plus one supporting finding and one
 limitation. Deep observation work should follow only for questions that remain valuable after this
@@ -155,5 +156,5 @@ Outside testing is not justified. The bounded sample misses the required 70% cor
 help is also not justified yet; the next work is a narrow product/analysis correction, not a
 parallel infrastructure program.
 
-This proposed direction awaits owner confirmation before a detailed next-phase implementation
-assignment is written.
+The detailed next-phase assignment is
+[018 — Answer-first product interaction](018-answer-first-product-interaction.md).

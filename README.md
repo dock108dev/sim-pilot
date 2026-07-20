@@ -165,5 +165,6 @@ Every serialized domain model carries `schema_version=1`. Changes to `TaskSpecif
 - [SSOT boundaries](docs/016-ssot-enforcement.md)
 - [Founder intelligence validation](docs/015-founder-intelligence-validation.md)
 - [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md)
+- [Phase 8D answer-first assignment](docs/018-answer-first-product-interaction.md)
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
