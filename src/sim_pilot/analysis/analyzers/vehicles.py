@@ -148,9 +148,21 @@ class VehiclePerformanceAnalyzer:
                 )
                 findings.append(finding)
         findings = _rank_findings(findings, request)
+        observed_company_vehicles = any(
+            item.owner_id == observer_company(current).id for item in current.vehicles
+        )
+        clean_no_match = not vehicles and bool(request.filters) and observed_company_vehicles
         return AnalyzerResult(
-            status=AnalysisStatus.COMPLETED if vehicles else AnalysisStatus.INSUFFICIENT_DATA,
-            answer=f"Analyzed {len(vehicles)} vehicles and produced {len(findings)} findings.",
+            status=(
+                AnalysisStatus.COMPLETED
+                if vehicles or clean_no_match
+                else AnalysisStatus.INSUFFICIENT_DATA
+            ),
+            answer=(
+                "No observed vehicles matched the requested filters."
+                if clean_no_match
+                else f"Analyzed {len(vehicles)} vehicles and produced {len(findings)} findings."
+            ),
             findings=tuple(findings),
             recommendations=tuple(recommendations),
             limitations=(

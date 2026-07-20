@@ -75,6 +75,27 @@ def test_vehicle_analyzer_handles_empty_selection() -> None:
     assert result.status is AnalysisStatus.INSUFFICIENT_DATA
 
 
+def test_vehicle_analyzer_reports_filtered_no_match_as_clean_result() -> None:
+    result = VehiclePerformanceAnalyzer().analyze(
+        AnalysisRequest(
+            analysis_type=AnalysisType.VEHICLE_PERFORMANCE,
+            question="Are any vehicles idle?",
+            filters=(
+                AnalysisFilter(
+                    field=AnalysisFilterField.RUNNING_STATE,
+                    operator=AnalysisFilterOperator.EQUAL,
+                    values=("idle",),
+                ),
+            ),
+        ),
+        snapshot(vehicles=(vehicle("running"),)),
+        None,
+    )
+    assert result.status is AnalysisStatus.COMPLETED
+    assert result.findings == ()
+    assert result.answer == "No observed vehicles matched the requested filters."
+
+
 def test_fleet_summary_is_deterministic() -> None:
     result = FleetSummaryAnalyzer().analyze(
         AnalysisRequest(analysis_type=AnalysisType.FLEET_SUMMARY, question="Fleet"),

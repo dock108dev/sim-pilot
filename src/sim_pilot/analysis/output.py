@@ -25,11 +25,12 @@ def render_analysis(
     title = response.request.analysis_type.value.replace("_", " ").title()
     lines = [f"{title}: {_status_label(response)}", "", "Fact", response.answer]
 
-    findings = tuple(item for item in response.findings if item.kind is FindingKind.OBSERVED_FACT)
+    visible_findings = response.findings if detailed else response.findings[:2]
+    findings = tuple(item for item in visible_findings if item.kind is FindingKind.OBSERVED_FACT)
     inferences = tuple(
-        item for item in response.findings if item.kind is FindingKind.INFERRED_FINDING
+        item for item in visible_findings if item.kind is FindingKind.INFERRED_FINDING
     )
-    quality = tuple(item for item in response.findings if item.kind is FindingKind.DATA_QUALITY)
+    quality = tuple(item for item in visible_findings if item.kind is FindingKind.DATA_QUALITY)
     _render_finding_group(lines, "Finding", findings, response, snapshot, detailed)
     _render_finding_group(lines, "Inference", inferences, response, snapshot, detailed)
     _render_finding_group(lines, "Data quality", quality, response, snapshot, detailed)
@@ -39,7 +40,8 @@ def render_analysis(
 
     lines.extend(("", "Recommendation"))
     if response.recommendations:
-        for item in sorted(response.recommendations, key=lambda value: value.priority):
+        recommendations = sorted(response.recommendations, key=lambda value: value.priority)
+        for item in recommendations if detailed else recommendations[:1]:
             lines.append(f"- Inspect: {item.title}. {item.rationale}")
             if detailed and item.limitations:
                 lines.extend(f"  Limitation: {value}" for value in item.limitations)
@@ -48,11 +50,14 @@ def render_analysis(
 
     if response.explanation is not None:
         lines.extend(("", "Model explanation"))
-        lines.extend(f"- {item.text}" for item in response.explanation.statements)
+        statements = response.explanation.statements
+        selected_statements = statements if detailed else statements[:2]
+        lines.extend(f"- {item.text}" for item in selected_statements)
 
     limitations = _limitations(response)
     lines.extend(("", "Limitation"))
-    lines.extend(f"- {item}" for item in limitations)
+    selected_limitations = limitations if detailed else limitations[:1]
+    lines.extend(f"- {item}" for item in selected_limitations)
 
     if response.request.ranking is not None:
         lines.extend(("", "Ranking"))
