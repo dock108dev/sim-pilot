@@ -46,7 +46,13 @@ uv run sim-pilot ask \
 ```
 
 Provider output never becomes evidence. Deterministic findings remain authoritative, and an
-unfaithful explanation is rejected. OpenAI is never invoked silently.
+unfaithful explanation is rejected. A faithful explanation is also suppressed when it merely
+repeats the deterministic answer. OpenAI is never invoked silently.
+
+The first sentence answers the requested concept directly. For example, a positive company result
+corrects “Why am I losing money?” instead of printing a generic health summary. Compact output then
+shows at most one observed result, one supported inspection recommendation, one limitation, and one
+follow-up.
 
 ## Evidence and entities
 
@@ -83,7 +89,8 @@ uv run sim-pilot openttd analyze changes \
 
 A compatible pair alone does not guarantee useful history: the current snapshot must contain or
 derive typed changes. Treat a zero-change answer as meaningful only when actual delta evidence was
-evaluated.
+evaluated. Otherwise Sim Pilot returns `insufficient_data` and asks for a compatible snapshot with
+typed changes.
 
 ## What works best
 
@@ -107,8 +114,9 @@ forecasts, construction, exact congestion, and prescriptive automation are unsup
 - Infrastructure maintenance and detailed expense causality are unavailable.
 - Competitor state, tiles, terrain, infrastructure ownership, and native crash events are partial
   or unavailable.
-- Company-health answers are currently less question-sensitive than direct metric commands.
-- Model explanations add latency and did not show enough value in the Phase 8C founder sample.
+- “Available cash” is the observed balance; committed costs and infrastructure liabilities are not
+  exposed.
+- Model explanations add latency and are hidden when they do not materially improve the answer.
 
 See [Founder Intelligence Validation](015-founder-intelligence-validation.md) for measured product
 results and [Gameplay Analysis Engine](014-gameplay-analysis-engine.md) for deterministic rules.

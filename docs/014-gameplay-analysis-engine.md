@@ -8,7 +8,7 @@ Analysis requests are not action tasks and never enter the one-action runtime.
 ```text
 question -> analysis compiler -> AnalysisRequest -> canonical WorldSnapshot
          -> deterministic analyzer -> findings/evidence/recommendations
-         -> optional explanation provider -> AnalysisResponse
+         -> deterministic answer composer -> optional explanation provider -> AnalysisResponse
 ```
 
 Deterministic findings are authoritative. Model providers may compile a question or explain existing
@@ -26,7 +26,9 @@ The closed version-1 catalog is `company_health`, `financial_summary`, `vehicle_
 `entity_summary`.
 
 Each request is immutable and semantic: type, subject IDs, filters, ranking, explicit comparison
-snapshot, top-N limit, and recommendation preference are separate from the original question.
+snapshot, top-N limit, recommendation preference, and typed answer intent are separate from the
+original question. Answer intent preserves concept, metric, period, answer kind, asserted premise,
+and comparison requirement.
 Unknown types, filters, rankings, subjects, analyzers, evidence references, and incompatible
 comparisons fail closed.
 
@@ -46,6 +48,37 @@ Confidence describes evidence quality, not model confidence:
 Recommendations are linked to supporting findings, informational, and always
 `executable=false`. Priority is deterministic: severity base `0/25/50/75` plus confidence points
 `5/15/25`. Stable IDs and entity IDs break ties.
+
+## Answer composition
+
+Phase 8D composes the default answer after deterministic analysis. The composer may select and
+phrase retained evidence but cannot create a metric, cause, entity, or recommendation. Compact text
+leads with the exact conclusion and shows at most one decisive finding, one recommendation linked
+to that finding, one material limitation, and one useful follow-up. It normally remains below 80
+words. Detailed and JSON output retain the complete authoritative response.
+
+False loss and zero-debt premises are corrected explicitly. A ranking result is displayed only
+when its metric, direction, period, filters, and actual top filtered entity agree. A compatible
+comparison pair without evaluated typed delta evidence returns `insufficient_data`. Nearby metrics
+are never substituted. Idle no-results name the deterministic depot/stopped/idle criteria.
+
+First-sentence selection is closed and deterministic:
+
+| Analysis type | First-sentence source |
+|---|---|
+| `company_health` | Requested operating-result concept; explicitly corrects a loss premise. |
+| `financial_summary` | Exact requested cash, loan, value, income, or expense finding. |
+| `vehicle_performance` | Exact ranked metric and actual top filtered vehicle; idle questions select only idle findings. |
+| `station_performance` | Exact requested station metric and top retained station finding. |
+| `route_performance` | Exact requested route metric; unavailable negative-vehicle count is insufficient data. |
+| `service_coverage` | Highest-priority retained coverage finding. |
+| `industry_opportunities` | Exact ranked opportunity/production finding or highest-priority retained finding. |
+| `town_coverage` | Exact ranked population/opportunity finding or highest-priority retained finding. |
+| `fleet_summary` | Highest-priority retained observed fleet finding. |
+| `world_changes` | Highest-priority typed snapshot-change finding; no typed change evidence is insufficient data. |
+| `anomaly_detection` | Highest-priority evaluated typed-delta finding; no evaluated delta is insufficient data. |
+| `priority_review` | Highest-priority retained deterministic inspection finding. |
+| `entity_summary` | First retained canonical entity finding; an unobserved subject is insufficient data. |
 
 ## Sim Pilot heuristics
 
@@ -137,19 +170,21 @@ uv run sim-pilot ask --live \
   "Which trains made the least money last year?"
 ```
 
-Compact text is the default. `--detailed`, `--json`, `--top`, `--entity`, `--snapshot`, and
+Compact answer-first text is the default. `--detailed`, `--json`, `--top`, `--entity`, `--snapshot`, and
 `--comparison` expose detail, stable filters, and explicit snapshot selection. Analysis never
 initializes the action runtime.
 
 Phase 8C added owner-only analysis-session records plus `analysis show`, `analysis evidence`, and
-`analysis entity`. Compact output separates fact, finding, inference, recommendation, and
-limitation; detailed output includes metrics, evidence, ranking metadata, and snapshot identity.
+`analysis entity`. Phase 8D adds typed presentation metadata for the decisive finding,
+recommendation, limitation, follow-up, and evaluated/excluded counts. Detailed output includes all
+findings, metrics, evidence, ranking metadata, and snapshot identity.
 
 The live founder validation proved compiler and explanation faithfulness but did not prove broad
 gameplay value. In the bounded company-health founder sample, 40% of answers were correct or
 acceptable, 20% revealed at least partially non-obvious information, and 80% were too verbose.
-Answers must become question-sensitive before the analysis catalog or action surface expands. Full
-results are in [015-founder-intelligence-validation.md](015-founder-intelligence-validation.md).
+Phase 8D corrected the interaction defects without expanding the analysis catalog or action
+surface. The preserved five-question run is documented in
+[015-founder-intelligence-validation.md](015-founder-intelligence-validation.md).
 
 ## Unsupported evidence and safety
 

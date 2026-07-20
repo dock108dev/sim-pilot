@@ -97,3 +97,19 @@ The main product defect is now answer selection rather than transport safety: th
 returns a generic analyzer summary instead of directly answering debt, loss, available cash, or
 change. The proposed direction is a narrow interaction-quality phase before deeper observation or
 automation. See [015-founder-intelligence-validation.md](015-founder-intelligence-validation.md).
+
+## Phase 8D update — answer-first interaction
+
+Phase 8D implemented that narrow correction without changing observation, analyzers, runtime,
+persistence, or actions. The preserved five-question company set now:
+
+- answers company health from the observed operating result;
+- corrects the false company-level loss premise;
+- states the observed zero loan directly;
+- states cash with an explicit committed-cost limitation;
+- returns `insufficient_data` instead of treating a compatible comparison as evidence of change.
+
+All five compact outputs are below 80 words. Ranking regressions preserve vehicle type, metric,
+period, direction, filtered counts, and deterministic tie-break behavior; a retained finding that
+is not the actual filtered top result is not displayed. The remaining product decision is the one
+grouped founder review, not broader testing or new feature work.

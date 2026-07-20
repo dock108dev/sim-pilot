@@ -158,3 +158,28 @@ parallel infrastructure program.
 
 The detailed next-phase assignment is
 [018 — Answer-first product interaction](018-answer-first-product-interaction.md).
+
+## Phase 8D focused before/after result
+
+Phase 8D reran only the five company-health questions against the preserved Phase 8C current and
+comparison snapshots. It made no live collection and no model call. The deterministic analyzers and
+their full findings were unchanged; only compilation intent, answer composition, integrity checks,
+and rendering changed.
+
+| Question | Phase 8C defect | Phase 8D first sentence | Words |
+|---|---|---|---:|
+| How healthy is my company right now? | Generic analyzer summary | The observed company-level operating result is positive at £941,840; this is a financial health signal, not a complete company-health verdict. | 47 |
+| Why am I losing money? | Failed to correct false premise | You are not losing money at company level in the observed accounting period; income plus expenses is £941,840. | 60 |
+| Am I carrying too much debt? | Omitted zero loan | There is no observed outstanding company loan. | 25 |
+| How much cash do I actually have available? | Generic findings obscured cash | The observed company cash balance available in this snapshot is £489,776,288. | 30 |
+| Is the company improving or getting worse? | Compatible pair implied an answer without deltas | Insufficient data: the compatible snapshots contain no evaluated typed change evidence. | 36 |
+
+The word counts include the entire compact answer, not only the first sentence. All are below the
+80-word target. Provider-free regressions also confirmed exact rail/last-year/descending intent,
+honest insufficient data when the best retained finding is not the actual filtered top entity,
+idle no-result criteria, negative-route metric preservation, contextual route resolution, and
+comparison evidence requirements.
+
+Engineering acceptance is complete. The remaining product criterion is deliberately subjective:
+the owner reviews these five answers once as a group and answers only whether the set is acceptable,
+whether they would use it during play, and an optional single note.

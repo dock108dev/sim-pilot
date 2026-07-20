@@ -16,6 +16,9 @@ All notable changes to Sim Pilot are documented in this file.
   retained deterministic fallback when explanations violate evidence contracts.
 - The owner confirmed interaction quality as the next direction, not gameplay automation; the
   answer-first Phase 8D assignment keeps observations, analyzers, runtime, and actions unchanged.
+- Implemented Phase 8D typed answer intent, exact first-sentence composition, false-premise
+  correction, ranking/comparison evidence gates, compact one-finding output, and redundant
+  explanation suppression without changing analyzers or gameplay authority.
 
 ### OpenTTD world observation
 

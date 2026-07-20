@@ -126,9 +126,10 @@ Codex or OpenAI compilation and explanation are optional and must be selected ex
 `--compiler-provider` and `--explanation-provider`. See the
 [gameplay analysis engine](docs/014-gameplay-analysis-engine.md).
 The [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md) documents evidence
-drill-down, snapshot freshness, comparisons, current strengths, and product limitations. Phase 8C
-found that direct evidence is trustworthy but broad company-health answers remain too generic and
-verbose; gameplay automation is still out of scope.
+drill-down, snapshot freshness, comparisons, current strengths, and product limitations. Phase 8D
+adds question-specific first-sentence answers, premise correction, exact metric/ranking checks,
+honest insufficient-data outcomes, and compact one-finding output. Gameplay automation remains out
+of scope.
 
 ## Architecture at a glance
 
