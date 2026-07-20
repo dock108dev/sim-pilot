@@ -20,7 +20,15 @@ from sim_pilot.analysis.contracts import (
 from sim_pilot.analysis.output import render_analysis
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
-from sim_pilot.domain.world import Company, FieldChanged, Vehicle
+from sim_pilot.domain.world import (
+    CargoFlow,
+    CargoFlowScope,
+    Company,
+    Coordinates,
+    FieldChanged,
+    Station,
+    Vehicle,
+)
 from tests.analysis.helpers import snapshot
 
 
@@ -189,6 +197,68 @@ def test_company_direction_question_does_not_overclaim_from_one_change() -> None
     )
 
     assert response.answer.startswith("I cannot determine the company's overall direction")
+
+
+def test_detected_anomaly_names_subject_metric_and_direction_first() -> None:
+    previous = _company_world().model_copy(
+        update={
+            "metadata": _company_world().metadata.model_copy(
+                update={"snapshot_id": "snapshot-previous", "game_date": 10}
+            ),
+            "companies": (_company_world().companies[0].model_copy(update={"cash": 3_000_000}),),
+        }
+    )
+    compilation = _compile("Are there any unusual changes?", comparison="snapshot-previous")
+    assert compilation.request is not None
+
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        compilation.request, _company_world(), previous
+    )
+
+    assert response.answer == (
+        "Yes. Founder Test's cash fell from £3,000,000 to £2,000,000, meeting the bounded "
+        "anomaly threshold."
+    )
+
+
+def test_station_follow_up_names_resolved_station_in_direct_answer() -> None:
+    station = Station(
+        id="station-1",
+        name="Transfer",
+        owner_id="company-1",
+        coordinates=Coordinates(x=1, y=1),
+        waiting_cargo=(
+            CargoFlow(
+                cargo_id="cargo-1",
+                cargo_type="Goods",
+                scope=CargoFlowScope.STATION,
+                entity_id="station-1",
+                waiting=1_000,
+            ),
+        ),
+        vehicle_count=1,
+    )
+    world = snapshot().model_copy(update={"stations": (station,)})
+    compilation = asyncio.run(
+        DeterministicAnalysisCompiler().compile(
+            "What makes this station worth inspecting?",
+            context=AnalysisCompilerContext(
+                prior_analysis_id="analysis:0123456789abcdef0123",
+                focus_entities=(
+                    AnalysisEntityContext(
+                        subject_type=AnalysisSubjectType.STATION,
+                        canonical_id="station-1",
+                        alias="S-001",
+                    ),
+                ),
+            ),
+        )
+    )
+    assert compilation.request is not None
+
+    response = AnalysisService(default_analyzer_registry()).analyze(compilation.request, world)
+
+    assert response.answer.startswith("Transfer is worth inspecting because ")
 
 
 def test_best_train_ranking_keeps_type_metric_period_and_direction() -> None:

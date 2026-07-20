@@ -16,6 +16,7 @@ from sim_pilot.analysis.contracts import (
     AnalysisType,
     AnswerBasis,
     AnswerConcept,
+    ConversationReferenceKind,
     EvidenceSourceType,
     FindingKind,
     FindingSeverity,
@@ -317,6 +318,45 @@ def _direct_answer(
         return f"The most material evaluated change is: {finding.summary}"
     if concept is AnswerConcept.IDLE:
         return f"At least one idle vehicle was detected: {_primary_label(finding, snapshot)}."
+    if concept is AnswerConcept.ANOMALY:
+        label = _primary_label(finding, snapshot)
+        metric = (finding.metric_name or "observed value").replace("_", " ")
+        before = finding.comparison_value
+        after = finding.metric_value
+        currency_metric = finding.metric_name in {
+            "cash",
+            "loan",
+            "profit_last_year",
+            "aggregate_profit_last_year",
+            RankingMetric.ROUTE_AGGREGATE_PROFIT.value,
+        }
+        before_text = (
+            _currency(before)
+            if currency_metric and isinstance(before, (int, float))
+            else str(before)
+        )
+        after_text = (
+            _currency(after) if currency_metric and isinstance(after, (int, float)) else str(after)
+        )
+        direction = (
+            "fell from"
+            if isinstance(before, (int, float))
+            and isinstance(after, (int, float))
+            and after < before
+            else "rose from"
+        )
+        return (
+            f"Yes. {label}'s {metric} {direction} {before_text} to {after_text}, meeting the "
+            "bounded anomaly threshold."
+        )
+    if (
+        intent is not None
+        and intent.reference_kind is ConversationReferenceKind.STATION
+        and request.subject_ids
+    ):
+        label = _primary_label(finding, snapshot)
+        detail = finding.summary[0].lower() + finding.summary[1:]
+        return f"{label} is worth inspecting because {detail}"
     if (
         intent is not None
         and intent.premise is PremiseType.ROUTE_LOSING
