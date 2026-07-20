@@ -21,6 +21,7 @@ from sim_pilot.analysis.analyzers.support import (
 from sim_pilot.analysis.analyzers.vehicles import VehiclePerformanceAnalyzer
 from sim_pilot.analysis.contracts import (
     AnalysisFinding,
+    AnalysisPopulation,
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisStatus,
@@ -31,6 +32,8 @@ from sim_pilot.analysis.contracts import (
     EvidenceSourceType,
     FindingKind,
     FindingSeverity,
+    RankingDirection,
+    RankingMetric,
 )
 from sim_pilot.analysis.evidence import field_evidence, observer_company
 from sim_pilot.domain.models import JsonValue
@@ -60,7 +63,6 @@ class WorldChangesAnalyzer:
         current: WorldSnapshot,
         comparison: WorldSnapshot | None,
     ) -> AnalyzerResult:
-        del request
         findings: list[AnalysisFinding] = []
         recommendations: list[AnalysisRecommendation] = []
         for index, change in enumerate(current.changes):
@@ -146,6 +148,26 @@ class WorldChangesAnalyzer:
             add_result(findings, recommendations, result)
         if not current.metadata.complete:
             add_result(findings, recommendations, _incomplete_snapshot(current, self.analysis_type))
+        subject_findings = [
+            item
+            for item in findings
+            if request.subject_type in {None, AnalysisSubjectType.WORLD}
+            or any(evidence.entity_type is request.subject_type for evidence in item.evidence)
+        ]
+        requested_metric = (
+            None if request.answer_intent is None else request.answer_intent.requested_metric
+        )
+        findings = (
+            subject_findings
+            if requested_metric is None
+            else [item for item in subject_findings if item.metric_name == requested_metric.value]
+        )
+        retained_ids = {item.finding_id for item in findings}
+        recommendations = [
+            item
+            for item in recommendations
+            if set(item.supporting_finding_ids).issubset(retained_ids)
+        ]
         findings.sort(key=_priority_sort)
         limitations: tuple[str, ...] = ()
         if comparison is not None and not current.changes:
@@ -159,6 +181,18 @@ class WorldChangesAnalyzer:
             findings=tuple(findings),
             recommendations=tuple(recommendations),
             limitations=limitations,
+            population=AnalysisPopulation(
+                eligible_count=len(subject_findings),
+                evaluated_count=len(findings),
+                excluded_count=len(subject_findings) - len(findings),
+                exclusion_reasons=(
+                    ("Changes without the requested metric were excluded.",)
+                    if len(subject_findings) > len(findings)
+                    else ()
+                ),
+                metric=requested_metric,
+                period=(None if request.answer_intent is None else request.answer_intent.period),
+            ),
         )
 
 
@@ -365,6 +399,14 @@ class PriorityReviewAnalyzer:
         TownCoverageAnalyzer(),
         IndustryOpportunitiesAnalyzer(),
     )
+    _source_subjects = {
+        AnalysisType.COMPANY_HEALTH: AnalysisSubjectType.COMPANY,
+        AnalysisType.VEHICLE_PERFORMANCE: AnalysisSubjectType.VEHICLE,
+        AnalysisType.STATION_PERFORMANCE: AnalysisSubjectType.STATION,
+        AnalysisType.ROUTE_PERFORMANCE: AnalysisSubjectType.ROUTE,
+        AnalysisType.TOWN_COVERAGE: AnalysisSubjectType.TOWN,
+        AnalysisType.INDUSTRY_OPPORTUNITIES: AnalysisSubjectType.INDUSTRY,
+    }
 
     def analyze(
         self,
@@ -375,6 +417,10 @@ class PriorityReviewAnalyzer:
         candidates: list[AnalysisFinding] = []
         limitations: list[str] = []
         for analyzer in self._sources:
+            if request.subject_type not in {None, AnalysisSubjectType.WORLD} and (
+                self._source_subjects[analyzer.analysis_type] is not request.subject_type
+            ):
+                continue
             source_request = AnalysisRequest(
                 analysis_type=analyzer.analysis_type,
                 question=request.question,
@@ -421,6 +467,13 @@ class PriorityReviewAnalyzer:
             findings=tuple(findings),
             recommendations=tuple(recommendations),
             limitations=tuple(dict.fromkeys(limitations)),
+            population=AnalysisPopulation(
+                eligible_count=len(candidates),
+                evaluated_count=len(candidates),
+                excluded_count=0,
+                metric=RankingMetric.PRIORITY_SCORE,
+                direction=RankingDirection.DESCENDING,
+            ),
         )
 
 

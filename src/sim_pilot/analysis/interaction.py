@@ -15,7 +15,6 @@ from sim_pilot.analysis.contracts import (
     AnalysisType,
     AnswerBasis,
     AnswerConcept,
-    AnswerMetric,
     EvidenceSourceType,
     FindingKind,
     FindingSeverity,
@@ -30,16 +29,24 @@ _RANKING_METRICS: dict[RankingMetric, str] = {
     RankingMetric.COMPANY_VALUE: "company_value",
     RankingMetric.INCOME: "income",
     RankingMetric.EXPENSES: "expenses",
+    RankingMetric.NET_OPERATING_RESULT: "net_operating_result",
     RankingMetric.PROFIT_THIS_YEAR: "profit_this_year",
     RankingMetric.PROFIT_LAST_YEAR: "profit_last_year",
     RankingMetric.AGE_DAYS: "age_days",
+    RankingMetric.RUNNING_STATE: "running_state",
     RankingMetric.WAITING_CARGO: "waiting_cargo",
     RankingMetric.VEHICLE_COUNT: "vehicle_count",
+    RankingMetric.CARGO_PER_VEHICLE: "cargo_per_vehicle",
+    RankingMetric.CARGO_TYPE_COVERAGE: "cargo_type_coverage",
+    RankingMetric.NEGATIVE_PROFIT_VEHICLE_COUNT: "negative_profit_vehicle_count",
+    RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT: "vehicle_type_aggregate_profit",
     RankingMetric.ROUTE_AGGREGATE_PROFIT: "route_aggregate_profit",
     RankingMetric.ROUTE_MEDIAN_PROFIT: "route_median_profit",
+    RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT: "route_negative_vehicle_count",
     RankingMetric.POPULATION: "population",
     RankingMetric.PRODUCTION: "production",
     RankingMetric.OPPORTUNITY_SCORE: "opportunity_score",
+    RankingMetric.PRIORITY_SCORE: "priority_score",
     RankingMetric.MATERIALITY: "materiality",
 }
 
@@ -85,6 +92,23 @@ def compose_interaction(
             )
 
     decisive = _select_decisive(request, findings, required_metric, snapshot)
+    if intent is not None and intent.concept is AnswerConcept.IDLE and decisive is None:
+        direct = "No idle vehicles were detected in the observed company fleet."
+        return (
+            status,
+            direct,
+            AnalysisPresentation(
+                direct_answer=direct,
+                basis=AnswerBasis.CONFIRMED_FACT,
+                limitation=(
+                    "Idle means a vehicle was observed in a depot or with running state "
+                    "idle or stopped."
+                ),
+                evaluated_count=_owned_vehicle_count(snapshot),
+                excluded_count=0,
+            ),
+        )
+
     if required_metric is not None and decisive is None:
         direct = (
             f"Insufficient data: no evaluated finding matches the requested "
@@ -101,23 +125,6 @@ def compose_interaction(
                 follow_up="Choose a supported metric or collect the missing evidence.",
                 evaluated_count=evaluated,
                 excluded_count=excluded,
-            ),
-        )
-
-    if intent is not None and intent.concept is AnswerConcept.IDLE and decisive is None:
-        direct = "No idle vehicles were detected in the observed company fleet."
-        return (
-            status,
-            direct,
-            AnalysisPresentation(
-                direct_answer=direct,
-                basis=AnswerBasis.CONFIRMED_FACT,
-                limitation=(
-                    "Idle means a vehicle was observed in a depot or with running state "
-                    "idle or stopped."
-                ),
-                evaluated_count=_owned_vehicle_count(snapshot),
-                excluded_count=0,
             ),
         )
 
@@ -209,8 +216,6 @@ def _select_decisive(
     intent = request.answer_intent
     if intent is not None and intent.concept is AnswerConcept.IDLE:
         return next((item for item in findings if item.finding_code == "idle_vehicle"), None)
-    if required_metric == AnswerMetric.NEGATIVE_VEHICLE_COUNT.value:
-        return None
     candidates = (
         findings
         if required_metric is None

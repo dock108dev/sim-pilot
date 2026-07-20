@@ -12,8 +12,11 @@ from sim_pilot.analysis.compiler import (
 )
 from sim_pilot.analysis.contracts import (
     AnalysisRequest,
+    AnalysisSubjectType,
     AnalysisType,
     AnswerConcept,
+    AnswerPeriod,
+    QuestionForm,
     RankingDirection,
     RankingMetric,
 )
@@ -41,6 +44,51 @@ def test_deterministic_compiler_ranks_profitable_routes_descending() -> None:
     assert result.request.ranking is not None
     assert result.request.ranking.metric is RankingMetric.ROUTE_AGGREGATE_PROFIT
     assert result.request.ranking.direction is RankingDirection.DESCENDING
+
+
+@pytest.mark.parametrize(
+    ("question", "subject"),
+    (
+        ("Which station should I inspect first?", AnalysisSubjectType.STATION),
+        ("Which vehicle should I inspect first?", AnalysisSubjectType.VEHICLE),
+        ("Which route should I inspect first?", AnalysisSubjectType.ROUTE),
+    ),
+)
+def test_priority_questions_preserve_named_entity_class(
+    question: str, subject: AnalysisSubjectType
+) -> None:
+    result = compile_question(question)
+    assert result.request is not None
+    assert result.request.analysis_type is AnalysisType.PRIORITY_REVIEW
+    assert result.request.subject_type is subject
+    assert result.request.ranking is not None
+    assert result.request.ranking.metric is RankingMetric.PRIORITY_SCORE
+
+
+@pytest.mark.parametrize(
+    ("question", "subject", "metric"),
+    (
+        ("Which towns gained population?", AnalysisSubjectType.TOWN, RankingMetric.POPULATION),
+        (
+            "Did profitable vehicles become unprofitable?",
+            AnalysisSubjectType.VEHICLE,
+            RankingMetric.PROFIT_LAST_YEAR,
+        ),
+    ),
+)
+def test_typed_comparisons_preserve_subject_and_metric(
+    question: str,
+    subject: AnalysisSubjectType,
+    metric: RankingMetric,
+) -> None:
+    result = compile_question(question)
+    assert result.request is not None
+    assert result.request.analysis_type is AnalysisType.WORLD_CHANGES
+    assert result.request.subject_type is subject
+    assert result.request.answer_intent is not None
+    assert result.request.answer_intent.question_forms == (QuestionForm.COMPARISON,)
+    assert result.request.answer_intent.requested_metric is metric
+    assert result.request.answer_intent.period is AnswerPeriod.BETWEEN_SNAPSHOTS
 
 
 def test_deterministic_compiler_uses_supplied_comparison_context() -> None:

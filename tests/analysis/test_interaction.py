@@ -170,7 +170,7 @@ def test_best_train_ranking_keeps_type_metric_period_and_direction() -> None:
     assert request.answer_intent.period is AnswerPeriod.LAST_YEAR
 
 
-def test_ranking_does_not_present_a_non_top_retained_finding() -> None:
+def test_positive_ranking_presents_the_actual_top_entity() -> None:
     profitable = Vehicle(
         id="rail-best",
         type="rail",
@@ -194,8 +194,8 @@ def test_ranking_does_not_present_a_non_top_retained_finding() -> None:
         snapshot(vehicles=(profitable, losing)),
     )
 
-    assert response.status is AnalysisStatus.INSUFFICIENT_DATA
-    assert "no evaluated finding matches" in response.answer
+    assert response.status is AnalysisStatus.COMPLETED_WITH_LIMITATIONS
+    assert "Best" in response.answer
     assert response.presentation is not None
     assert response.presentation.evaluated_count == 2
     assert response.presentation.excluded_count == 0
@@ -204,9 +204,13 @@ def test_ranking_does_not_present_a_non_top_retained_finding() -> None:
 def test_route_losing_vehicle_request_is_not_changed_to_total_vehicle_count() -> None:
     compilation = _compile("Which routes have the most losing vehicles?")
     assert compilation.request is not None
-    assert compilation.request.ranking is None
+    assert compilation.request.ranking is not None
+    assert compilation.request.ranking.metric is RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT
     assert compilation.request.answer_intent is not None
-    assert compilation.request.answer_intent.requested_metric is AnswerMetric.NEGATIVE_VEHICLE_COUNT
+    assert (
+        compilation.request.answer_intent.requested_metric
+        is AnswerMetric.ROUTE_NEGATIVE_VEHICLE_COUNT
+    )
 
 
 def test_idle_no_result_names_the_deterministic_criteria() -> None:

@@ -103,6 +103,7 @@ class AnalysisService:
             limitations=limitations,
             unsupported_parts=result.unsupported_parts,
             presentation=presentation,
+            population=result.population,
             generated_at=self._clock(),
         )
 

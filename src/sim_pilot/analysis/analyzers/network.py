@@ -8,6 +8,7 @@ from sim_pilot.analysis.analyzers.base import AnalyzerResult
 from sim_pilot.analysis.analyzers.support import add_result, make_finding, requested_ids
 from sim_pilot.analysis.contracts import (
     AnalysisFinding,
+    AnalysisPopulation,
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisStatus,
@@ -165,6 +166,13 @@ class StationPerformanceAnalyzer:
             answer=f"Analyzed {len(stations)} stations without inferring congestion.",
             findings=tuple(findings),
             recommendations=tuple(recommendations),
+            population=AnalysisPopulation(
+                eligible_count=len(stations),
+                evaluated_count=len(stations),
+                excluded_count=0,
+                metric=(request.ranking.metric if request.ranking is not None else None),
+                direction=(request.ranking.direction if request.ranking is not None else None),
+            ),
         )
 
 
@@ -239,6 +247,43 @@ class RoutePerformanceAnalyzer:
                 recommendation_code="inspect_negative_route" if aggregate < 0 else None,
             )
             add_result(findings, recommendations, result)
+            if (
+                request.ranking is not None
+                and request.ranking.metric is RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT
+            ):
+                finding, _ = make_finding(
+                    snapshot=current,
+                    analysis_type=self.analysis_type,
+                    code="route_negative_vehicle_count",
+                    entity_ids=(route.id,),
+                    kind=FindingKind.OBSERVED_FACT,
+                    severity=(
+                        FindingSeverity.WARNING if negative > 0 else FindingSeverity.INFORMATIONAL
+                    ),
+                    title=f"Losing vehicles on route {route.id}",
+                    summary=(
+                        f"{negative} of {len(members)} observed vehicles on route {route.id} "
+                        "lost money last year."
+                    ),
+                    metric_name=RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT.value,
+                    metric_value=negative,
+                    confidence=EvidenceConfidence.HIGH,
+                    evidence=(
+                        metric_evidence(
+                            current,
+                            entity_type=AnalysisSubjectType.ROUTE,
+                            entity_id=route.id,
+                            field=RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT.value,
+                            value=negative,
+                            inputs={
+                                "vehicle_ids": [item.id for item in members],
+                                "profit_last_year": list(profits),
+                            },
+                        ),
+                    ),
+                    limitations=(ROUTE_LIMITATION,),
+                )
+                findings.append(finding)
             if len(members) >= 2 and share >= 0.5:
                 add_result(
                     findings,
@@ -304,17 +349,36 @@ class RoutePerformanceAnalyzer:
             findings=tuple(findings),
             recommendations=tuple(recommendations),
             limitations=tuple(dict.fromkeys(limitations)),
+            population=AnalysisPopulation(
+                eligible_count=len(routes),
+                evaluated_count=sum(
+                    bool([item for item in route.vehicle_ids if item in vehicles])
+                    for route in routes
+                ),
+                excluded_count=sum(
+                    not bool([item for item in route.vehicle_ids if item in vehicles])
+                    for route in routes
+                ),
+                exclusion_reasons=(
+                    ("Routes without resolved observed vehicles were excluded.",)
+                    if any(
+                        not any(item in vehicles for item in route.vehicle_ids) for route in routes
+                    )
+                    else ()
+                ),
+                metric=(request.ranking.metric if request.ranking is not None else None),
+                direction=(request.ranking.direction if request.ranking is not None else None),
+            ),
         )
 
 
 def _route_sort_key(item: AnalysisFinding, request: AnalysisRequest) -> tuple[int, float, str]:
     value = item.metric_value
     ranking = request.ranking
-    matched = bool(
-        (ranking is None or ranking.metric is RankingMetric.ROUTE_AGGREGATE_PROFIT)
-        and item.metric_name == "route_aggregate_profit"
-        and isinstance(value, (int, float))
+    expected = (
+        RankingMetric.ROUTE_AGGREGATE_PROFIT.value if ranking is None else ranking.metric.value
     )
+    matched = item.metric_name == expected and isinstance(value, (int, float))
     numeric = float(value) if matched and isinstance(value, (int, float)) else 0.0
     if ranking is not None and ranking.direction is RankingDirection.DESCENDING:
         numeric = -numeric

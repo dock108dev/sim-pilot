@@ -5,7 +5,11 @@ from sim_pilot.analysis.contracts import (
     AnalysisFilterOperator,
     AnalysisRequest,
     AnalysisStatus,
+    AnalysisSubjectType,
     AnalysisType,
+    RankingDirection,
+    RankingMetric,
+    RankingRequest,
 )
 from sim_pilot.domain.world import Vehicle
 from tests.analysis.helpers import snapshot
@@ -106,3 +110,56 @@ def test_fleet_summary_is_deterministic() -> None:
         "fleet_count_rail",
         "fleet_count_road",
     ]
+
+
+def test_vehicle_positive_ranking_evaluates_the_full_eligible_population() -> None:
+    result = VehiclePerformanceAnalyzer().analyze(
+        AnalysisRequest(
+            analysis_type=AnalysisType.VEHICLE_PERFORMANCE,
+            question="Which vehicle performed best last year?",
+            ranking=RankingRequest(
+                metric=RankingMetric.PROFIT_LAST_YEAR,
+                direction=RankingDirection.DESCENDING,
+            ),
+        ),
+        snapshot(
+            vehicles=(
+                vehicle("best", previous=500),
+                vehicle("middle", previous=100),
+                vehicle("loss", previous=-10),
+            )
+        ),
+        None,
+    )
+
+    assert result.findings[0].evidence[0].entity_id == "best"
+    assert result.population is not None
+    assert result.population.evaluated_count == 3
+    assert result.population.excluded_count == 0
+
+
+def test_fleet_summary_ranks_vehicle_types_by_aggregate_profit() -> None:
+    result = FleetSummaryAnalyzer().analyze(
+        AnalysisRequest(
+            analysis_type=AnalysisType.FLEET_SUMMARY,
+            question="Which vehicle type is dragging down profitability?",
+            subject_type=AnalysisSubjectType.VEHICLE,
+            ranking=RankingRequest(
+                metric=RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+                direction=RankingDirection.ASCENDING,
+            ),
+        ),
+        snapshot(
+            vehicles=(
+                vehicle("rail-loss", kind="rail", previous=-200),
+                vehicle("rail-gain", kind="rail", previous=50),
+                vehicle("road-gain", kind="road", previous=100),
+            )
+        ),
+        None,
+    )
+
+    assert result.findings[0].metric_value == -150
+    assert "1 of 2 lost money" in result.findings[0].summary
+    assert result.population is not None
+    assert result.population.evaluated_count == 2

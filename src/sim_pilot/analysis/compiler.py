@@ -238,6 +238,7 @@ def _analysis_type(question: str) -> AnalysisType | None:
                 "getting worse",
                 "gained",
                 "became unprofitable",
+                "become unprofitable",
             ),
             AnalysisType.WORLD_CHANGES,
         ),

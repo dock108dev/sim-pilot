@@ -110,7 +110,7 @@ def add_result(
 
 
 def requested_ids(request: AnalysisRequest, subject: AnalysisSubjectType) -> frozenset[str] | None:
-    if request.subject_type is subject:
+    if request.subject_type is subject and request.subject_ids:
         return frozenset(request.subject_ids)
     return None
 

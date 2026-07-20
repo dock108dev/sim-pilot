@@ -10,13 +10,20 @@ from sim_pilot.analysis.contracts import (
     AnalysisType,
     FindingKind,
     FindingSeverity,
+    RankingDirection,
+    RankingMetric,
+    RankingRequest,
 )
 from sim_pilot.domain.world import (
+    CargoFlow,
+    CargoFlowScope,
     Company,
+    Coordinates,
     CoverageChanged,
     CoverageStatus,
     EntityRemoved,
     FieldChanged,
+    Station,
     Vehicle,
 )
 from tests.analysis.helpers import snapshot
@@ -134,3 +141,55 @@ def test_priority_review_exposes_priority_score() -> None:
     assert result.findings[0].metric_name == "priority_score"
     assert result.findings[0].metric_value == 100
     assert result.findings[0].analysis_type is AnalysisType.PRIORITY_REVIEW
+
+
+def test_station_priority_review_never_returns_vehicle_findings() -> None:
+    station = Station(
+        id="station-1",
+        name="Station One",
+        owner_id="company-1",
+        coordinates=Coordinates(x=1, y=1),
+        waiting_cargo=(
+            CargoFlow(
+                cargo_id="cargo-1",
+                cargo_type="Goods",
+                scope=CargoFlowScope.STATION,
+                entity_id="station-1",
+                waiting=1_500,
+            ),
+        ),
+        vehicle_count=0,
+    )
+    loss = Vehicle(
+        id="vehicle-1",
+        type="road",
+        name="Loss",
+        age_days=100,
+        profit_this_year=-100,
+        profit_last_year=-100,
+        running_state="running",
+        coordinates=None,
+        in_depot=False,
+        owner_id="company-1",
+    )
+    result = PriorityReviewAnalyzer().analyze(
+        AnalysisRequest(
+            analysis_type=AnalysisType.PRIORITY_REVIEW,
+            question="Which station should I inspect first?",
+            subject_type=AnalysisSubjectType.STATION,
+            ranking=RankingRequest(
+                metric=RankingMetric.PRIORITY_SCORE,
+                direction=RankingDirection.DESCENDING,
+            ),
+        ),
+        snapshot(vehicles=(loss,)).model_copy(update={"stations": (station,)}),
+        None,
+    )
+
+    assert result.findings
+    assert all(
+        evidence.entity_type is AnalysisSubjectType.STATION
+        for finding in result.findings
+        for evidence in finding.evidence
+        if evidence.entity_type is not None
+    )

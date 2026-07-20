@@ -11,6 +11,7 @@ from sim_pilot.analysis.analyzers.support import (
 )
 from sim_pilot.analysis.contracts import (
     AnalysisFinding,
+    AnalysisPopulation,
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisStatus,
@@ -37,6 +38,8 @@ class VehiclePerformanceAnalyzer:
     ) -> AnalyzerResult:
         del comparison
         vehicles = _selected_vehicles(request, current)
+        if request.ranking is not None:
+            return _ranked_vehicle_result(request, current, vehicles)
         findings: list[AnalysisFinding] = []
         recommendations: list[AnalysisRecommendation] = []
         for vehicle in vehicles:
@@ -168,6 +171,11 @@ class VehiclePerformanceAnalyzer:
             limitations=(
                 "Vehicle classes are not normalized against each other unless filtered by type.",
             ),
+            population=AnalysisPopulation(
+                eligible_count=len(vehicles),
+                evaluated_count=len(vehicles),
+                excluded_count=0,
+            ),
         )
 
 
@@ -182,6 +190,11 @@ class FleetSummaryAnalyzer:
     ) -> AnalyzerResult:
         del comparison
         vehicles = _selected_vehicles(request, current)
+        if (
+            request.ranking is not None
+            and request.ranking.metric is RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT
+        ):
+            return _vehicle_type_profit_result(request, current, vehicles)
         counts: dict[str, int] = {}
         for vehicle in vehicles:
             counts[vehicle.type] = counts.get(vehicle.type, 0) + 1
@@ -215,7 +228,151 @@ class FleetSummaryAnalyzer:
             status=AnalysisStatus.COMPLETED if vehicles else AnalysisStatus.INSUFFICIENT_DATA,
             answer=f"Observed fleet contains {len(vehicles)} vehicles across {len(counts)} types.",
             findings=tuple(findings),
+            population=AnalysisPopulation(
+                eligible_count=len(counts),
+                evaluated_count=len(counts),
+                excluded_count=0,
+                metric=RankingMetric.VEHICLE_COUNT,
+            ),
         )
+
+
+def _ranked_vehicle_result(
+    request: AnalysisRequest,
+    snapshot: WorldSnapshot,
+    vehicles: list[Vehicle],
+) -> AnalyzerResult:
+    assert request.ranking is not None
+    metric = request.ranking.metric
+    field = {
+        RankingMetric.PROFIT_THIS_YEAR: "profit_this_year",
+        RankingMetric.PROFIT_LAST_YEAR: "profit_last_year",
+        RankingMetric.AGE_DAYS: "age_days",
+    }[metric]
+    reverse = request.ranking.direction is RankingDirection.DESCENDING
+    ranked = sorted(
+        vehicles,
+        key=lambda item: (
+            -getattr(item, field) if reverse else getattr(item, field),
+            item.id,
+        ),
+    )
+    findings: list[AnalysisFinding] = []
+    recommendations: list[AnalysisRecommendation] = []
+    for position, vehicle in enumerate(ranked[: request.ranking.limit], start=1):
+        value = getattr(vehicle, field)
+        finding, recommendation = make_finding(
+            snapshot=snapshot,
+            analysis_type=AnalysisType.VEHICLE_PERFORMANCE,
+            code=f"ranked_{field}_{position}",
+            entity_ids=(vehicle.id,),
+            kind=FindingKind.OBSERVED_FACT,
+            severity=FindingSeverity.INFORMATIONAL,
+            title=f"#{position} {vehicle.name} by {field.replace('_', ' ')}",
+            summary=f"{vehicle.name} ranks #{position} with {field}={value}.",
+            metric_name=metric.value,
+            metric_value=value,
+            confidence=EvidenceConfidence.HIGH,
+            evidence=(_vehicle_field(snapshot, vehicle, field),),
+            limitations=(
+                ("A negative accounting result warrants inspection before any action.",)
+                if field in {"profit_this_year", "profit_last_year"} and value < 0
+                else ()
+            ),
+            recommendation_code=(
+                "inspect_ranked_unprofitable_vehicle"
+                if field in {"profit_this_year", "profit_last_year"} and value < 0
+                else None
+            ),
+        )
+        findings.append(finding)
+        if recommendation is not None:
+            recommendations.append(recommendation)
+    return AnalyzerResult(
+        status=AnalysisStatus.COMPLETED if vehicles else AnalysisStatus.INSUFFICIENT_DATA,
+        answer=f"Ranked {len(vehicles)} eligible vehicles by {metric.value}.",
+        findings=tuple(findings),
+        recommendations=tuple(recommendations),
+        limitations=(
+            "Vehicle classes are not normalized against each other unless filtered by type.",
+        ),
+        population=AnalysisPopulation(
+            eligible_count=len(vehicles),
+            evaluated_count=len(vehicles),
+            excluded_count=0,
+            metric=metric,
+            direction=request.ranking.direction,
+        ),
+    )
+
+
+def _vehicle_type_profit_result(
+    request: AnalysisRequest,
+    snapshot: WorldSnapshot,
+    vehicles: list[Vehicle],
+) -> AnalyzerResult:
+    assert request.ranking is not None
+    groups: dict[str, list[Vehicle]] = {}
+    for vehicle in vehicles:
+        groups.setdefault(vehicle.type, []).append(vehicle)
+    values = [
+        (
+            vehicle_type,
+            sum(item.profit_last_year for item in members),
+            sum(item.profit_last_year < 0 for item in members),
+            len(members),
+        )
+        for vehicle_type, members in groups.items()
+    ]
+    reverse = request.ranking.direction is RankingDirection.DESCENDING
+    values.sort(key=lambda item: (-item[1] if reverse else item[1], item[0]))
+    findings: list[AnalysisFinding] = []
+    for position, (vehicle_type, profit, negative, count) in enumerate(
+        values[: request.ranking.limit], start=1
+    ):
+        finding, _ = make_finding(
+            snapshot=snapshot,
+            analysis_type=AnalysisType.FLEET_SUMMARY,
+            code=f"vehicle_type_profit_{vehicle_type}",
+            entity_ids=(observer_company(snapshot).id,),
+            kind=FindingKind.OBSERVED_FACT,
+            severity=(FindingSeverity.WARNING if profit < 0 else FindingSeverity.INFORMATIONAL),
+            title=f"#{position} {vehicle_type.title()} aggregate profit",
+            summary=(
+                f"{vehicle_type.title()} vehicles produced {profit} aggregate last-year profit; "
+                f"{negative} of {count} lost money."
+            ),
+            metric_name=RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT.value,
+            metric_value=profit,
+            confidence=EvidenceConfidence.HIGH,
+            evidence=(
+                metric_evidence(
+                    snapshot,
+                    entity_type=AnalysisSubjectType.COMPANY,
+                    entity_id=observer_company(snapshot).id,
+                    field=f"vehicle_type_aggregate_profit.{vehicle_type}",
+                    value=profit,
+                    inputs={
+                        "vehicle_type": vehicle_type,
+                        "vehicle_count": count,
+                        "negative_vehicle_count": negative,
+                    },
+                ),
+            ),
+        )
+        findings.append(finding)
+    return AnalyzerResult(
+        status=AnalysisStatus.COMPLETED if groups else AnalysisStatus.INSUFFICIENT_DATA,
+        answer=f"Ranked {len(groups)} vehicle types by aggregate last-year profit.",
+        findings=tuple(findings),
+        population=AnalysisPopulation(
+            eligible_count=len(groups),
+            evaluated_count=len(groups),
+            excluded_count=0,
+            metric=RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+            direction=request.ranking.direction,
+        ),
+    )
 
 
 def _selected_vehicles(request: AnalysisRequest, snapshot: WorldSnapshot) -> list[Vehicle]:
