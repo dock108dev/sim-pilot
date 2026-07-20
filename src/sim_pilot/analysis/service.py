@@ -14,6 +14,7 @@ from sim_pilot.analysis.contracts import (
     AnalysisStatus,
 )
 from sim_pilot.analysis.errors import AnalysisComparisonError, AnalyzerResultError
+from sim_pilot.analysis.interaction import compose_interaction
 from sim_pilot.analysis.registry import AnalyzerRegistry
 from sim_pilot.domain.world import CoverageStatus, WorldSnapshot
 
@@ -81,16 +82,27 @@ class AnalysisService:
         status = result.status
         if limitations and status is AnalysisStatus.COMPLETED:
             status = AnalysisStatus.COMPLETED_WITH_LIMITATIONS
+        status, answer, presentation = compose_interaction(
+            request,
+            snapshot=snapshot,
+            comparison=comparison,
+            status=status,
+            findings=findings,
+            recommendations=recommendations,
+            limitations=limitations,
+            fallback_answer=result.answer,
+        )
         return AnalysisResponse(
             request=request,
             snapshot_id=snapshot.metadata.snapshot_id,
             status=status,
-            answer=result.answer,
+            answer=answer,
             findings=findings,
             recommendations=recommendations,
             assumptions=result.assumptions,
             limitations=limitations,
             unsupported_parts=result.unsupported_parts,
+            presentation=presentation,
             generated_at=self._clock(),
         )
 
