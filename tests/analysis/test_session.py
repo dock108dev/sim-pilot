@@ -84,6 +84,29 @@ def test_session_store_round_trips_owner_only_records(tmp_path: Path) -> None:
         stat.S_IMODE(item.stat().st_mode) == 0o600 for item in (tmp_path / "sessions").iterdir()
     )
 
+    context = store.compiler_context(world)
+    assert context.prior_analysis_id == record.analysis_id
+    assert len(context.focus_entities) == 1
+    assert context.focus_entities[0].subject_type is AnalysisSubjectType.COMPANY
+
+
+def test_session_context_is_dropped_when_save_identity_changes(tmp_path: Path) -> None:
+    world = snapshot()
+    store = AnalysisSessionStore(tmp_path / "sessions")
+    store.save(response(world), world)
+    changed = world.model_copy(
+        update={
+            "metadata": world.metadata.model_copy(
+                update={"save_generation": world.metadata.save_generation + 1}
+            )
+        }
+    )
+
+    context = store.compiler_context(changed)
+
+    assert context.prior_analysis_id is None
+    assert context.focus_entities == ()
+
 
 def test_session_store_rejects_path_traversal(tmp_path: Path) -> None:
     store = AnalysisSessionStore(tmp_path)

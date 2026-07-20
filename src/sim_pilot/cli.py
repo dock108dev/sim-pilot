@@ -26,7 +26,6 @@ from sim_pilot.analysis import (
 from sim_pilot.analysis.compiler import (
     AnalysisCompilation,
     AnalysisCompiler,
-    AnalysisCompilerContext,
 )
 from sim_pilot.analysis.errors import AnalysisError
 from sim_pilot.analysis.evidence_view import (
@@ -811,6 +810,7 @@ def _emit_analysis(
     *,
     json_output: bool,
     detailed: bool,
+    evidence: bool = False,
 ) -> None:
     if json_output:
         _emit(response)
@@ -826,6 +826,7 @@ def _emit_analysis(
             detailed=detailed,
             snapshot=record.snapshot,
             snapshot_age_seconds=age,
+            evidence=evidence,
         )
     )
     typer.echo("")
@@ -860,6 +861,7 @@ def analysis_ask(
     maximum_findings: Annotated[int, typer.Option("--top", min=1, max=20)] = 5,
     model: Annotated[str | None, typer.Option("--model")] = None,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
+    evidence: Annotated[bool, typer.Option("--evidence")] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
     fresh: Annotated[bool, typer.Option("--fresh")] = False,
@@ -887,13 +889,15 @@ def analysis_ask(
         compiler = _analysis_compiler(compiler_provider, model)
         if compiler_provider is not AnalysisProviderName.NONE:
             progress.compiling()
+        context = _analysis_session_store().compiler_context(
+            current,
+            comparison_snapshot_id=(
+                None if comparison is None else comparison.metadata.snapshot_id
+            ),
+        )
         compilation = await compiler.compile(
             question,
-            context=AnalysisCompilerContext(
-                comparison_snapshot_id=(
-                    None if comparison is None else comparison.metadata.snapshot_id
-                )
-            ),
+            context=context,
         )
         if compilation.request is None:
             return compilation, None, current
@@ -908,8 +912,6 @@ def analysis_ask(
             }
         )
         progress.analyzing(current)
-        if explanation_provider is not AnalysisProviderName.NONE:
-            progress.explaining()
         response = await AnalysisQueryService(
             AnalysisService(default_analyzer_registry())
         ).analyze_request(
@@ -924,10 +926,19 @@ def analysis_ask(
     try:
         compilation, response, current = asyncio.run(run())
         if response is None:
-            _emit(compilation)
+            if json_output:
+                _emit(compilation)
+            else:
+                typer.echo(compilation.clarification or compilation.unsupported_reason)
             raise typer.Exit(INVALID_INPUT)
         record = _analysis_session_store().save(response, current)
-        _emit_analysis(response, record, json_output=json_output, detailed=detailed)
+        _emit_analysis(
+            response,
+            record,
+            json_output=json_output,
+            detailed=detailed,
+            evidence=evidence,
+        )
     except typer.Exit:
         raise
     except (

@@ -17,7 +17,7 @@ from sim_pilot.domain import (
     WorldSnapshot,
     WorldSnapshotMetadata,
 )
-from sim_pilot.domain.world import CoverageStatus
+from sim_pilot.domain.world import CoverageStatus, Vehicle
 from sim_pilot.intent_compiler import IntentCompiler
 from sim_pilot.intent_compiler.providers import ScriptedCompilerProvider
 from sim_pilot.openttd.config import OpenTTDConfiguration
@@ -601,7 +601,8 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
     assert ask.exit_code == 0, ask.output
     assert ask.output.index("The company is losing money at company level") > 0
     assert "Company Health" not in ask.output
-    assert "Negative operating result" in ask.output
+    assert "Evidence" in ask.output
+    assert "net operating result is -£1,000" in ask.output
     assert direct.exit_code == 0, direct.output
     assert '"analysis_type": "company_health"' in direct.output
 
@@ -638,6 +639,51 @@ def test_analysis_cli_defaults_to_live_with_progress_and_supports_quiet(
     assert "Analyzing 0 vehicles and 0 stations" in result.output
     assert quiet.exit_code == 0, quiet.output
     assert "Collecting OpenTTD snapshot" not in quiet.output
+
+
+def test_analysis_cli_resolves_single_vehicle_follow_up_from_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vehicle = Vehicle(
+        id="vehicle-1",
+        type="road",
+        name="Loss Maker",
+        age_days=20,
+        profit_this_year=-50,
+        profit_last_year=-100,
+        running_state="running",
+        coordinates=None,
+        in_depot=False,
+        owner_id="company-1",
+    )
+    world = analysis_snapshot(vehicles=(vehicle,))
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(world.model_dump_json(), encoding="utf-8")
+    monkeypatch.setattr(
+        "sim_pilot.cli.analysis_session_directory", lambda: tmp_path / "analysis-session"
+    )
+    runner = CliRunner()
+
+    first = runner.invoke(
+        app,
+        ["ask", "Which vehicles are losing the most money?", "--snapshot", str(snapshot_path)],
+    )
+    follow_up = runner.invoke(
+        app,
+        ["ask", "Why did you flag that vehicle?", "--snapshot", str(snapshot_path)],
+    )
+    incompatible = runner.invoke(
+        app,
+        ["ask", "Why is this route losing money?", "--snapshot", str(snapshot_path)],
+    )
+
+    assert first.exit_code == 0, first.output
+    assert follow_up.exit_code == 0, follow_up.output
+    assert "Loss Maker" in follow_up.output
+    assert "Which vehicle do you mean" not in follow_up.output
+    assert incompatible.exit_code != 0
+    assert "Which route do you mean" in incompatible.output
+    assert '"clarification"' not in incompatible.output
 
 
 def test_openttd_bridge_doctor_reports_negotiated_health(

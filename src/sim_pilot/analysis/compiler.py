@@ -28,6 +28,7 @@ from sim_pilot.analysis.contracts import (
     RankingDirection,
     RankingMetric,
     RankingRequest,
+    ResolvedConversationReference,
 )
 from sim_pilot.analysis.errors import AnalysisRequestError
 
@@ -59,6 +60,7 @@ class AnalysisCompilerContext(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     comparison_snapshot_id: str | None = Field(default=None, min_length=1)
+    prior_analysis_id: str | None = Field(default=None, pattern=r"^analysis:[0-9a-f]{20}$")
     entity_counts: dict[AnalysisSubjectType, int] = Field(default_factory=_empty_entity_counts)
     focus_entities: tuple[AnalysisEntityContext, ...] = Field(default=(), max_length=10)
     prior_findings: tuple[AnalysisFindingContext, ...] = Field(default=(), max_length=5)
@@ -149,21 +151,34 @@ class DeterministicAnalysisCompiler:
                     "Ask about company health, vehicles, stations, routes, coverage, or changes."
                 )
             )
-        if any(term in normalized for term in ("this route", "that route")):
-            routes = (
-                ()
-                if context is None
-                else tuple(
+        reference_kind, reference_phrase = _conversation_reference(normalized)
+        resolved_entity: AnalysisEntityContext | None = None
+        resolved_finding: AnalysisFindingContext | None = None
+        if reference_kind is not None:
+            if context is None:
+                return AnalysisCompilation(clarification=_reference_clarification(reference_kind))
+            if reference_kind is ConversationReferenceKind.FINDING:
+                if len(context.prior_findings) != 1:
+                    return AnalysisCompilation(clarification="Which displayed finding do you mean?")
+                resolved_finding = context.prior_findings[0]
+                candidates = tuple(
                     item
                     for item in context.focus_entities
-                    if item.subject_type is AnalysisSubjectType.ROUTE
+                    if item.canonical_id in resolved_finding.entity_ids
                 )
-            )
-            if len(routes) != 1:
-                return AnalysisCompilation(
-                    clarification="Name one route or continue from a single unambiguous route."
+            else:
+                subject = _reference_subject(reference_kind)
+                candidates = tuple(
+                    item
+                    for item in context.focus_entities
+                    if subject is None or item.subject_type is subject
                 )
+            if len(candidates) != 1:
+                return AnalysisCompilation(clarification=_reference_clarification(reference_kind))
+            resolved_entity = candidates[0]
         analysis_type = _analysis_type(normalized)
+        if analysis_type is None and resolved_entity is not None:
+            analysis_type = AnalysisType.ENTITY_SUMMARY
         if analysis_type is None:
             return AnalysisCompilation(
                 unsupported_reason=(
@@ -199,15 +214,20 @@ class DeterministicAnalysisCompiler:
         ranking = _ranking(normalized, analysis_type)
         subject_type = _subject_scope(normalized, analysis_type)
         subject_ids: tuple[str, ...] = ()
-        if any(term in normalized for term in ("this route", "that route")):
-            assert context is not None
-            route = next(
-                item
-                for item in context.focus_entities
-                if item.subject_type is AnalysisSubjectType.ROUTE
-            )
-            subject_type = AnalysisSubjectType.ROUTE
-            subject_ids = (route.canonical_id,)
+        resolved_reference = None
+        if resolved_entity is not None:
+            assert reference_kind is not None
+            subject_type = resolved_entity.subject_type
+            subject_ids = (resolved_entity.canonical_id,)
+            if context is not None and context.prior_analysis_id is not None:
+                resolved_reference = ResolvedConversationReference(
+                    kind=reference_kind,
+                    phrase=reference_phrase,
+                    prior_analysis_id=context.prior_analysis_id,
+                    subject_type=resolved_entity.subject_type,
+                    entity_id=resolved_entity.canonical_id,
+                    finding_id=(None if resolved_finding is None else resolved_finding.finding_id),
+                )
         request = AnalysisRequest(
             analysis_type=analysis_type,
             question=question.strip(),
@@ -219,6 +239,7 @@ class DeterministicAnalysisCompiler:
             answer_intent=answer_intent_for_question(
                 normalized, analysis_type, ranking, subject_type
             ),
+            resolved_reference=resolved_reference,
         )
         validate_analysis_request(request)
         return AnalysisCompilation(request=request)
@@ -345,6 +366,40 @@ def _subject_scope(question: str, analysis_type: AnalysisType) -> AnalysisSubjec
     return None
 
 
+def _conversation_reference(
+    question: str,
+) -> tuple[ConversationReferenceKind | None, str]:
+    for phrase, kind in (
+        ("that vehicle", ConversationReferenceKind.VEHICLE),
+        ("this vehicle", ConversationReferenceKind.VEHICLE),
+        ("that route", ConversationReferenceKind.ROUTE),
+        ("this route", ConversationReferenceKind.ROUTE),
+        ("that station", ConversationReferenceKind.STATION),
+        ("this station", ConversationReferenceKind.STATION),
+        ("that finding", ConversationReferenceKind.FINDING),
+        ("this finding", ConversationReferenceKind.FINDING),
+        ("the top opportunity", ConversationReferenceKind.TOP_OPPORTUNITY),
+    ):
+        if phrase in question:
+            return kind, phrase
+    return None, ""
+
+
+def _reference_subject(
+    kind: ConversationReferenceKind,
+) -> AnalysisSubjectType | None:
+    return {
+        ConversationReferenceKind.VEHICLE: AnalysisSubjectType.VEHICLE,
+        ConversationReferenceKind.ROUTE: AnalysisSubjectType.ROUTE,
+        ConversationReferenceKind.STATION: AnalysisSubjectType.STATION,
+    }.get(kind)
+
+
+def _reference_clarification(kind: ConversationReferenceKind) -> str:
+    label = kind.value.replace("_", " ")
+    return f"Which {label} do you mean? Name one or continue from one displayed result."
+
+
 def answer_intent_for_question(
     question: str,
     analysis_type: AnalysisType,
@@ -437,6 +492,20 @@ def answer_intent_for_question(
             ),
         )
     if analysis_type is AnalysisType.VEHICLE_PERFORMANCE:
+        vehicle_reference = any(term in question for term in ("this vehicle", "that vehicle"))
+        if "flag" in question and vehicle_reference:
+            return AnswerIntent(
+                concept=AnswerConcept.ENTITY,
+                kind=AnswerKind.ENTITY_FOLLOW_UP,
+                question_forms=(QuestionForm.DRILL_DOWN, QuestionForm.EVIDENCE),
+                period=AnswerPeriod.CURRENT_SNAPSHOT,
+                reference_kind=ConversationReferenceKind.VEHICLE,
+                evidence_requirements=_evidence_requirements(
+                    (QuestionForm.DRILL_DOWN, QuestionForm.EVIDENCE),
+                    None,
+                    AnalysisSubjectType.VEHICLE,
+                ),
+            )
         if "idle" in question or "sitting" in question:
             return AnswerIntent(
                 concept=AnswerConcept.IDLE,
@@ -474,7 +543,11 @@ def answer_intent_for_question(
         forms = (
             (QuestionForm.PREMISE_CHECK, QuestionForm.CAUSE, QuestionForm.DRILL_DOWN)
             if premise is not None
-            else (QuestionForm.RANKING,)
+            else (
+                (QuestionForm.DRILL_DOWN, QuestionForm.EVIDENCE)
+                if "contribute" in question and reference is not None
+                else (QuestionForm.RANKING,)
+            )
         )
         return AnswerIntent(
             concept=AnswerConcept.PERFORMANCE,
