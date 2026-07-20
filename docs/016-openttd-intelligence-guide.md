@@ -17,7 +17,7 @@ uv run sim-pilot openttd analyze coverage
 
 Use `--snapshot snapshot.json` to analyze a selected canonical snapshot. Use `--fresh` to make the
 collection intent explicit. Add `--quiet` for scripts, `--detailed` for full evidence and snapshot
-identity, or `--json` for the canonical `AnalysisResponse` only.
+identity, `--evidence` for primary metric inputs, or `--json` for the canonical response.
 
 ## Ask a natural-language question
 
@@ -47,12 +47,16 @@ uv run sim-pilot ask \
 
 Provider output never becomes evidence. Deterministic findings remain authoritative, and an
 unfaithful explanation is rejected. A faithful explanation is also suppressed when it merely
-repeats the deterministic answer. OpenAI is never invoked silently.
+repeats the deterministic answer. Simple quantities, rankings, no-results, and insufficient-data
+answers do not invoke the configured explanation provider. OpenAI is never invoked silently.
 
 The first sentence answers the requested concept directly. For example, a positive company result
 corrects “Why am I losing money?” instead of printing a generic health summary. Compact output then
-shows at most one observed result, one supported inspection recommendation, one limitation, and one
-follow-up.
+shows at most one decisive evidence item, one supported inspection step, and one limitation.
+
+Follow-up references such as `that vehicle` or `this route` use only the single primary entity from
+the latest compatible local analysis. Ambiguous, missing, or incompatible context asks for
+clarification instead of silently choosing an entity.
 
 ## Evidence and entities
 
@@ -64,7 +68,8 @@ uv run sim-pilot analysis evidence analysis:0123456789abcdefabcd FINDING_ID
 uv run sim-pilot analysis entity analysis:0123456789abcdefabcd vehicle V-001
 ```
 
-Snapshot-local aliases such as `V-001`, `S-001`, and `R-001` are readable handles. Canonical IDs
+Snapshot-local aliases such as `V-001`, `S-001`, and `R-001` are readable handles. Compact route
+labels include ordered station endpoints when available. Canonical IDs
 remain authoritative. Direct entity commands are also available:
 
 ```bash

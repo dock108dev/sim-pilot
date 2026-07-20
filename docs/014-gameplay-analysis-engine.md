@@ -15,8 +15,8 @@ Deterministic findings are authoritative. Model providers may compile a question
 findings, but cannot add evidence, change metrics or severity, claim unsupported causality, or make a
 recommendation executable. Invalid explanations are discarded and deterministic output is retained.
 
-Analysis history is not persisted. Supplied snapshots and responses remain ordinary local JSON;
-task lifecycle tables and migrations are unchanged.
+Analysis never enters task persistence. Owner-only local JSON session records retain bounded
+evidence and compatible conversational context; task lifecycle tables and migrations are unchanged.
 
 ## Supported analysis types
 
@@ -25,10 +25,10 @@ The closed version-1 catalog is `company_health`, `financial_summary`, `vehicle_
 `town_coverage`, `fleet_summary`, `world_changes`, `anomaly_detection`, `priority_review`, and
 `entity_summary`.
 
-Each request is immutable and semantic: type, subject IDs, filters, ranking, explicit comparison
+Each request is immutable and semantic: question forms, type, subject IDs, filters, ranking, explicit comparison
 snapshot, top-N limit, recommendation preference, and typed answer intent are separate from the
-original question. Answer intent preserves concept, metric, period, answer kind, asserted premise,
-and comparison requirement.
+original question. Answer intent preserves concept, metric, period, answer kind, premise,
+comparison requirement, conversational reference, and evidence preconditions.
 Unknown types, filters, rankings, subjects, analyzers, evidence references, and incompatible
 comparisons fail closed.
 
@@ -51,7 +51,7 @@ Recommendations are linked to supporting findings, informational, and always
 
 ## Answer composition
 
-Phase 8D composes the default answer after deterministic analysis. The composer may select and
+Phase 9 composes the default answer after deterministic analysis. The composer may select and
 phrase retained evidence but cannot create a metric, cause, entity, or recommendation. Compact text
 leads with the exact conclusion and shows at most one decisive finding, one recommendation linked
 to that finding, one material limitation, and one useful follow-up. It normally remains below 80
@@ -70,11 +70,11 @@ First-sentence selection is closed and deterministic:
 | `financial_summary` | Exact requested cash, loan, value, income, or expense finding. |
 | `vehicle_performance` | Exact ranked metric and actual top filtered vehicle; idle questions select only idle findings. |
 | `station_performance` | Exact requested station metric and top retained station finding. |
-| `route_performance` | Exact requested route metric; unavailable negative-vehicle count is insufficient data. |
+| `route_performance` | Exact requested aggregate profit or negative-profit vehicle count. |
 | `service_coverage` | Highest-priority retained coverage finding. |
 | `industry_opportunities` | Exact ranked opportunity/production finding or highest-priority retained finding. |
 | `town_coverage` | Exact ranked population/opportunity finding or highest-priority retained finding. |
-| `fleet_summary` | Highest-priority retained observed fleet finding. |
+| `fleet_summary` | Exact vehicle count or vehicle-type aggregate-profit finding. |
 | `world_changes` | Highest-priority typed snapshot-change finding; no typed change evidence is insufficient data. |
 | `anomaly_detection` | Highest-priority evaluated typed-delta finding; no evaluated delta is insufficient data. |
 | `priority_review` | Highest-priority retained deterministic inspection finding. |
@@ -170,7 +170,7 @@ uv run sim-pilot ask --live \
   "Which trains made the least money last year?"
 ```
 
-Compact answer-first text is the default. `--detailed`, `--json`, `--top`, `--entity`, `--snapshot`, and
+Compact answer-first text is the default. `--detailed`, `--json`, `--evidence`, `--top`, `--entity`, `--snapshot`, and
 `--comparison` expose detail, stable filters, and explicit snapshot selection. Analysis never
 initializes the action runtime.
 
@@ -178,6 +178,10 @@ Phase 8C added owner-only analysis-session records plus `analysis show`, `analys
 `analysis entity`. Phase 8D adds typed presentation metadata for the decisive finding,
 recommendation, limitation, follow-up, and evaluated/excluded counts. Detailed output includes all
 findings, metrics, evidence, ranking metadata, and snapshot identity.
+
+Phase 9 uses compatible session records to resolve one unambiguous displayed vehicle, station,
+route, finding, or top opportunity. It invalidates context across world, save-generation, observer,
+or capability changes. Compact output uses entity names and endpoint-based route labels.
 
 The live founder validation proved compiler and explanation faithfulness but did not prove broad
 gameplay value. In the bounded company-health founder sample, 40% of answers were correct or

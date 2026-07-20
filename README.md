@@ -128,8 +128,11 @@ Codex or OpenAI compilation and explanation are optional and must be selected ex
 The [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md) documents evidence
 drill-down, snapshot freshness, comparisons, current strengths, and product limitations. Phase 8D
 adds question-specific first-sentence answers, premise correction, exact metric/ranking checks,
-honest insufficient-data outcomes, and compact one-finding output. Gameplay automation remains out
-of scope.
+honest insufficient-data outcomes, and compact one-finding output. Phase 9 adds explicit question
+forms and evidence requirements, full positive rankings, subject-specific priority review,
+compatible conversational follow-ups, readable route labels, and pre-invocation explanation
+gating. Gameplay automation remains out of scope; see the
+[Phase 9 design](docs/019-interaction-ready-intelligence.md).
 
 ## Architecture at a glance
 

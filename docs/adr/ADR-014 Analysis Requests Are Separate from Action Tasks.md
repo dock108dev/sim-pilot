@@ -27,5 +27,7 @@ invalid provider result falls back to deterministic output.
 - Snapshot collection is composed at the CLI/application edge and is either live or selected from a
   canonical file.
 - Founder-facing evidence drill-down may retain owner-only local session files. These records do
-  not enter task tables, event streams, recovery, approval, or action authority.
+  not enter task tables, event streams, recovery, approval, or action authority. They may resolve
+  one unambiguous conversational entity only while world, save generation, observer company, and
+  capability identity remain compatible.
 - Future execution of advice requires a separate, explicit product and authority decision.

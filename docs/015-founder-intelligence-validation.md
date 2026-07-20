@@ -183,3 +183,11 @@ comparison evidence requirements.
 Engineering acceptance is complete. The remaining product criterion is deliberately subjective:
 the owner reviews these five answers once as a group and answers only whether the set is acceptable,
 whether they would use it during play, and an optional single note.
+
+## Phase 9 continuation
+
+Phase 9 preserves this historical result and uses it as the interaction failure baseline. It adds
+explicit question forms and evidence requirements, positive ranking populations, vehicle-type and
+route-loss aggregation, subject-specific priority review, compatible conversational references,
+readable route labels, and model pre-invocation gating. Its founder conclusion remains pending; see
+[Phase 9 validation](020-phase9-founder-interaction-validation.md).

@@ -23,6 +23,10 @@ Start with the root [README](../README.md), then use the guide that matches the 
   findings, heuristics, evidence, optional explanations, and CLI usage.
 - [OpenTTD intelligence guide](016-openttd-intelligence-guide.md): player-facing questions,
   commands, evidence drill-down, freshness, comparisons, and limitations.
+- [Phase 9 interaction-ready intelligence](019-interaction-ready-intelligence.md): question forms,
+  compact composition, session references, and explanation gating.
+- [Phase 9 founder validation](020-phase9-founder-interaction-validation.md): pending live and
+  founder product gate.
 
 ## Product and implementation contracts
 
