@@ -11,18 +11,17 @@ from sim_pilot.analysis.service import AnalysisService
 from tests.analysis.helpers import snapshot
 
 
-def test_compact_answer_separates_claim_roles_and_always_has_limitation() -> None:
+def test_compact_answer_leads_with_answer_and_has_one_result_and_limitation() -> None:
     world = snapshot()
     response = AnalysisService(default_analyzer_registry()).analyze(
         AnalysisRequest(analysis_type=AnalysisType.FINANCIAL_SUMMARY, question="Finances?"),
         world,
     )
     rendered = render_analysis(response, snapshot=world)
-    assert "\nFact\n" in rendered
-    assert "\nFinding\n" in rendered
-    assert "\nRecommendation\n" in rendered
+    assert rendered.splitlines()[0] == response.answer
+    assert rendered.count("\nObserved result\n") == 1
     assert "\nLimitation\n" in rendered
-    assert "\nAsk next\n" in rendered
+    assert "\nRecommendation\n" not in rendered
 
 
 def test_detailed_ranked_answer_shows_evidence_counts_and_snapshot_identity() -> None:
@@ -55,4 +54,5 @@ def test_no_result_answer_does_not_manufacture_a_problem() -> None:
         world,
     )
     rendered = render_analysis(response, snapshot=world)
+    assert rendered.startswith("Insufficient data:")
     assert "did not contain enough supported evidence" in rendered

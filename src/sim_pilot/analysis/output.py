@@ -22,8 +22,10 @@ def render_analysis(
     cached: bool = False,
 ) -> str:
     """Render a deterministic answer with claims separated by epistemic role."""
+    if not detailed and response.presentation is not None:
+        return _render_compact(response, snapshot)
     title = response.request.analysis_type.value.replace("_", " ").title()
-    lines = [f"{title}: {_status_label(response)}", "", "Fact", response.answer]
+    lines = [response.answer, "", f"{title}: {_status_label(response)}"]
 
     visible_findings = response.findings if detailed else response.findings[:2]
     findings = tuple(item for item in visible_findings if item.kind is FindingKind.OBSERVED_FACT)
@@ -69,8 +71,15 @@ def render_analysis(
         )
         lines.append(f"Metric: {metric} ({period})")
         if snapshot is not None:
-            evaluated = _evaluated_count(response, snapshot)
-            lines.append(f"Evaluated: {evaluated}; excluded for missing metric: 0")
+            evaluated = (
+                _evaluated_count(response, snapshot)
+                if response.presentation is None
+                else response.presentation.evaluated_count
+            )
+            excluded = 0 if response.presentation is None else response.presentation.excluded_count
+            lines.append(
+                f"Evaluated: {evaluated or 0}; excluded for missing metric: {excluded or 0}"
+            )
         lines.append("Tie-break: canonical entity ID, ascending.")
 
     if detailed and snapshot is not None:
@@ -88,6 +97,42 @@ def render_analysis(
             )
         )
     lines.extend(("", "Ask next", _next_question(response)))
+    return "\n".join(lines)
+
+
+def _render_compact(
+    response: AnalysisResponse,
+    snapshot: WorldSnapshot | None,
+) -> str:
+    presentation = response.presentation
+    assert presentation is not None
+    lines = [presentation.direct_answer]
+    finding = next(
+        (item for item in response.findings if item.finding_id == presentation.decisive_finding_id),
+        None,
+    )
+    if finding is not None:
+        identity = _finding_identity(finding, snapshot)
+        observed = f"{identity}{finding.title}"
+        if finding.metric_name is not None:
+            observed += f": {finding.metric_value}"
+        lines.extend(("", "Observed result", observed))
+    recommendation = next(
+        (
+            item
+            for item in response.recommendations
+            if item.recommendation_id == presentation.recommendation_id
+        ),
+        None,
+    )
+    if recommendation is not None:
+        lines.extend(("", "Inspect next", recommendation.title))
+    if response.explanation is not None:
+        lines.extend(("", "Why it matters", response.explanation.statements[0].text))
+    if presentation.limitation is not None:
+        lines.extend(("", "Limitation", presentation.limitation))
+    if presentation.follow_up is not None:
+        lines.extend(("", "Ask next", presentation.follow_up))
     return "\n".join(lines)
 
 

@@ -13,10 +13,15 @@ from sim_pilot.analysis.contracts import (
     FindingSeverity,
 )
 from sim_pilot.analysis.errors import AnalysisInputError
-from sim_pilot.analysis.explanation import ScriptedExplanationProvider, validate_explanation
+from sim_pilot.analysis.explanation import (
+    ScriptedExplanationProvider,
+    retain_valuable_explanation,
+    validate_explanation,
+)
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
+from sim_pilot.domain.world import Company
 from tests.analysis.helpers import snapshot
 
 
@@ -28,7 +33,7 @@ def request() -> AnalysisRequest:
     return AnalysisRequest(analysis_type=AnalysisType.FINANCIAL_SUMMARY, question="Finances?")
 
 
-def test_faithful_explanation_is_attached() -> None:
+def test_faithful_but_redundant_explanation_is_suppressed() -> None:
     deterministic = AnalysisService(default_analyzer_registry()).analyze(request(), snapshot())
     cash = next(item for item in deterministic.findings if item.metric_name == "cash")
     explanation = AnalysisExplanation(
@@ -58,7 +63,7 @@ def test_faithful_explanation_is_attached() -> None:
         )
     )
     assert response is not None
-    assert response.explanation == explanation
+    assert response.explanation is None
 
 
 def test_invented_metric_falls_back_to_deterministic_output() -> None:
@@ -112,3 +117,38 @@ def test_explanation_omitting_critical_finding_limitation_is_rejected() -> None:
     )
     with pytest.raises(AnalysisInputError, match="omits a critical"):
         validate_explanation(explanation, response)
+
+
+def test_explanation_that_connects_selected_finding_and_recommendation_is_retained() -> None:
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        AnalysisRequest(analysis_type=AnalysisType.COMPANY_HEALTH, question="Health?"),
+        snapshot(
+            company=Company(
+                id="company-1",
+                name="Company",
+                cash=10,
+                loan=0,
+                income=10,
+                expenses=-100,
+            )
+        ),
+    )
+    assert response.presentation is not None
+    finding_id = response.presentation.decisive_finding_id
+    recommendation_id = response.presentation.recommendation_id
+    assert finding_id is not None
+    assert recommendation_id is not None
+    explanation = AnalysisExplanation(
+        statements=(
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.RECOMMENDATION,
+                text="Start here because this is the selected company-level loss signal.",
+                finding_ids=(finding_id,),
+                recommendation_ids=(recommendation_id,),
+            ),
+        )
+    )
+
+    retained = retain_valuable_explanation(validate_explanation(explanation, response), response)
+
+    assert retained == explanation

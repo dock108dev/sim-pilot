@@ -599,7 +599,8 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
     )
 
     assert ask.exit_code == 0, ask.output
-    assert "Company Health" in ask.output
+    assert ask.output.index("The company is losing money at company level") > 0
+    assert "Company Health" not in ask.output
     assert "Negative operating result" in ask.output
     assert direct.exit_code == 0, direct.output
     assert '"analysis_type": "company_health"' in direct.output

@@ -31,6 +31,7 @@ from sim_pilot.analysis.explanation import (
     ExplanationProvider,
     ExplanationStyle,
     explanation_input,
+    retain_valuable_explanation,
     validate_explanation,
 )
 from sim_pilot.analysis.output import render_analysis
@@ -324,7 +325,9 @@ def _run_explanation_case(
             provider.explain(explanation_input(response, style=ExplanationStyle.COMPACT))
         )
         validated = validate_explanation(explanation, response)
-        explained = response.model_copy(update={"explanation": validated})
+        explained = response.model_copy(
+            update={"explanation": retain_valuable_explanation(validated, response)}
+        )
         return _result(
             FounderPass.CODEX_EXPLANATION,
             case,

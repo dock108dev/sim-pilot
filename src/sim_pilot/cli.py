@@ -23,7 +23,11 @@ from sim_pilot.analysis import (
     AnalysisType,
     DeterministicAnalysisCompiler,
 )
-from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompiler
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    AnalysisCompiler,
+    AnalysisCompilerContext,
+)
 from sim_pilot.analysis.errors import AnalysisError
 from sim_pilot.analysis.evidence_view import (
     render_entity,
@@ -883,26 +887,14 @@ def analysis_ask(
         compiler = _analysis_compiler(compiler_provider, model)
         if compiler_provider is not AnalysisProviderName.NONE:
             progress.compiling()
-        compilation = await compiler.compile(question)
-        normalized_question = " ".join(question.casefold().split())
-        if (
-            compilation.request is None
-            and compilation.clarification is not None
-            and comparison is not None
-            and any(term in normalized_question for term in ("compare", "changed", "unusual"))
-        ):
-            analysis_type = (
-                AnalysisType.ANOMALY_DETECTION
-                if "unusual" in normalized_question
-                else AnalysisType.WORLD_CHANGES
-            )
-            compilation = AnalysisCompilation(
-                request=AnalysisRequest(
-                    analysis_type=analysis_type,
-                    question=question.strip(),
-                    comparison_snapshot_id=comparison.metadata.snapshot_id,
+        compilation = await compiler.compile(
+            question,
+            context=AnalysisCompilerContext(
+                comparison_snapshot_id=(
+                    None if comparison is None else comparison.metadata.snapshot_id
                 )
-            )
+            ),
+        )
         if compilation.request is None:
             return compilation, None, current
         request = compilation.request.model_copy(

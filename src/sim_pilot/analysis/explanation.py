@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sim_pilot.analysis.contracts import (
     AnalysisExplanation,
+    AnalysisExplanationStatement,
     AnalysisFinding,
     AnalysisRecommendation,
     AnalysisRequest,
@@ -111,3 +112,52 @@ def validate_explanation(
     if not critical_findings.issubset(acknowledged_limitations):
         raise AnalysisInputError("explanation omits a critical finding limitation")
     return explanation
+
+
+def retain_valuable_explanation(
+    explanation: AnalysisExplanation,
+    response: AnalysisResponse,
+) -> AnalysisExplanation | None:
+    """Suppress provider prose that only repeats the deterministic answer."""
+    presentation = response.presentation
+    base_texts = {
+        _normalized(response.answer),
+        *(_normalized(item.title) for item in response.findings),
+        *(_normalized(item.summary) for item in response.findings),
+        *(_normalized(item.rationale) for item in response.recommendations),
+        *(_normalized(item) for item in response.limitations),
+    }
+    if presentation is not None and presentation.limitation is not None:
+        base_texts.add(_normalized(presentation.limitation))
+    selected: list[AnalysisExplanationStatement] = []
+    for statement in explanation.statements:
+        text = _normalized(statement.text)
+        if not text or any(
+            text == base or text in base or base in text for base in base_texts if base
+        ):
+            continue
+        if statement.claim_type is ExplanationClaimType.LIMITATION:
+            selected.append(statement)
+            continue
+        if statement.claim_type is ExplanationClaimType.RECOMMENDATION:
+            decisive = None if presentation is None else presentation.decisive_finding_id
+            selected_recommendation = (
+                None if presentation is None else presentation.recommendation_id
+            )
+            if (
+                decisive is not None
+                and decisive in statement.finding_ids
+                and selected_recommendation is not None
+                and selected_recommendation in statement.recommendation_ids
+            ):
+                selected.append(statement)
+            continue
+        if len(statement.finding_ids) >= 2:
+            selected.append(statement)
+    if not selected:
+        return None
+    return AnalysisExplanation(statements=tuple(selected))
+
+
+def _normalized(value: str) -> str:
+    return " ".join(value.casefold().rstrip(".").split())
