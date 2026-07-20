@@ -1,0 +1,125 @@
+"""Explicitly gated Phase 9 read-only live interaction regression."""
+
+import asyncio
+import os
+from pathlib import Path
+
+import pytest
+
+from sim_pilot.analysis.compiler import AnalysisCompilerContext, DeterministicAnalysisCompiler
+from sim_pilot.analysis.contracts import (
+    AnalysisResponse,
+    AnalysisStatus,
+    AnalysisSubjectType,
+)
+from sim_pilot.analysis.query import AnalysisQueryService
+from sim_pilot.analysis.registry import default_analyzer_registry
+from sim_pilot.analysis.service import AnalysisService
+from sim_pilot.analysis.session import AnalysisSessionStore
+from sim_pilot.analysis_provider import CodexAnalysisCompiler, CodexExplanationProvider
+from sim_pilot.cli import capture_openttd_world_snapshot
+from sim_pilot.config import codex_model, codex_timeout_seconds
+from sim_pilot.openttd.config import openttd_configuration
+from sim_pilot.openttd.world_diff import diff_world
+
+
+def _assert_read_only() -> None:
+    config = openttd_configuration()
+    assert not config.allow_writes
+    assert not config.allow_gamescript_writes
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.getenv("SIM_PILOT_LIVE_OPENTTD_INTERACTION") != "1",
+    reason="set SIM_PILOT_LIVE_OPENTTD_INTERACTION=1 for Phase 9 read-only regression",
+)
+def test_live_phase9_question_set_is_question_sensitive_and_read_only(
+    tmp_path: Path,
+) -> None:
+    _assert_read_only()
+    previous = asyncio.run(capture_openttd_world_snapshot())
+    observed = asyncio.run(capture_openttd_world_snapshot())
+    current = diff_world(previous, observed)
+    compiler = DeterministicAnalysisCompiler()
+    service = AnalysisService(default_analyzer_registry())
+
+    questions = (
+        "Why am I losing money?",
+        "How much debt do I have?",
+        "Which vehicles lost the most money last year?",
+        "Which station should I inspect first?",
+        "Which routes have the most losing vehicles?",
+        "Which industry is the best observed opportunity?",
+    )
+    responses: list[AnalysisResponse] = []
+    for question in questions:
+        compilation = asyncio.run(compiler.compile(question))
+        assert compilation.request is not None
+        response = service.analyze(compilation.request, current)
+        assert response.answer
+        assert all(not item.executable for item in response.recommendations)
+        responses.append(response)
+
+    missing = asyncio.run(compiler.compile("What changed?"))
+    assert missing.request is not None
+    missing_response = service.analyze(missing.request, current)
+    assert missing_response.status is AnalysisStatus.INSUFFICIENT_DATA
+    assert not missing_response.answer.startswith("Observed 0")
+
+    compared = asyncio.run(
+        compiler.compile(
+            "What changed since the last snapshot?",
+            context=AnalysisCompilerContext(comparison_snapshot_id=previous.metadata.snapshot_id),
+        )
+    )
+    assert compared.request is not None
+    compared_response = service.analyze(compared.request, current, previous)
+    assert compared_response.status in {
+        AnalysisStatus.COMPLETED,
+        AnalysisStatus.COMPLETED_WITH_LIMITATIONS,
+        AnalysisStatus.INSUFFICIENT_DATA,
+    }
+    assert not compared_response.answer.startswith("Observed 0")
+
+    vehicle_response = responses[2]
+    store = AnalysisSessionStore(tmp_path / "sessions")
+    store.save(vehicle_response, current)
+    follow_up = asyncio.run(
+        compiler.compile(
+            "Why did you flag that vehicle?",
+            context=store.compiler_context(current),
+        )
+    )
+    assert follow_up.request is not None
+    assert follow_up.request.subject_type is AnalysisSubjectType.VEHICLE
+    follow_up_response = service.analyze(follow_up.request, current)
+    assert follow_up_response.answer
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.getenv("SIM_PILOT_LIVE_OPENTTD_INTERACTION") != "1"
+    or os.getenv("SIM_PILOT_LIVE_CODEX_INTERACTION") != "1",
+    reason="set both Phase 9 live flags for at most two Codex invocations",
+)
+def test_live_phase9_codex_compilation_and_explanation_remain_bounded() -> None:
+    _assert_read_only()
+    world = asyncio.run(capture_openttd_world_snapshot())
+    query = AnalysisQueryService(AnalysisService(default_analyzer_registry()))
+    compilation, response = asyncio.run(
+        query.ask(
+            "Why am I losing money?",
+            world,
+            compiler=CodexAnalysisCompiler(
+                model=codex_model(), timeout_seconds=codex_timeout_seconds()
+            ),
+            explanation_provider=CodexExplanationProvider(
+                model=codex_model(), timeout_seconds=codex_timeout_seconds()
+            ),
+        )
+    )
+    assert compilation.request is not None
+    assert response is not None
+    assert response.answer
+    assert all(not item.executable for item in response.recommendations)

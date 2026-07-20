@@ -80,6 +80,8 @@ The default test suite skips live access. These variables are read only by live 
 | `SIM_PILOT_LIVE_OPENTTD_GS=1` | Installed bridge; writes also require `SIM_PILOT_OPENTTD_GS_ALLOW_WRITES=1`. |
 | `SIM_PILOT_LIVE_OPENTTD_INTELLIGENCE=1` | Read-only live world collection and deterministic intelligence. |
 | `SIM_PILOT_LIVE_CODEX_INTELLIGENCE=1` plus the OpenTTD intelligence gate | Authenticated Codex compilation or explanation over bounded inputs. |
+| `SIM_PILOT_LIVE_OPENTTD_INTERACTION=1` | Phase 9 read-only live interaction regression. |
+| `SIM_PILOT_LIVE_CODEX_INTERACTION=1` plus the Phase 9 OpenTTD gate | Phase 9 Codex regression, capped by the test plan at two invocations. |
 
 These gates authorize a test to attempt external access; they do not configure credentials or the
 OpenTTD connection themselves.
