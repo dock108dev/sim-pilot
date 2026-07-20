@@ -587,18 +587,29 @@ def answer_intent_for_question(
     metric = _answer_metric(ranking)
     if analysis_type is AnalysisType.SERVICE_COVERAGE and "cargo type" in question:
         metric = AnswerMetric.CARGO_TYPE_COVERAGE
-    forms = (
-        (QuestionForm.RECOMMENDATION, QuestionForm.RANKING)
-        if analysis_type is AnalysisType.PRIORITY_REVIEW
-        else ((QuestionForm.RANKING,) if ranking is not None else (QuestionForm.SUMMARY,))
+    station_reference = analysis_type is AnalysisType.STATION_PERFORMANCE and any(
+        term in question for term in ("this station", "that station")
     )
+    if station_reference and any(term in question for term in ("why", "what makes")):
+        forms = (QuestionForm.DRILL_DOWN, QuestionForm.EVIDENCE, QuestionForm.CAUSE)
+    elif analysis_type is AnalysisType.PRIORITY_REVIEW:
+        forms = (QuestionForm.RECOMMENDATION, QuestionForm.RANKING)
+    else:
+        forms = (QuestionForm.RANKING,) if ranking is not None else (QuestionForm.SUMMARY,)
     return AnswerIntent(
         concept=concepts.get(analysis_type, AnswerConcept.PERFORMANCE),
-        kind=AnswerKind.RANKING if ranking is not None else AnswerKind.FACT,
+        kind=(
+            AnswerKind.ENTITY_FOLLOW_UP
+            if station_reference
+            else AnswerKind.RANKING
+            if ranking is not None
+            else AnswerKind.FACT
+        ),
         question_forms=forms,
         requested_metric=metric,
         period=_period(metric),
         comparison_required=comparison_required,
+        reference_kind=(ConversationReferenceKind.STATION if station_reference else None),
         evidence_requirements=_evidence_requirements(forms, metric, subject_type),
     )
 

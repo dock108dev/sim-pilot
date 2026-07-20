@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from sim_pilot.analysis.compiler import (
     AnalysisCompilation,
     AnalysisCompilerContext,
+    AnalysisEntityContext,
     DeterministicAnalysisCompiler,
     ScriptedAnalysisCompiler,
     normalize_provider_compilation,
@@ -18,6 +19,7 @@ from sim_pilot.analysis.contracts import (
     AnswerIntent,
     AnswerKind,
     AnswerPeriod,
+    ConversationReferenceKind,
     QuestionForm,
     RankingDirection,
     RankingMetric,
@@ -104,6 +106,36 @@ def test_deterministic_compiler_uses_supplied_comparison_context() -> None:
     assert result.request is not None
     assert result.request.analysis_type is AnalysisType.WORLD_CHANGES
     assert result.request.comparison_snapshot_id == "snapshot-before"
+
+
+def test_station_follow_up_preserves_reference_and_explanation_intent() -> None:
+    result = asyncio.run(
+        DeterministicAnalysisCompiler().compile(
+            "What makes this station worth inspecting?",
+            context=AnalysisCompilerContext(
+                prior_analysis_id="analysis:0123456789abcdef0123",
+                focus_entities=(
+                    AnalysisEntityContext(
+                        subject_type=AnalysisSubjectType.STATION,
+                        canonical_id="station-1",
+                        alias="S-001",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert result.request is not None
+    assert result.request.subject_type is AnalysisSubjectType.STATION
+    assert result.request.subject_ids == ("station-1",)
+    assert result.request.answer_intent is not None
+    assert result.request.answer_intent.kind is AnswerKind.ENTITY_FOLLOW_UP
+    assert result.request.answer_intent.question_forms == (
+        QuestionForm.DRILL_DOWN,
+        QuestionForm.EVIDENCE,
+        QuestionForm.CAUSE,
+    )
+    assert result.request.answer_intent.reference_kind is ConversationReferenceKind.STATION
 
 
 @pytest.mark.parametrize(
