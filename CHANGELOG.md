@@ -4,6 +4,19 @@ All notable changes to Sim Pilot are documented in this file.
 
 ## Unreleased
 
+### OpenTTD founder intelligence
+
+- Added deterministic, evidence-backed gameplay analysis, bounded natural-language compilation,
+  optional faithful explanations, compact/detailed/JSON output, progress, owner-only analysis
+  sessions, evidence/entity drill-down, and fail-closed snapshot freshness policy.
+- Added the 45-question Phase 8C founder catalog and recorded read-only deterministic, compiler,
+  explanation, latency, token, and bounded founder-sample evidence.
+- Corrected compiler subject invariants, supplied a bounded analyzer compatibility catalog and
+  comparison/follow-up context, fixed route ranking direction and filtered no-result behavior, and
+  retained deterministic fallback when explanations violate evidence contracts.
+- The proposed next direction is interaction quality, not gameplay automation; broad company-health
+  answers remain too generic and verbose despite trustworthy underlying evidence.
+
 ### OpenTTD world observation
 
 - Added GameScript protocol v2 and immutable canonical snapshots for companies, towns, industries,

@@ -84,6 +84,25 @@ class FounderEvaluationResult(BaseModel):
     reviewer_notes: str = ""
 
 
+class FounderSampleRating(BaseModel):
+    """Owner-authored subjective rating used for a deliberately bounded founder sample."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    case_id: str = Field(min_length=1)
+    manual_rating: Literal["correct", "acceptable", "annoying", "incorrect", "unsafe"]
+    revealed_nonobvious_information: Literal["yes", "partially", "no"]
+    would_use_during_gameplay: Literal["yes", "maybe", "no"]
+    identified_right_subject: Literal["yes", "partially", "no"]
+    most_important_finding_first: Literal["yes", "partially", "no"]
+    evidence_sufficient: Literal["yes", "partially", "no"]
+    limitation_understandable: Literal["yes", "partially", "no"]
+    too_verbose: Literal["yes", "no"]
+    faster_than_manual_inspection: Literal["yes", "maybe", "no"]
+    next_question: str
+    reviewer_notes: str
+
+
 def load_founder_questions(path: Path) -> tuple[FounderQuestion, ...]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return tuple(TypeAdapter(list[FounderQuestion]).validate_python(payload, strict=True))

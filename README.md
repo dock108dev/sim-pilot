@@ -111,17 +111,24 @@ The canonical model and its explicit coverage limits are documented in
 ## Analyze OpenTTD
 
 Gameplay analysis is read-only and separate from action tasks. It works deterministically from a
-saved snapshot or an explicitly collected live snapshot without a model:
+saved snapshot or a fresh live snapshot without a model. When no snapshot file is supplied, the
+OpenTTD intelligence commands collect live state by default:
 
 ```bash
 uv run sim-pilot ask --snapshot snapshot.json "Why am I losing money?"
+uv run sim-pilot ask "Which vehicles lost the most money last year?"
+uv run sim-pilot openttd analyze company
 uv run sim-pilot openttd analyze vehicles --snapshot snapshot.json --top 10
-uv run sim-pilot openttd analyze coverage --live
+uv run sim-pilot analysis show
 ```
 
 Codex or OpenAI compilation and explanation are optional and must be selected explicitly with
 `--compiler-provider` and `--explanation-provider`. See the
 [gameplay analysis engine](docs/014-gameplay-analysis-engine.md).
+The [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md) documents evidence
+drill-down, snapshot freshness, comparisons, current strengths, and product limitations. Phase 8C
+found that direct evidence is trustworthy but broad company-health answers remain too generic and
+verbose; gameplay automation is still out of scope.
 
 ## Architecture at a glance
 
@@ -156,5 +163,7 @@ Every serialized domain model carries `schema_version=1`. Changes to `TaskSpecif
 - [Security hardening review](docs/014-security-hardening-review.md)
 - [Failure handling](docs/015-abend-handling.md)
 - [SSOT boundaries](docs/016-ssot-enforcement.md)
+- [Founder intelligence validation](docs/015-founder-intelligence-validation.md)
+- [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md)
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).

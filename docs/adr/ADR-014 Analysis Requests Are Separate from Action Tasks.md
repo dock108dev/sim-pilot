@@ -24,8 +24,8 @@ invalid provider result falls back to deterministic output.
 
 - Asking a question cannot execute or authorize an action.
 - The one-action runtime, recovery journal, and database schema remain unchanged.
-- Snapshot collection is composed at the CLI/application edge and must be explicitly live or file
-  based.
-- Analysis history has no durable repository in Phase 8B.
+- Snapshot collection is composed at the CLI/application edge and is either live or selected from a
+  canonical file.
+- Founder-facing evidence drill-down may retain owner-only local session files. These records do
+  not enter task tables, event streams, recovery, approval, or action authority.
 - Future execution of advice requires a separate, explicit product and authority decision.
-

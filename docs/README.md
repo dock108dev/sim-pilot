@@ -21,6 +21,8 @@ Start with the root [README](../README.md), then use the guide that matches the 
   boundaries.
 - [Gameplay analysis engine](014-gameplay-analysis-engine.md): read-only questions, deterministic
   findings, heuristics, evidence, optional explanations, and CLI usage.
+- [OpenTTD intelligence guide](016-openttd-intelligence-guide.md): player-facing questions,
+  commands, evidence drill-down, freshness, comparisons, and limitations.
 
 ## Product and implementation contracts
 
@@ -52,5 +54,6 @@ These files are retained as dated evidence rather than current operating instruc
 - [009 — Product usability findings](009-product-usability-findings.md)
 - [012 — Phase 7.6 stability report](012-phase-7.6-stability-report.md)
 - [017 — Phase 8B live founder evaluation](017-phase-8b-live-evaluation.md)
+- [Phase 8C — Founder intelligence validation](015-founder-intelligence-validation.md)
 
 Use [operations.md](operations.md) for current commands.

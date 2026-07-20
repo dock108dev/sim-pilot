@@ -165,4 +165,12 @@ signals are validated against live saves.
 Phase 8B now consumes this model through the separate query boundary in
 [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md). It says “high waiting cargo” or
 “potentially underserved,” not “congested,” because tile movement is unavailable. Analyses are not
-persisted and comparisons remain explicit and fail closed.
+persisted in task tables and comparisons remain explicit and fail closed. Phase 8C added owner-only
+local analysis-session files for evidence drill-down; these are not runtime tasks or gameplay
+authority.
+
+The Phase 8C live save produced complete captures in approximately seven seconds. This remains the
+dominant direct-analysis latency. A compatible pair of independently loaded canonical snapshots
+does not automatically contain typed changes; comparison answers must return insufficient data
+unless a delta was actually derived or observed. See
+[Founder Intelligence Validation](015-founder-intelligence-validation.md).

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from sim_pilot.analysis.evaluation import (
     FounderEvaluationResult,
+    FounderSampleRating,
     load_founder_questions,
     load_founder_results,
 )
@@ -32,3 +33,22 @@ def test_live_founder_rating_is_recorded() -> None:
     assert len(results) == 1
     assert results[0].manual_rating == "acceptable"
     assert results[0].revealed_nonobvious_information == "partially"
+
+
+def test_bounded_founder_sample_preserves_owner_authored_values() -> None:
+    rating = FounderSampleRating(
+        case_id="company-health-001",
+        manual_rating="acceptable",
+        revealed_nonobvious_information="partially",
+        would_use_during_gameplay="maybe",
+        identified_right_subject="yes",
+        most_important_finding_first="yes",
+        evidence_sufficient="partially",
+        limitation_understandable="yes",
+        too_verbose="yes",
+        faster_than_manual_inspection="maybe",
+        next_question="Which parts of the fleet are least profitable?",
+        reviewer_notes="Trustworthy but generic.",
+    )
+    assert rating.too_verbose == "yes"
+    assert rating.manual_rating == "acceptable"

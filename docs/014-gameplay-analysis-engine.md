@@ -126,7 +126,8 @@ uv run sim-pilot openttd analyze coverage --snapshot snapshot.json
 uv run sim-pilot openttd analyze changes --snapshot current.json --comparison previous.json
 ```
 
-Use `--live` instead of `--snapshot` to explicitly collect a fresh read-only OpenTTD snapshot.
+With neither option, intelligence commands collect a fresh read-only OpenTTD snapshot. `--live`
+remains an explicit compatibility flag and `--fresh` documents forced collection intent.
 Model use is separately explicit:
 
 ```bash
@@ -140,6 +141,16 @@ Compact text is the default. `--detailed`, `--json`, `--top`, `--entity`, `--sna
 `--comparison` expose detail, stable filters, and explicit snapshot selection. Analysis never
 initializes the action runtime.
 
+Phase 8C added owner-only analysis-session records plus `analysis show`, `analysis evidence`, and
+`analysis entity`. Compact output separates fact, finding, inference, recommendation, and
+limitation; detailed output includes metrics, evidence, ranking metadata, and snapshot identity.
+
+The live founder validation proved compiler and explanation faithfulness but did not prove broad
+gameplay value. In the bounded company-health founder sample, 40% of answers were correct or
+acceptable, 20% revealed at least partially non-obvious information, and 80% were too verbose.
+Answers must become question-sensitive before the analysis catalog or action surface expands. Full
+results are in [015-founder-intelligence-validation.md](015-founder-intelligence-validation.md).
+
 ## Unsupported evidence and safety
 
 The engine does not claim exact path congestion, construction feasibility, competitor intention,
@@ -147,4 +158,3 @@ future profitability, crash causality, or expense causality. The snapshot lacks 
 terrain/buildability, complete competitor state, forecasting evidence, native crash events, and
 separate infrastructure/maintenance expenses. The engine adds no gameplay actions, background
 monitor, scheduler, HTTP service, UI, or database migration.
-

@@ -78,3 +78,22 @@ The two founder-blocking execution defects are resolved. Phase 7.7 may begin, bu
 a narrow product-value proof rather than an infrastructure expansion. Do not redesign the CLI
 first. The next proof should focus on whether existing bridge telemetry can deliver meaningful
 planning value, not on adding more administrative controls.
+
+## Phase 8C update — founder intelligence
+
+Phase 8C validated 45 natural questions objectively and used a deliberately bounded five-case
+company-health founder sample after the owner rejected a burdensome 37-answer review form. The
+sample is directional, not a full-catalog subjective score.
+
+- 45/45 compiler outcomes matched their expected completed, clarification, or unsupported class
+  after blocking compiler-context fixes.
+- All five selected explanations were faithful, but explanation latency exceeded the target and
+  the owner found it duplicative.
+- Only 2/5 sampled answers were acceptable; 3/5 were incorrect.
+- Four of five were too verbose, none earned definite gameplay-use intent, and only one revealed
+  partially non-obvious information.
+
+The main product defect is now answer selection rather than transport safety: the engine often
+returns a generic analyzer summary instead of directly answering debt, loss, available cash, or
+change. The proposed direction is a narrow interaction-quality phase before deeper observation or
+automation. See [015-founder-intelligence-validation.md](015-founder-intelligence-validation.md).
