@@ -1,0 +1,302 @@
+[
+  {
+    "case_id": "company-health-001",
+    "question": "How healthy is my company right now?",
+    "compiled_analysis_request": {
+      "analysis_type": "company_health",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "company_health",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["fleet_concentration", "operating_result"],
+    "final_answer": "Company health produced 2 evidence-backed findings.",
+    "manual_rating": "acceptable",
+    "known_failure_category": [
+      "generic answer composition",
+      "recommendation mismatch",
+      "redundant model explanation",
+      "verbosity"
+    ]
+  },
+  {
+    "case_id": "company-health-002",
+    "question": "Why am I losing money?",
+    "compiled_analysis_request": {
+      "analysis_type": "company_health",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "company_health",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["fleet_concentration", "operating_result"],
+    "final_answer": "Company health produced 2 evidence-backed findings.",
+    "manual_rating": "incorrect",
+    "known_failure_category": [
+      "question intent lost",
+      "false premise not corrected",
+      "generic answer composition",
+      "recommendation mismatch",
+      "verbosity"
+    ]
+  },
+  {
+    "case_id": "company-health-003",
+    "question": "Am I carrying too much debt?",
+    "compiled_analysis_request": {
+      "analysis_type": "company_health",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "company_health",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["fleet_concentration", "operating_result"],
+    "final_answer": "Company health produced 2 evidence-backed findings.",
+    "manual_rating": "incorrect",
+    "known_failure_category": [
+      "question intent lost",
+      "wrong analyzer",
+      "wrong metric",
+      "generic answer composition",
+      "irrelevant limitation",
+      "verbosity"
+    ]
+  },
+  {
+    "case_id": "company-health-004",
+    "question": "How much cash do I actually have available?",
+    "compiled_analysis_request": {
+      "analysis_type": "financial_summary",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "financial_summary",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["observed_cash", "observed_loan"],
+    "final_answer": "Financial summary for Sim Pilot Founder Test contains 6 observed metrics.",
+    "manual_rating": "acceptable",
+    "known_failure_category": [
+      "question intent lost",
+      "generic answer composition",
+      "irrelevant limitation"
+    ]
+  },
+  {
+    "case_id": "company-health-005",
+    "question": "Is the company improving or getting worse?",
+    "compiled_analysis_request": {
+      "analysis_type": "company_health",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": "spb-1636440848-1049736244:world:46251"
+    },
+    "selected_analyzer": "company_health",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": true,
+    "selected_findings": ["fleet_concentration", "operating_result"],
+    "final_answer": "Company health produced 2 evidence-backed findings.",
+    "manual_rating": "incorrect",
+    "known_failure_category": [
+      "question intent lost",
+      "wrong analyzer",
+      "comparison evidence absent",
+      "generic answer composition",
+      "status semantics",
+      "verbosity"
+    ]
+  },
+  {
+    "case_id": "vehicles-002",
+    "question": "Which trains performed best last year?",
+    "compiled_analysis_request": {
+      "analysis_type": "vehicle_performance",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": ["vehicle_type=rail"],
+      "ranking": "profit_last_year descending",
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "vehicle_performance",
+    "filters": ["vehicle_type=rail"],
+    "ranking_request": "profit_last_year descending",
+    "comparison_requirement": false,
+    "selected_findings": ["negative_current_profit", "old_vehicle"],
+    "final_answer": "Analyzed 59 vehicles and produced 18 findings.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "wrong metric",
+      "generic answer composition",
+      "recommendation mismatch",
+      "status semantics"
+    ]
+  },
+  {
+    "case_id": "vehicles-006",
+    "question": "Which vehicle type is dragging down the company?",
+    "compiled_analysis_request": {
+      "analysis_type": "vehicle_performance",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": "profit_this_year ascending",
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "vehicle_performance",
+    "filters": [],
+    "ranking_request": "profit_this_year ascending",
+    "comparison_requirement": false,
+    "selected_findings": ["negative_current_profit", "negative_current_profit"],
+    "final_answer": "Analyzed 432 vehicles and produced 90 findings.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "wrong subject",
+      "wrong metric",
+      "generic answer composition"
+    ]
+  },
+  {
+    "case_id": "stations-003",
+    "question": "Which station should I inspect first?",
+    "compiled_analysis_request": {
+      "analysis_type": "priority_review",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": "materiality descending",
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "priority_review",
+    "filters": [],
+    "ranking_request": "materiality descending",
+    "comparison_requirement": false,
+    "selected_findings": ["priority_negative_last_year_profit"],
+    "final_answer": "Ranked 5 inspection targets from deterministic findings.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "wrong subject",
+      "generic answer composition",
+      "recommendation mismatch",
+      "status semantics"
+    ]
+  },
+  {
+    "case_id": "routes-003",
+    "question": "Which routes have the most losing vehicles?",
+    "compiled_analysis_request": {
+      "analysis_type": "route_performance",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": "vehicle_count descending",
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "route_performance",
+    "filters": [],
+    "ranking_request": "vehicle_count descending",
+    "comparison_requirement": false,
+    "selected_findings": ["route_profit_summary", "route_profit_summary"],
+    "final_answer": "Analyzed 101 inferred routes.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "wrong metric",
+      "generic answer composition",
+      "unreadable entity identity"
+    ]
+  },
+  {
+    "case_id": "towns-industries-005",
+    "question": "Which cargo types are missing from my network?",
+    "compiled_analysis_request": {
+      "analysis_type": "service_coverage",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "service_coverage",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["unserved_industry_opportunity", "unserved_industry_opportunity"],
+    "final_answer": "Found 0 unserved-town and 31 unserved-industry opportunities.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "wrong subject",
+      "wrong metric",
+      "generic answer composition",
+      "data genuinely unavailable"
+    ]
+  },
+  {
+    "case_id": "changes-001",
+    "question": "What changed since the last snapshot?",
+    "compiled_analysis_request": {
+      "analysis_type": "world_changes",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": "spb-1636440848-1049736244:world:46251"
+    },
+    "selected_analyzer": "world_changes",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": true,
+    "selected_findings": [],
+    "final_answer": "Observed 0 canonical world changes.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "comparison evidence absent",
+      "status semantics"
+    ]
+  },
+  {
+    "case_id": "routes-006",
+    "question": "Why is this route losing money?",
+    "compiled_analysis_request": {
+      "analysis_type": "route_performance",
+      "subject_type": null,
+      "subject_ids": [],
+      "filters": [],
+      "ranking": null,
+      "comparison_snapshot_id": null
+    },
+    "selected_analyzer": "route_performance",
+    "filters": [],
+    "ranking_request": null,
+    "comparison_requirement": false,
+    "selected_findings": ["negative_route_profit", "route_profit_summary"],
+    "final_answer": "Analyzed 101 inferred routes.",
+    "manual_rating": null,
+    "known_failure_category": [
+      "conversational reference unresolved",
+      "false premise not corrected",
+      "generic answer composition",
+      "unreadable entity identity"
+    ]
+  }
+]
