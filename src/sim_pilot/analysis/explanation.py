@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from enum import StrEnum
 from typing import Protocol
@@ -17,6 +18,7 @@ from sim_pilot.analysis.contracts import (
     AnalysisResponse,
     ExplanationClaimType,
     FindingSeverity,
+    QuestionForm,
 )
 from sim_pilot.analysis.errors import AnalysisInputError
 
@@ -85,7 +87,20 @@ def validate_explanation(
         if item.severity is FindingSeverity.CRITICAL and item.limitations
     }
     acknowledged_limitations: set[str] = set()
+    authoritative_numbers = _numbers(
+        " ".join(
+            (
+                response.answer,
+                *(item.title for item in response.findings),
+                *(item.summary for item in response.findings),
+                *(str(item.metric_value) for item in response.findings),
+                *(item.rationale for item in response.recommendations),
+            )
+        )
+    )
     for statement in explanation.statements:
+        if not _numbers(statement.text).issubset(authoritative_numbers):
+            raise AnalysisInputError("explanation introduces an unsupported number")
         if not set(statement.finding_ids).issubset(findings):
             raise AnalysisInputError("explanation references an unknown finding")
         if not set(statement.recommendation_ids).issubset(recommendations):
@@ -156,8 +171,41 @@ def retain_valuable_explanation(
             selected.append(statement)
     if not selected:
         return None
+    if sum(len(item.text.split()) for item in selected) > 80:
+        return None
     return AnalysisExplanation(statements=tuple(selected))
+
+
+def should_invoke_explanation(response: AnalysisResponse) -> bool:
+    """Gate model use to answers where synthesis can add material value."""
+    if response.status.value in {
+        "insufficient_data",
+        "clarification_required",
+        "unsupported",
+        "failed",
+    }:
+        return False
+    intent = response.request.answer_intent
+    if intent is None or response.presentation is None:
+        return False
+    forms = set(intent.question_forms)
+    if forms & {QuestionForm.QUANTITY, QuestionForm.EXISTENCE, QuestionForm.RANKING}:
+        return False
+    return bool(
+        len(response.findings) >= 2
+        and forms
+        & {
+            QuestionForm.CAUSE,
+            QuestionForm.DRILL_DOWN,
+            QuestionForm.SUMMARY,
+            QuestionForm.RECOMMENDATION,
+        }
+    )
 
 
 def _normalized(value: str) -> str:
     return " ".join(value.casefold().rstrip(".").split())
+
+
+def _numbers(value: str) -> set[str]:
+    return set(re.findall(r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)*%?", value))

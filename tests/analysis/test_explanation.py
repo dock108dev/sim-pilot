@@ -2,7 +2,11 @@ import asyncio
 
 import pytest
 
-from sim_pilot.analysis.compiler import AnalysisCompilation, ScriptedAnalysisCompiler
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    DeterministicAnalysisCompiler,
+    ScriptedAnalysisCompiler,
+)
 from sim_pilot.analysis.contracts import (
     AnalysisExplanation,
     AnalysisExplanationStatement,
@@ -21,7 +25,7 @@ from sim_pilot.analysis.explanation import (
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
-from sim_pilot.domain.world import Company
+from sim_pilot.domain.world import Company, Vehicle
 from tests.analysis.helpers import snapshot
 
 
@@ -93,7 +97,8 @@ def test_invented_metric_falls_back_to_deterministic_output() -> None:
         )
     )
     assert response.explanation is None
-    assert any("rejected" in item for item in response.limitations)
+    assert response.explanation_value.value == "not_invoked"
+    assert not any("rejected" in item for item in response.limitations)
 
 
 def test_explanation_omitting_critical_finding_limitation_is_rejected() -> None:
@@ -152,3 +157,69 @@ def test_explanation_that_connects_selected_finding_and_recommendation_is_retain
     retained = retain_valuable_explanation(validate_explanation(explanation, response), response)
 
     assert retained == explanation
+
+
+def test_causal_multi_finding_answer_can_invoke_and_retain_useful_synthesis() -> None:
+    vehicles = tuple(
+        Vehicle(
+            id=f"vehicle-{index}",
+            type="road",
+            name=f"Vehicle {index}",
+            age_days=20,
+            profit_this_year=-10,
+            profit_last_year=-10,
+            running_state="running",
+            coordinates=None,
+            in_depot=False,
+            owner_id="company-1",
+        )
+        for index in range(4)
+    )
+    world = snapshot(
+        company=Company(
+            id="company-1",
+            name="Company",
+            cash=100,
+            loan=0,
+            income=1_000,
+            expenses=-100,
+        ),
+        vehicles=vehicles,
+    )
+    compilation = asyncio.run(DeterministicAnalysisCompiler().compile("Why am I losing money?"))
+    assert compilation.request is not None
+    deterministic = AnalysisService(default_analyzer_registry()).analyze(compilation.request, world)
+    finding_ids = tuple(item.finding_id for item in deterministic.findings[:2])
+    critical_id = next(
+        item.finding_id
+        for item in deterministic.findings
+        if item.severity is FindingSeverity.CRITICAL
+    )
+    explanation = AnalysisExplanation(
+        statements=(
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.SUMMARY,
+                text=(
+                    "The company-level result and vehicle-level losses describe different "
+                    "profitability scopes."
+                ),
+                finding_ids=finding_ids,
+            ),
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.LIMITATION,
+                text="Vehicle-level losses can include deliberately subsidized service.",
+                finding_ids=(critical_id,),
+            ),
+        )
+    )
+
+    response = asyncio.run(
+        query_service().analyze_request(
+            compilation.request,
+            world,
+            explanation_provider=ScriptedExplanationProvider((explanation,)),
+        )
+    )
+
+    assert response.explanation == explanation
+    assert response.explanation_value.value == "improved_answer"

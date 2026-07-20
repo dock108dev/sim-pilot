@@ -379,6 +379,15 @@ class AnalysisStatus(StrEnum):
     FAILED = "failed"
 
 
+class ExplanationValue(StrEnum):
+    NOT_INVOKED = "not_invoked"
+    IMPROVED_ANSWER = "improved_answer"
+    NEUTRAL = "neutral"
+    MADE_ANSWER_WORSE = "made_answer_worse"
+    REJECTED_BY_VALIDATOR = "rejected_by_validator"
+    PROVIDER_FAILED = "provider_failed"
+
+
 class AnswerBasis(StrEnum):
     CONFIRMED_FACT = "confirmed_fact"
     FINDING = "finding"
@@ -429,6 +438,7 @@ class AnalysisResponse(AnalysisModel):
     limitations: tuple[str, ...] = ()
     unsupported_parts: tuple[str, ...] = ()
     explanation: AnalysisExplanation | None = None
+    explanation_value: ExplanationValue = ExplanationValue.NOT_INVOKED
     presentation: AnalysisPresentation | None = None
     population: AnalysisPopulation | None = None
     generated_at: AwareDatetime
