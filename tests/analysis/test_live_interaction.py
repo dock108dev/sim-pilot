@@ -19,14 +19,28 @@ from sim_pilot.analysis.session import AnalysisSessionStore
 from sim_pilot.analysis_provider import CodexAnalysisCompiler, CodexExplanationProvider
 from sim_pilot.cli import capture_openttd_world_snapshot
 from sim_pilot.config import codex_model, codex_timeout_seconds
+from sim_pilot.domain.world import WorldSnapshot
 from sim_pilot.openttd.config import openttd_configuration
 from sim_pilot.openttd.world_diff import diff_world
+
+EXPECTED_WORLD_ID = "spb-1636440848-1049736244"
+EXPECTED_SAVE_GENERATION = 334
+EXPECTED_COMPANY_NAME = "Sim Pilot Founder Test"
 
 
 def _assert_read_only() -> None:
     config = openttd_configuration()
     assert not config.allow_writes
     assert not config.allow_gamescript_writes
+
+
+def _assert_expected_save(world: WorldSnapshot) -> None:
+    assert world.metadata.world_id == EXPECTED_WORLD_ID
+    assert world.metadata.save_generation == EXPECTED_SAVE_GENERATION
+    company = next(
+        item for item in world.companies if item.id == world.metadata.observer_company_id
+    )
+    assert company.name == EXPECTED_COMPANY_NAME
 
 
 @pytest.mark.live
@@ -40,6 +54,8 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
     _assert_read_only()
     previous = asyncio.run(capture_openttd_world_snapshot())
     observed = asyncio.run(capture_openttd_world_snapshot())
+    _assert_expected_save(previous)
+    _assert_expected_save(observed)
     current = diff_world(previous, observed)
     compiler = DeterministicAnalysisCompiler()
     service = AnalysisService(default_analyzer_registry())
@@ -106,6 +122,7 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
 def test_live_phase9_codex_compilation_and_explanation_remain_bounded() -> None:
     _assert_read_only()
     world = asyncio.run(capture_openttd_world_snapshot())
+    _assert_expected_save(world)
     query = AnalysisQueryService(AnalysisService(default_analyzer_registry()))
     compilation, response = asyncio.run(
         query.ask(
