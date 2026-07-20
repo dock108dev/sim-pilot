@@ -131,7 +131,7 @@ def test_change_question_without_typed_delta_evidence_is_insufficient() -> None:
     )
 
     assert response.status is AnalysisStatus.INSUFFICIENT_DATA
-    assert response.answer.startswith("Insufficient data:")
+    assert response.answer.startswith("I cannot answer the comparison")
     assert "no evaluated typed change evidence" in response.answer
 
 
@@ -247,19 +247,48 @@ def test_context_free_route_follow_up_clarifies_and_single_route_context_resolve
         compiler.compile(
             "Why is this route losing money?",
             context=AnalysisCompilerContext(
+                prior_analysis_id="analysis:0123456789abcdef0123",
                 focus_entities=(
                     AnalysisEntityContext(
                         subject_type=AnalysisSubjectType.ROUTE,
                         canonical_id="route-1",
                         alias="R-001",
                     ),
-                )
+                ),
             ),
         )
     )
     assert resolved.request is not None
     assert resolved.request.subject_type is AnalysisSubjectType.ROUTE
     assert resolved.request.subject_ids == ("route-1",)
+    assert resolved.request.resolved_reference is not None
+    assert resolved.request.resolved_reference.entity_id == "route-1"
+
+
+def test_ambiguous_vehicle_reference_requires_clarification() -> None:
+    result = asyncio.run(
+        DeterministicAnalysisCompiler().compile(
+            "Why did you flag that vehicle?",
+            context=AnalysisCompilerContext(
+                prior_analysis_id="analysis:0123456789abcdef0123",
+                focus_entities=(
+                    AnalysisEntityContext(
+                        subject_type=AnalysisSubjectType.VEHICLE,
+                        canonical_id="vehicle-1",
+                        alias="V-001",
+                    ),
+                    AnalysisEntityContext(
+                        subject_type=AnalysisSubjectType.VEHICLE,
+                        canonical_id="vehicle-2",
+                        alias="V-002",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert result.clarification is not None
+    assert "Which vehicle" in result.clarification
 
 
 def test_selected_recommendation_is_supported_by_the_decisive_finding() -> None:

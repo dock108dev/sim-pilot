@@ -32,6 +32,34 @@ def entity_aliases(snapshot: WorldSnapshot, subject: AnalysisSubjectType) -> dic
     return {item.id: f"{prefix}-{index:03d}" for index, item in enumerate(values, 1)}
 
 
+def entity_display_labels(snapshot: WorldSnapshot, subject: AnalysisSubjectType) -> dict[str, str]:
+    """Return stable, player-readable labels without exposing raw canonical IDs."""
+    aliases = entity_aliases(snapshot, subject)
+    labels: dict[str, str] = {}
+    stations = {item.id: item.name for item in snapshot.stations}
+    for item in _collection(snapshot, subject):
+        alias = aliases[item.id]
+        if isinstance(item, Route):
+            endpoints = [
+                stations[station_id]
+                for station_id in item.ordered_station_ids
+                if station_id in stations
+            ]
+            if len(endpoints) >= 2:
+                labels[item.id] = f"Route {alias} — {endpoints[0]} → {endpoints[-1]}"
+            elif endpoints:
+                labels[item.id] = f"Route {alias} — via {endpoints[0]}"
+            else:
+                labels[item.id] = f"Route {alias}"
+            continue
+        name = getattr(item, "name", None)
+        if isinstance(item, Vehicle):
+            labels[item.id] = f"{name or 'Vehicle'} ({alias})"
+        else:
+            labels[item.id] = name or f"{subject.value.title()} {alias}"
+    return labels
+
+
 def resolve_entity(
     snapshot: WorldSnapshot,
     subject: AnalysisSubjectType,

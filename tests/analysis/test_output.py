@@ -19,7 +19,7 @@ def test_compact_answer_leads_with_answer_and_has_one_result_and_limitation() ->
     )
     rendered = render_analysis(response, snapshot=world)
     assert rendered.splitlines()[0] == response.answer
-    assert rendered.count("\nObserved result\n") == 1
+    assert rendered.count("\nEvidence\n") == 1
     assert "\nLimitation\n" in rendered
     assert "\nRecommendation\n" not in rendered
 

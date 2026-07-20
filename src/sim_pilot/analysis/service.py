@@ -91,6 +91,7 @@ class AnalysisService:
             recommendations=recommendations,
             limitations=limitations,
             fallback_answer=result.answer,
+            population=result.population,
         )
         return AnalysisResponse(
             request=request,

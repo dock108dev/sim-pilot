@@ -9,7 +9,7 @@ from sim_pilot.analysis.contracts import (
     AnalysisSubjectType,
     FindingKind,
 )
-from sim_pilot.analysis.evidence_view import entity_aliases
+from sim_pilot.analysis.evidence_view import entity_display_labels
 from sim_pilot.domain.world import WorldSnapshot
 
 
@@ -20,10 +20,11 @@ def render_analysis(
     snapshot: WorldSnapshot | None = None,
     snapshot_age_seconds: float = 0,
     cached: bool = False,
+    evidence: bool = False,
 ) -> str:
     """Render a deterministic answer with claims separated by epistemic role."""
     if not detailed and response.presentation is not None:
-        return _render_compact(response, snapshot)
+        return _render_compact(response, snapshot, evidence=evidence)
     title = response.request.analysis_type.value.replace("_", " ").title()
     lines = [response.answer, "", f"{title}: {_status_label(response)}"]
 
@@ -103,6 +104,8 @@ def render_analysis(
 def _render_compact(
     response: AnalysisResponse,
     snapshot: WorldSnapshot | None,
+    *,
+    evidence: bool = False,
 ) -> str:
     presentation = response.presentation
     assert presentation is not None
@@ -112,11 +115,7 @@ def _render_compact(
         None,
     )
     if finding is not None:
-        identity = _finding_identity(finding, snapshot)
-        observed = f"{identity}{finding.title}"
-        if finding.metric_name is not None:
-            observed += f": {finding.metric_value}"
-        lines.extend(("", "Observed result", observed))
+        lines.extend(("", "Evidence", _compact_evidence(finding, snapshot)))
     recommendation = next(
         (
             item
@@ -126,14 +125,45 @@ def _render_compact(
         None,
     )
     if recommendation is not None:
-        lines.extend(("", "Inspect next", recommendation.title))
+        lines.extend(("", "Inspect next", recommendation.rationale))
+    elif presentation.follow_up is not None:
+        lines.extend(("", "Inspect next", presentation.follow_up))
     if response.explanation is not None:
         lines.extend(("", "Why it matters", response.explanation.statements[0].text))
     if presentation.limitation is not None:
         lines.extend(("", "Limitation", presentation.limitation))
-    if presentation.follow_up is not None:
-        lines.extend(("", "Ask next", presentation.follow_up))
+    if evidence and finding is not None:
+        lines.extend(("", "Evidence details"))
+        for item in finding.evidence:
+            lines.append(f"- {item.field}: {item.observed_value}")
+            if item.metric_inputs:
+                inputs = ", ".join(
+                    f"{key}={value}" for key, value in sorted(item.metric_inputs.items())
+                )
+                lines.append(f"  Inputs: {inputs}")
     return "\n".join(lines)
+
+
+def _compact_evidence(finding: AnalysisFinding, snapshot: WorldSnapshot | None) -> str:
+    identity = _finding_identity(finding, snapshot).removesuffix(" — ")
+    prefix = f"{identity}: " if identity else ""
+    value = finding.metric_value
+    if finding.metric_name in {
+        "cash",
+        "loan",
+        "net_operating_result",
+        "profit_this_year",
+        "profit_last_year",
+        "route_aggregate_profit",
+        "vehicle_type_aggregate_profit",
+    } and isinstance(value, (int, float)):
+        return f"{prefix}{finding.metric_name.replace('_', ' ')} is {_currency(value)}."
+    return f"{prefix}{finding.summary}"
+
+
+def _currency(value: int | float) -> str:
+    sign = "-" if value < 0 else ""
+    return f"{sign}£{abs(value):,.0f}"
 
 
 def _render_finding_group(
@@ -174,7 +204,7 @@ def _finding_identity(finding: AnalysisFinding, snapshot: WorldSnapshot | None) 
     for evidence in finding.evidence:
         if evidence.entity_type is None or evidence.entity_id is None:
             continue
-        aliases = entity_aliases(snapshot, evidence.entity_type)
+        aliases = entity_display_labels(snapshot, evidence.entity_type)
         labels.append(aliases.get(evidence.entity_id, evidence.entity_id))
     unique = tuple(dict.fromkeys(labels))
     return "" if not unique else f"{', '.join(unique)} — "

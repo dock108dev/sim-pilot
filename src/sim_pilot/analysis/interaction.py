@@ -7,6 +7,7 @@ from typing import Protocol
 from sim_pilot.analysis.analyzers.support import filter_value
 from sim_pilot.analysis.contracts import (
     AnalysisFinding,
+    AnalysisPopulation,
     AnalysisPresentation,
     AnalysisRecommendation,
     AnalysisRequest,
@@ -18,6 +19,7 @@ from sim_pilot.analysis.contracts import (
     EvidenceSourceType,
     FindingKind,
     FindingSeverity,
+    PremiseType,
     RankingMetric,
 )
 from sim_pilot.domain.models import JsonValue
@@ -65,6 +67,7 @@ def compose_interaction(
     recommendations: tuple[AnalysisRecommendation, ...],
     limitations: tuple[str, ...],
     fallback_answer: str,
+    population: AnalysisPopulation | None = None,
 ) -> tuple[AnalysisStatus, str, AnalysisPresentation]:
     """Select one exact answer without changing or manufacturing analyzer evidence."""
     intent = request.answer_intent
@@ -73,7 +76,7 @@ def compose_interaction(
     if intent is not None and intent.comparison_required:
         comparison_problem = _comparison_problem(request, comparison, findings)
         if comparison_problem is not None:
-            direct = f"Insufficient data: {comparison_problem}"
+            direct = f"I cannot answer the comparison because {comparison_problem}"
             return (
                 AnalysisStatus.INSUFFICIENT_DATA,
                 direct,
@@ -83,9 +86,7 @@ def compose_interaction(
                     limitation=(
                         "A compatible snapshot pair is not evidence that a change was evaluated."
                     ),
-                    follow_up=(
-                        "Select or collect a compatible comparison snapshot with typed changes."
-                    ),
+                    follow_up="Supply a compatible prior snapshot with --comparison PATH.",
                     evaluated_count=0,
                     excluded_count=0,
                 ),
@@ -110,11 +111,17 @@ def compose_interaction(
         )
 
     if required_metric is not None and decisive is None:
-        direct = (
-            f"Insufficient data: no evaluated finding matches the requested "
-            f"{required_metric.replace('_', ' ')} metric."
-        )
-        evaluated, excluded = _ranking_counts(request, snapshot)
+        if required_metric == RankingMetric.CARGO_TYPE_COVERAGE.value:
+            direct = (
+                "I cannot identify missing cargo types because observed network cargo coverage "
+                "is unavailable."
+            )
+        else:
+            direct = (
+                f"I cannot answer this question because no evaluated finding contains the "
+                f"requested {required_metric.replace('_', ' ')} metric."
+            )
+        evaluated, excluded = _ranking_counts(request, snapshot, population)
         return (
             AnalysisStatus.INSUFFICIENT_DATA,
             direct,
@@ -122,7 +129,7 @@ def compose_interaction(
                 direct_answer=direct,
                 basis=AnswerBasis.INSUFFICIENT_DATA,
                 limitation="A nearby metric was not substituted for the requested metric.",
-                follow_up="Choose a supported metric or collect the missing evidence.",
+                follow_up="Collect the missing evidence or choose a supported observed metric.",
                 evaluated_count=evaluated,
                 excluded_count=excluded,
             ),
@@ -150,10 +157,10 @@ def compose_interaction(
             ),
         )
 
-    direct = _direct_answer(request, decisive)
+    direct = _direct_answer(request, decisive, snapshot)
     recommendation = _supported_recommendation(decisive, recommendations)
     limitation = _material_limitation(request, decisive, limitations)
-    evaluated, excluded = _ranking_counts(request, snapshot)
+    evaluated, excluded = _ranking_counts(request, snapshot, population)
     return (
         status,
         direct,
@@ -238,7 +245,9 @@ def _select_decisive(
     return min(candidates, key=lambda item: (-_severity(item.severity), item.finding_id))
 
 
-def _direct_answer(request: AnalysisRequest, finding: AnalysisFinding) -> str:
+def _direct_answer(
+    request: AnalysisRequest, finding: AnalysisFinding, snapshot: WorldSnapshot
+) -> str:
     intent = request.answer_intent
     concept = None if intent is None else intent.concept
     value = finding.metric_value
@@ -261,10 +270,18 @@ def _direct_answer(request: AnalysisRequest, finding: AnalysisFinding) -> str:
     if concept is AnswerConcept.DEBT and finding.metric_name == "loan":
         if value == 0:
             return "There is no observed outstanding company loan."
-        return (
-            f"The observed company loan is {_currency(value)}; whether that is too much requires "
-            "company-value or repayment context."
+        observer_id = snapshot.metadata.observer_company_id
+        company = next(
+            (item for item in snapshot.companies if item.id == observer_id),
+            None,
         )
+        if company is not None and company.company_value:
+            share = float(value) / company.company_value if isinstance(value, (int, float)) else 0
+            return (
+                f"Your outstanding loan is {_currency(value)}, equal to {share:.1%} of observed "
+                "company value."
+            )
+        return f"Your outstanding loan is {_currency(value)}."
     if concept is AnswerConcept.AVAILABLE_CASH and finding.metric_name == "cash":
         return (
             f"The observed company cash balance available in this snapshot is {_currency(value)}."
@@ -272,10 +289,35 @@ def _direct_answer(request: AnalysisRequest, finding: AnalysisFinding) -> str:
     if concept is AnswerConcept.CHANGE:
         return f"The most material evaluated change is: {finding.summary}"
     if concept is AnswerConcept.IDLE:
-        return f"At least one idle vehicle was detected: {finding.title}."
+        return f"At least one idle vehicle was detected: {_primary_label(finding, snapshot)}."
+    if (
+        intent is not None
+        and intent.premise is PremiseType.ROUTE_LOSING
+        and finding.metric_name == RankingMetric.ROUTE_AGGREGATE_PROFIT.value
+        and isinstance(value, (int, float))
+    ):
+        label = _primary_label(finding, snapshot)
+        if value >= 0:
+            return f"{label} is not losing money; it earned {_currency(value)} last year."
+        return f"{label} lost {_currency(abs(value))} last year."
     if request.ranking is not None:
-        metric_label = (finding.metric_name or "requested metric").replace("_", " ")
-        return f"The top result by {metric_label} is {finding.title}."
+        label = _primary_label(finding, snapshot)
+        metric = finding.metric_name
+        if metric in {
+            RankingMetric.PROFIT_LAST_YEAR.value,
+            RankingMetric.PROFIT_THIS_YEAR.value,
+            RankingMetric.ROUTE_AGGREGATE_PROFIT.value,
+            RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT.value,
+        }:
+            return f"{label} ranks first at {_currency(value)} for the requested period."
+        if metric == RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT.value:
+            return f"{label} has the most losing vehicles: {value}."
+        if metric == RankingMetric.WAITING_CARGO.value:
+            return f"{label} has the most waiting cargo: {value} units."
+        if metric == RankingMetric.PRIORITY_SCORE.value:
+            return f"{label} should be inspected first based on the observed priority evidence."
+        metric_label = (metric or "requested metric").replace("_", " ")
+        return f"{label} ranks first by {metric_label}: {value}."
     return finding.summary
 
 
@@ -309,17 +351,21 @@ def _material_limitation(
 def _follow_up(request: AnalysisRequest, finding: AnalysisFinding) -> str | None:
     intent = request.answer_intent
     if intent is not None and intent.concept is AnswerConcept.LOSS:
-        return "Ask which vehicles lost the most money last year to inspect local losses."
+        return "Inspect the vehicle with the largest observed loss last year."
     if intent is not None and intent.concept is AnswerConcept.CHANGE:
         return "Inspect the evidence for this change before acting on it."
     if request.ranking is not None:
-        return f"Inspect the evidence for {finding.title}."
+        return "Review the displayed entity and its supporting evidence."
     return None
 
 
 def _ranking_counts(
-    request: AnalysisRequest, snapshot: WorldSnapshot
+    request: AnalysisRequest,
+    snapshot: WorldSnapshot,
+    population: AnalysisPopulation | None = None,
 ) -> tuple[int | None, int | None]:
+    if population is not None:
+        return population.evaluated_count, population.excluded_count
     if request.ranking is None:
         return None, None
     subject = request.subject_type or _default_subject(request.analysis_type)
@@ -421,6 +467,19 @@ def _vehicle_metric(vehicle: Vehicle, metric: str | None) -> int | None:
     if metric == "age_days":
         return vehicle.age_days
     return None
+
+
+def _primary_label(finding: AnalysisFinding, snapshot: WorldSnapshot) -> str:
+    from sim_pilot.analysis.evidence_view import entity_display_labels
+
+    for evidence in finding.evidence:
+        if evidence.entity_type is None or evidence.entity_id is None:
+            continue
+        label = entity_display_labels(snapshot, evidence.entity_type).get(evidence.entity_id)
+        if label is not None:
+            return label
+    title = finding.title.removeprefix("#1 ")
+    return title
 
 
 def _default_subject(analysis_type: AnalysisType) -> AnalysisSubjectType | None:
