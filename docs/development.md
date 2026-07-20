@@ -60,6 +60,8 @@ Only run live tests after authorizing the corresponding hosted usage or disposab
 | `sim_pilot.runtime` | Lifecycle, policy, decision validation, verification, persistence coordination, and recovery. |
 | `sim_pilot.intent_compiler` | Natural-language compilation and deterministic semantic validation. |
 | `sim_pilot.decision_provider` | Model-backed runtime decision implementations. |
+| `sim_pilot.analysis` | Read-only deterministic gameplay requests, analyzers, evidence, interaction composition, freshness, and local sessions. |
+| `sim_pilot.analysis_provider` | Optional Codex CLI and OpenAI analysis compilers and explanations. |
 | `sim_pilot.provider_support` | Shared provider subprocess support, currently the Codex CLI boundary. |
 | `sim_pilot.persistence` | Repository and unit-of-work contracts plus in-memory storage. |
 | `sim_pilot.persistence.sqlite` | SQLAlchemy repositories, schema, transactions, and Alembic helpers. |
@@ -135,7 +137,9 @@ that dependency direction and isolate the OpenAI SDK to provider modules.
 
 All configuration keys and live-test gates are cataloged in
 [configuration.md](configuration.md). Persistence contracts and schema ownership are described in
-[data-models.md](data-models.md).
+[data-models.md](data-models.md). The complete list of authoritative implementation paths, bounded
+read-compatibility readers, and guard tests is maintained in
+[016-ssot-enforcement.md](016-ssot-enforcement.md).
 
 ## Repository support surfaces
 
@@ -144,6 +148,12 @@ All configuration keys and live-test gates are cataloged in
 - `discovery/openttd_gamescript/`: retained Task 7A probes and sanitized discovery evidence; it is
   not production adapter code.
 - `scripts/demo_crash_recovery.py`: deterministic crash-window demonstration.
+- `scripts/profile_phase9_2_latency.py`: reproducible read-only collection profiler documented by
+  the Phase 9.2 latency report.
+- `scripts/run_founder_intelligence.py`, `scripts/assemble_founder_review.py`,
+  `scripts/run_phase9_founder_review.py`, and `scripts/summarize_founder_sample.py`: milestone
+  evidence generators retained so the dated founder-review artifacts can be reproduced. They are
+  not normal operating entry points.
 
 ## Large cohesive modules
 
@@ -151,11 +161,21 @@ The following source modules remain over roughly 500 lines after review:
 
 - `cli.py`: Typer command registration and monkeypatched CLI composition are currently one public
   process surface. Split by command group only with a focused CLI-module migration.
+- `analysis/compiler.py`: deterministic parsing, conversation resolution, and provider-output
+  normalization derive one request contract. Splitting them independently would risk intent drift.
+- `analysis/analyzers/changes.py`: change, anomaly, entity-summary, and priority analyzers share
+  typed change-evidence and severity helpers. A later analyzer-per-module move should be mechanical.
+- `analysis/interaction.py`: direct answer, decisive-finding selection, inspection guidance, and
+  limitations form one deterministic response-composition pipeline.
 - `product_evaluation.py`: models, bounded call accounting, per-case execution, aggregation, and
   resumable file output form one evidence pipeline. A later split should preserve resumability.
+- `analysis/contracts.py`: the strict request, evidence, finding, presentation, freshness, and
+  response models are kept together as the analysis package's public schema surface.
 - `provider_support/codex_cli/client.py`: subprocess lifecycle, parsing, diagnostics, isolation, and
   cleanup share security-sensitive state. Splitting it should be handled as a provider-boundary
   hardening change.
+- `openttd/gamescript/client.py`: negotiation, identity, sequence validation, resynchronization, and
+  paginated collection are one stateful bridge protocol client.
 
 Large test modules mirror end-to-end scenarios and are retained as tests rather than production
 architecture.

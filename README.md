@@ -57,9 +57,8 @@ The `scripted` decision provider is deterministic and performs no hosted call.
 
 ## Compile a natural-language task
 
-The default compiler provider is `none`. Select a provider explicitly.
-
-Using an authenticated local Codex CLI session:
+Providers are always explicit; there is no fallback from an unconfigured provider to a hosted
+provider. For example, with an authenticated local Codex CLI session:
 
 ```bash
 codex login status
@@ -68,17 +67,8 @@ uv run sim-pilot task compile \
   --instruction "Reach one million cash without taking loans"
 ```
 
-Using the OpenAI API:
-
-```bash
-export OPENAI_API_KEY="..."
-uv run sim-pilot task compile \
-  --provider openai \
-  --instruction "Reach one million cash without taking loans"
-```
-
-Compiler and runtime decision providers are selected independently. There is no fallback from an
-unconfigured provider to a hosted provider.
+Compiler and runtime decision providers are selected independently. See the
+[operations guide](docs/operations.md) for OpenAI configuration and runtime-provider commands.
 
 ## OpenTTD
 
@@ -88,18 +78,7 @@ Admin Network password:
 ```bash
 export SIM_PILOT_OPENTTD_ADMIN_PASSWORD="..."
 uv run sim-pilot openttd doctor
-uv run sim-pilot openttd capabilities
-uv run sim-pilot openttd observe
-
-# With the protocol-v2 GameScript bridge enabled:
 uv run sim-pilot openttd world
-uv run sim-pilot openttd towns
-uv run sim-pilot openttd industries
-uv run sim-pilot openttd stations
-uv run sim-pilot openttd vehicles
-uv run sim-pilot openttd company
-uv run sim-pilot openttd routes
-uv run sim-pilot openttd diff
 ```
 
 Writes remain disabled unless their separate safety flags are enabled on a disposable server. See
@@ -111,28 +90,23 @@ The canonical model and its explicit coverage limits are documented in
 ## Analyze OpenTTD
 
 Gameplay analysis is read-only and separate from action tasks. It works deterministically from a
-saved snapshot or a fresh live snapshot without a model. When no snapshot file is supplied, the
-OpenTTD intelligence commands collect live state by default:
+saved snapshot or verified live state without a model. When no snapshot file is supplied, the
+OpenTTD intelligence commands reuse a compatible snapshot up to five seconds old after a live
+identity probe, or collect fresh state when needed:
 
 ```bash
 uv run sim-pilot ask --snapshot snapshot.json "Why am I losing money?"
 uv run sim-pilot ask "Which vehicles lost the most money last year?"
-uv run sim-pilot openttd analyze company
-uv run sim-pilot openttd analyze vehicles --snapshot snapshot.json --top 10
+uv run sim-pilot openttd analyze vehicles --fresh
 uv run sim-pilot analysis show
+uv run sim-pilot analysis inspect ANALYSIS_ID FINDING_ID
 ```
 
 Codex or OpenAI compilation and explanation are optional and must be selected explicitly with
-`--compiler-provider` and `--explanation-provider`. See the
-[gameplay analysis engine](docs/014-gameplay-analysis-engine.md).
-The [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md) documents evidence
-drill-down, snapshot freshness, comparisons, current strengths, and product limitations. Phase 8D
-adds question-specific first-sentence answers, premise correction, exact metric/ranking checks,
-honest insufficient-data outcomes, and compact one-finding output. Phase 9 adds explicit question
-forms and evidence requirements, full positive rankings, subject-specific priority review,
-compatible conversational follow-ups, readable route labels, and pre-invocation explanation
-gating. Gameplay automation remains out of scope; see the
-[Phase 9 design](docs/019-interaction-ready-intelligence.md).
+`--compiler-provider` and `--explanation-provider`. The
+[OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md) covers supported questions,
+freshness, evidence drill-down, and limitations. Named client-window inspection currently returns
+`unsupported` because the proven OpenTTD boundary has no verifiable viewport postcondition.
 
 ## Architecture at a glance
 
@@ -158,17 +132,10 @@ Every serialized domain model carries `schema_version=1`. Changes to `TaskSpecif
 - [Documentation index](docs/README.md)
 - [Development and architecture guide](docs/development.md)
 - [Environment and configuration](docs/configuration.md)
-- [Data and persistence model](docs/data-models.md)
 - [Operations and CLI guide](docs/operations.md)
 - [Known limitations](docs/known-limitations.md)
 - [Vision](docs/000-vision.md)
 - [Runtime design](docs/001-month-1-design.md)
 - [Reference simulation specification](docs/002-reference-simulation.md)
-- [Security hardening review](docs/014-security-hardening-review.md)
-- [Failure handling](docs/015-abend-handling.md)
-- [SSOT boundaries](docs/016-ssot-enforcement.md)
-- [Founder intelligence validation](docs/015-founder-intelligence-validation.md)
-- [OpenTTD intelligence guide](docs/016-openttd-intelligence-guide.md)
-- [Phase 8D answer-first assignment](docs/018-answer-first-product-interaction.md)
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).

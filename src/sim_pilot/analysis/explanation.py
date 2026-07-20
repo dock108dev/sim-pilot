@@ -18,6 +18,8 @@ from sim_pilot.analysis.contracts import (
     AnalysisResponse,
     ExplanationClaimType,
     FindingSeverity,
+    InspectionGuidance,
+    InspectionGuidanceStatus,
     QuestionForm,
 )
 from sim_pilot.analysis.errors import AnalysisInputError
@@ -36,6 +38,7 @@ class ExplanationInput(BaseModel):
     request: AnalysisRequest
     findings: tuple[AnalysisFinding, ...] = Field(max_length=20)
     recommendations: tuple[AnalysisRecommendation, ...] = Field(max_length=20)
+    inspection_guidance: InspectionGuidance | None = None
     limitations: tuple[str, ...] = Field(max_length=50)
     style: ExplanationStyle = ExplanationStyle.COMPACT
 
@@ -65,6 +68,9 @@ def explanation_input(
         request=response.request,
         findings=response.findings,
         recommendations=response.recommendations,
+        inspection_guidance=(
+            None if response.presentation is None else response.presentation.inspection_guidance
+        ),
         limitations=response.limitations,
         style=style,
     )
@@ -99,6 +105,8 @@ def validate_explanation(
         )
     )
     for statement in explanation.statements:
+        if re.search(r"(?i)\b(proves?|is caused by|is due to|guarantees?)\b", statement.text):
+            raise AnalysisInputError("explanation asserts unsupported causal certainty")
         if not _numbers(statement.text).issubset(authoritative_numbers):
             raise AnalysisInputError("explanation introduces an unsupported number")
         if not set(statement.finding_ids).issubset(findings):
@@ -114,6 +122,24 @@ def validate_explanation(
             raise AnalysisInputError(
                 "an explanation recommendation must be labeled as a recommendation"
             )
+        if statement.claim_type is ExplanationClaimType.RECOMMENDATION:
+            presentation = response.presentation
+            if presentation is None:
+                raise AnalysisInputError("explanation recommendation has no selected guidance")
+            guidance = presentation.inspection_guidance
+            if guidance.status is not InspectionGuidanceStatus.RECOMMENDED:
+                raise AnalysisInputError(
+                    "explanation recommendation contradicts unavailable guidance"
+                )
+            assert guidance.target_label is not None
+            if guidance.target_label.casefold() not in statement.text.casefold():
+                raise AnalysisInputError("explanation recommendation changes the inspection target")
+            if guidance.target_entity_id is not None and set(statement.entity_ids) != {
+                guidance.target_entity_id
+            }:
+                raise AnalysisInputError("explanation recommendation changes the inspection entity")
+            if not set(guidance.supporting_finding_ids).issubset(statement.finding_ids):
+                raise AnalysisInputError("explanation recommendation changes its evidence basis")
         if statement.claim_type is ExplanationClaimType.LIMITATION:
             acknowledged_limitations.update(statement.finding_ids)
         for reference in statement.metric_references:
@@ -144,6 +170,17 @@ def retain_valuable_explanation(
     }
     if presentation is not None and presentation.limitation is not None:
         base_texts.add(_normalized(presentation.limitation))
+    if presentation is not None:
+        guidance = presentation.inspection_guidance
+        base_texts.update(
+            _normalized(value)
+            for value in (
+                guidance.observation,
+                guidance.diagnostic_value,
+                guidance.unavailable_reason,
+            )
+            if value is not None
+        )
     selected: list[AnalysisExplanationStatement] = []
     for statement in explanation.statements:
         text = _normalized(statement.text)

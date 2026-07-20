@@ -24,6 +24,7 @@ from sim_pilot.analysis.contracts import (
     RankingDirection,
     RankingMetric,
 )
+from sim_pilot.analysis.inspection import inspection_guidance
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.domain.world import Vehicle, WorldSnapshot
 
@@ -89,6 +90,13 @@ def compose_interaction(
                 AnalysisPresentation(
                     direct_answer=direct,
                     basis=AnswerBasis.CONFIRMED_FACT,
+                    inspection_guidance=inspection_guidance(
+                        request,
+                        None,
+                        snapshot,
+                        status=AnalysisStatus.COMPLETED,
+                        unavailable_reason="no bounded anomaly identified a specific target",
+                    ),
                     limitation=(
                         "These are fixed change alerts, not statistical anomalies or learned "
                         "baselines."
@@ -106,6 +114,15 @@ def compose_interaction(
                 AnalysisPresentation(
                     direct_answer=direct,
                     basis=AnswerBasis.INSUFFICIENT_DATA,
+                    inspection_guidance=inspection_guidance(
+                        request,
+                        None,
+                        snapshot,
+                        status=AnalysisStatus.INSUFFICIENT_DATA,
+                        unavailable_reason=(
+                            "a compatible prior snapshot with evaluated change evidence is missing"
+                        ),
+                    ),
                     limitation=(
                         "A compatible snapshot pair is not evidence that a change was evaluated."
                     ),
@@ -124,6 +141,13 @@ def compose_interaction(
             AnalysisPresentation(
                 direct_answer=direct,
                 basis=AnswerBasis.CONFIRMED_FACT,
+                inspection_guidance=inspection_guidance(
+                    request,
+                    None,
+                    snapshot,
+                    status=status,
+                    unavailable_reason="no idle vehicle was identified as a specific target",
+                ),
                 limitation=(
                     "Idle means a vehicle was observed in a depot or with running state "
                     "idle or stopped."
@@ -151,6 +175,19 @@ def compose_interaction(
             AnalysisPresentation(
                 direct_answer=direct,
                 basis=AnswerBasis.INSUFFICIENT_DATA,
+                inspection_guidance=inspection_guidance(
+                    request,
+                    None,
+                    snapshot,
+                    status=AnalysisStatus.INSUFFICIENT_DATA,
+                    unavailable_reason=(
+                        "route cargo coverage is unavailable"
+                        if required_metric == RankingMetric.CARGO_TYPE_COVERAGE.value
+                        else (
+                            f"the requested {required_metric.replace('_', ' ')} evidence is missing"
+                        )
+                    ),
+                ),
                 limitation="A nearby metric was not substituted for the requested metric.",
                 follow_up="Collect the missing evidence or choose a supported observed metric.",
                 evaluated_count=evaluated,
@@ -176,6 +213,12 @@ def compose_interaction(
             AnalysisPresentation(
                 direct_answer=direct,
                 basis=basis,
+                inspection_guidance=inspection_guidance(
+                    request,
+                    None,
+                    snapshot,
+                    status=status,
+                ),
                 limitation=limitations[0] if limitations else None,
             ),
         )
@@ -197,6 +240,12 @@ def compose_interaction(
             decisive_finding_id=decisive.finding_id,
             recommendation_id=(
                 None if recommendation is None else recommendation.recommendation_id
+            ),
+            inspection_guidance=inspection_guidance(
+                request,
+                decisive,
+                snapshot,
+                status=status,
             ),
             limitation=limitation,
             follow_up=_follow_up(request, decisive),

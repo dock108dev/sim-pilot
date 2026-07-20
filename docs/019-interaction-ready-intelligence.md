@@ -23,6 +23,20 @@ Compact output is `Direct answer`, `Evidence`, `Inspect next`, and `Limitation`.
 omitted. Lifecycle status, schema details, canonical IDs, and capability internals remain in JSON or
 detailed output rather than the default player answer.
 
+Phase 9.1 makes `Inspect next` a required section for every composed answer. Its deterministic
+`InspectionGuidance` contract separates status, target type and identity, player-readable label,
+concrete observation, diagnostic distinction, unavailable reason, and supporting finding IDs.
+Recommended guidance must support the decisive finding and, when it names a canonical entity, that
+entity must occur in the finding evidence. Contract validation rejects repeated findings, generic
+inspection verbs without an observation, unsupported causal certainty, wrong-entity references,
+and guidance outside the compact word budget.
+
+Waiting cargo guidance asks the player to compare frequency, cargo types, and destinations without
+claiming congestion. Vehicle and route loss guidance asks for orders, loading waits, and empty legs
+without assigning a cause. Industry and town opportunities remain investigation heuristics;
+connection feasibility and future profitability remain unknown. Missing evidence and healthy
+no-urgent-problem results explicitly decline to manufacture an inspection target.
+
 ## Intent and evidence contract
 
 `AnswerIntent` preserves bounded question forms (`status`, `existence`, `quantity`, `ranking`,
@@ -76,8 +90,15 @@ critical limitations, and unlinked recommendations. Redundant or overlong prose 
 Responses record `not_invoked`, `improved_answer`, `neutral`, `rejected_by_validator`, or
 `provider_failed` for evaluation.
 
+Explanation prompt version `analysis-explanation-v2` includes the typed inspection guidance as an
+authoritative input. Optional Codex wording may add bounded synthesis, but it cannot change the
+target, observation, diagnostic distinction, unavailable state, metric, or evidence. Redundant or
+causally overconfident prose fails closed.
+
 `sim-pilot ask` remains compact by default and supports `--detailed`, `--json`, `--evidence`,
-`--fresh`, and `--quiet`. Progress describes snapshot collection and analysis, not provider
+`--fresh`, `--max-snapshot-age`, and `--quiet`. Compatible snapshots are reused only after a live
+identity probe; detailed and JSON output expose the resulting freshness and synchronization
+metadata. Progress describes snapshot collection and analysis, not provider
 internals. Analysis remains separated from action tasks under ADR-014.
 
 ## Known limits
@@ -86,4 +107,3 @@ Network-wide missing cargo types cannot yet be established from current route-to
 therefore return insufficient data. Route identity remains inferred from normalized orders.
 Waiting cargo does not prove congestion. Infrastructure and maintenance expenses are not exposed
 separately. Comparison questions require actual typed change evidence, not merely two files.
-

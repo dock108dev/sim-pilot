@@ -47,6 +47,7 @@ class SynchronizationState(StrEnum):
     SYNCHRONIZED = "synchronized"
     DEGRADED = "degraded"
     RESYNCHRONIZING = "resynchronizing"
+    IDENTITY_VERIFIED = "identity_verified"
     INCOMPATIBLE = "incompatible"
     FAILED = "failed"
 

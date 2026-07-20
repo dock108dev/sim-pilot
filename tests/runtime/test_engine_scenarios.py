@@ -67,6 +67,8 @@ class ShutdownFailureAdapter(TrackingAdapter):
 
 
 class FalseSuccessAdapter:
+    requires_fresh_observation_on_resume = False
+
     def __init__(self) -> None:
         self.shutdown_count = 0
         self.observation_count = 0

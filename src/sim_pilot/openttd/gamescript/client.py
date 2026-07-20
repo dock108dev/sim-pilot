@@ -135,12 +135,27 @@ class GameScriptBridgeClient:
                     self._accept_snapshot(message)
                     got_snapshot = True
                 elif message.message_type is MessageType.WORLD_MANIFEST:
-                    self._accept_world_manifest(message)
+                    if got_hello and got_capabilities and got_response and got_snapshot:
+                        self._accept_world_manifest(message)
                 elif message.message_type is MessageType.WORLD_COLLECTION_PAGE:
-                    self._accept_world_page(message)
+                    if (
+                        got_hello
+                        and got_capabilities
+                        and got_response
+                        and got_snapshot
+                        and self._world_manifest is not None
+                    ):
+                        self._accept_world_page(message)
                 elif message.message_type is MessageType.WORLD_SNAPSHOT_COMPLETE:
-                    self._accept_world_complete(message)
-                    got_world = True
+                    if (
+                        got_hello
+                        and got_capabilities
+                        and got_response
+                        and got_snapshot
+                        and self._world_manifest is not None
+                    ):
+                        self._accept_world_complete(message)
+                        got_world = True
                 needs_world = bool(
                     self.health.capabilities is not None
                     and self.health.capabilities.world_snapshots
@@ -166,6 +181,53 @@ class GameScriptBridgeClient:
         if health.snapshot is None:
             raise BridgeUnavailableError("bridge synchronization returned no snapshot")
         return health.snapshot
+
+    async def verify_identity(self) -> BridgeHealth:
+        """Correlate bridge identity without waiting for paginated world collections."""
+        self._set_state(SynchronizationState.CONNECTING)
+        try:
+            await self.transport.connect()
+            await self.transport.subscribe_gamescript()
+            self._seen_message_ids.clear()
+            self._set_state(SynchronizationState.AWAITING_HELLO, connected=True)
+            request_id = await self._send(
+                MessageType.RESYNC_REQUEST,
+                ResyncRequestPayload(
+                    last_script_instance_id=self.health.script_instance_id,
+                    last_sequence=self.health.last_sequence,
+                    reason="identity_probe",
+                ),
+                company_id=self.company_id,
+            )
+            self._set_state(SynchronizationState.RESYNCHRONIZING)
+            got_hello = False
+            got_capabilities = False
+            got_response = False
+            got_snapshot = False
+            while not (got_hello and got_capabilities and got_response and got_snapshot):
+                message = await self._receive(allow_resync_baseline=True)
+                if message.message_type is MessageType.HELLO:
+                    self._accept_hello(message)
+                    got_hello = True
+                elif message.message_type is MessageType.CAPABILITIES:
+                    self._accept_capabilities(message)
+                    got_capabilities = True
+                elif (
+                    message.message_type is MessageType.RESYNC_RESPONSE
+                    and message.correlation_id == request_id
+                ):
+                    got_response = True
+                elif message.message_type is MessageType.STATE_SNAPSHOT:
+                    self._accept_snapshot(message)
+                    got_snapshot = True
+            self._set_state(SynchronizationState.IDENTITY_VERIFIED)
+            return self.health
+        except BridgeIncompatibleError:
+            self._set_state(SynchronizationState.INCOMPATIBLE)
+            raise
+        except Exception as error:
+            self._set_state(SynchronizationState.FAILED, degraded_reason=str(error))
+            raise
 
     async def execute_set_company_name(
         self,

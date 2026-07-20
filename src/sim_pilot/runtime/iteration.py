@@ -244,11 +244,9 @@ async def run_iterations(
                     )
                     break
                 if decision.type is DecisionType.WAIT:
-                    external_refresh = bool(
-                        getattr(adapter, "requires_fresh_observation_on_resume", False)
-                    )
+                    external_refresh = adapter.requires_fresh_observation_on_resume
                     if external_refresh:
-                        observation = await adapter.observe()
+                        observation = cast("Observation", await adapter.observe())
                         drafts.append(observation_draft(observation))
                     state_fingerprint = json.dumps(
                         observation.state, sort_keys=True, separators=(",", ":")
@@ -357,7 +355,7 @@ async def run_iterations(
                         "rejected_action_count": runtime_state.rejected_action_count + 1,
                     }
                 )
-                stale = bool(getattr(adapter_validation, "state_stale", False))
+                stale = adapter_validation.state_stale
                 if stale:
                     observation = await adapter.observe()
                     drafts.append(observation_draft(observation))

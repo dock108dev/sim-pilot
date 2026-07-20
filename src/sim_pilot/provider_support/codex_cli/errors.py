@@ -24,6 +24,8 @@ class CodexCLIProcessStartError(CodexCLIError):
 class CodexCLITimeoutError(CodexCLIError):
     """The subprocess exceeded its configured deadline."""
 
+    process_id: int | None = None
+
 
 class CodexCLIProcessTerminationError(CodexCLIError):
     """A timed-out or invalid subprocess could not be terminated."""

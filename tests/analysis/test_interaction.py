@@ -421,7 +421,8 @@ def test_selected_recommendation_is_supported_by_the_decisive_finding() -> None:
     )
     assert decisive in recommendation.supporting_finding_ids
     rendered = render_analysis(response, snapshot=snapshot(vehicles=(losing,)))
-    assert recommendation.title in rendered
+    assert "Inspect Loss (V-001)" in rendered
+    assert "orders, loading waits, and empty return legs" in rendered
     assert rendered.count(recommendation.rationale) == 0
 
 

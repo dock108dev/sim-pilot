@@ -10,6 +10,7 @@ from sim_pilot.analysis.contracts import (
     FindingKind,
 )
 from sim_pilot.analysis.evidence_view import entity_display_labels
+from sim_pilot.analysis.inspection import render_inspection_guidance
 from sim_pilot.domain.world import WorldSnapshot
 
 
@@ -18,8 +19,6 @@ def render_analysis(
     *,
     detailed: bool = False,
     snapshot: WorldSnapshot | None = None,
-    snapshot_age_seconds: float = 0,
-    cached: bool = False,
     evidence: bool = False,
 ) -> str:
     """Render a deterministic answer with claims separated by epistemic role."""
@@ -41,15 +40,11 @@ def render_analysis(
     if not response.findings:
         lines.extend(("", "Finding", _no_result_message(response)))
 
-    lines.extend(("", "Recommendation"))
-    if response.recommendations:
-        recommendations = sorted(response.recommendations, key=lambda value: value.priority)
-        for item in recommendations if detailed else recommendations[:1]:
-            lines.append(f"- Inspect: {item.title}. {item.rationale}")
-            if detailed and item.limitations:
-                lines.extend(f"  Limitation: {value}" for value in item.limitations)
+    lines.extend(("", "Inspect next"))
+    if response.presentation is not None:
+        lines.append(render_inspection_guidance(response.presentation.inspection_guidance))
     else:
-        lines.append(f"- {_next_question(response)}")
+        lines.append("No responsible next inspection can be recommended from this response.")
 
     if response.explanation is not None:
         lines.extend(("", "Model explanation"))
@@ -85,7 +80,7 @@ def render_analysis(
 
     if detailed and snapshot is not None:
         metadata = snapshot.metadata
-        source = "cached" if cached else "fresh or selected"
+        freshness = response.snapshot_metadata
         lines.extend(
             (
                 "",
@@ -93,7 +88,33 @@ def render_analysis(
                 f"ID: {metadata.snapshot_id}",
                 f"World: {metadata.world_id}; save generation: {metadata.save_generation}",
                 f"Captured: {metadata.captured_at.isoformat()}",
-                f"Age: {snapshot_age_seconds:.1f}s; source: {source}",
+                f"Age: {freshness.snapshot_age_seconds:.1f}s; source: {freshness.source.value}",
+                (
+                    "Freshness policy: "
+                    + (
+                        "not specified"
+                        if freshness.maximum_acceptable_age_seconds is None
+                        else f"maximum {freshness.maximum_acceptable_age_seconds:.1f}s"
+                    )
+                ),
+                (
+                    f"Collection: {freshness.collection_interval_game_days} game day(s); "
+                    + (
+                        "duration unavailable"
+                        if freshness.collection_duration_seconds is None
+                        else f"{freshness.collection_duration_seconds:.3f}s elapsed"
+                    )
+                ),
+                (
+                    f"Company: {freshness.observer_company_id or 'unavailable'}; "
+                    f"bridge context: {freshness.bridge_company_context}"
+                ),
+                (
+                    f"Bridge: {freshness.bridge_synchronization_state}; "
+                    f"snapshot sequence {freshness.snapshot_bridge_sequence}; "
+                    f"verification sequence {freshness.identity_verification_sequence}"
+                ),
+                f"Capability fingerprint: {freshness.capability_fingerprint}",
                 f"Complete: {str(metadata.complete).lower()}",
             )
         )
@@ -116,26 +137,7 @@ def _render_compact(
     )
     if finding is not None:
         lines.extend(("", "Evidence", _compact_evidence(finding, snapshot)))
-    recommendation = next(
-        (
-            item
-            for item in response.recommendations
-            if item.recommendation_id == presentation.recommendation_id
-        ),
-        None,
-    )
-    if recommendation is not None:
-        recommendation_text = (
-            recommendation.title
-            if finding is not None and recommendation.rationale == finding.summary
-            else recommendation.rationale
-        )
-        lines.extend(("", "Inspect next", recommendation_text))
-    elif presentation.follow_up is not None and (
-        finding is None
-        or presentation.follow_up not in {finding.summary, presentation.direct_answer}
-    ):
-        lines.extend(("", "Inspect next", presentation.follow_up))
+    lines.extend(("", "Inspect next", render_inspection_guidance(presentation.inspection_guidance)))
     if response.explanation is not None:
         lines.extend(("", "Why it matters", response.explanation.statements[0].text))
     if presentation.limitation is not None:
@@ -165,6 +167,25 @@ def _compact_evidence(finding: AnalysisFinding, snapshot: WorldSnapshot | None) 
             identity = f"{vehicle_type.title()} vehicles"
     prefix = f"{identity}: " if identity else ""
     value = finding.metric_value
+    if finding.metric_name == "route_negative_vehicle_count" and isinstance(value, int):
+        vehicle_count: int | None = None
+        for item in finding.evidence:
+            vehicles = item.metric_inputs.get("vehicle_ids")
+            if isinstance(vehicles, list):
+                vehicle_count = len(vehicles)
+                break
+        population = (
+            "observed route vehicles" if vehicle_count is None else f"{vehicle_count} vehicles"
+        )
+        return f"{prefix}{value} of {population} lost money last year."
+    if finding.metric_name == "opportunity_score":
+        primary = finding.evidence[0]
+        production = primary.metric_inputs.get("production")
+        if primary.entity_type is AnalysisSubjectType.INDUSTRY and isinstance(production, int):
+            return (
+                f"{prefix}opportunity score is {value}; observed production is {production}; "
+                "no selected-company nearby station."
+            )
     if finding.metric_name in {
         "cash",
         "loan",

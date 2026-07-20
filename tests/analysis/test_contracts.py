@@ -11,6 +11,7 @@ from sim_pilot.analysis import (
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisResponse,
+    AnalysisSnapshotMetadata,
     AnalysisStatus,
     AnalysisSubjectType,
     AnalysisType,
@@ -22,6 +23,7 @@ from sim_pilot.analysis import (
     RankingDirection,
     RankingMetric,
     RankingRequest,
+    SnapshotSource,
 )
 
 
@@ -102,6 +104,17 @@ def test_findings_recommendations_and_response_keep_authority_separate() -> None
     response = AnalysisResponse(
         request=request(),
         snapshot_id="snapshot-1",
+        snapshot_metadata=AnalysisSnapshotMetadata(
+            source=SnapshotSource.SUPPLIED_SNAPSHOT,
+            snapshot_age_seconds=0,
+            collection_interval_game_days=0,
+            world_id="world-1",
+            observer_company_id="company:opaque",
+            save_generation=1,
+            capability_fingerprint="fingerprint",
+            snapshot_bridge_sequence=1,
+            bridge_synchronization_state="snapshot_metadata_only",
+        ),
         status=AnalysisStatus.COMPLETED,
         answer="One rail vehicle has negative last-year profit.",
         findings=(finding,),

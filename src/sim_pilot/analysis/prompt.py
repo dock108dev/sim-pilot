@@ -34,16 +34,21 @@ compatible ID.
 """.strip()
 
 ANALYSIS_EXPLANATION_PROMPT = """
-Explain only the supplied deterministic findings, evidence, recommendations, and limitations.
+Explain only the supplied deterministic findings, evidence, typed inspection guidance,
+recommendations, and limitations.
 Every factual claim must reference supplied identifiers. Preserve every metric name, value,
 severity, and confidence exactly. Do not add facts, evidence, causal certainty, or executable
-instructions. Label recommendations as recommendations, never facts. Preserve critical limitations
+instructions. The typed inspection guidance is authoritative: wording may be clearer, but the
+target, observation, diagnostic distinction, and unavailable state must not change. Label
+recommendations as recommendations, never facts. Preserve critical limitations
 with limitation statements that reference the affected finding IDs. Use the requested compact,
 coach, or technical style without adding generic strategy advice.
 If recommendation_ids is non-empty, claim_type must be recommendation. Otherwise leave
 recommendation_ids empty. Never attach recommendation IDs to summary or contributor statements.
+Recommendation wording must include the exact inspection target label, target entity ID when one
+exists, and every supporting finding ID from the typed guidance.
 Return only the structured AnalysisExplanation schema.
 """.strip()
 
 COMPILER_PROMPT_VERSION = "analysis-compiler-v5"
-EXPLANATION_PROMPT_VERSION = "analysis-explanation-v1"
+EXPLANATION_PROMPT_VERSION = "analysis-explanation-v2"

@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from time import perf_counter
 from typing import Annotated, Literal, NoReturn
 from uuid import UUID, uuid4
 
 import typer
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import Engine
 
 from sim_pilot.adapters.base import AdapterSnapshot, SimulationAdapter
@@ -19,6 +20,7 @@ from sim_pilot.adapters.reference import ReferenceSimulationAdapter
 from sim_pilot.analysis import (
     AnalysisRequest,
     AnalysisResponse,
+    AnalysisSnapshotMetadata,
     AnalysisSubjectType,
     AnalysisType,
     DeterministicAnalysisCompiler,
@@ -27,6 +29,13 @@ from sim_pilot.analysis.compiler import (
     AnalysisCompilation,
     AnalysisCompiler,
 )
+from sim_pilot.analysis.contracts import SnapshotSource
+from sim_pilot.analysis.entity_inspection import (
+    EntityInspectionError,
+    evaluate_unsupported_inspection,
+    render_inspection_result,
+    resolve_inspection_action,
+)
 from sim_pilot.analysis.errors import AnalysisError
 from sim_pilot.analysis.evidence_view import (
     render_entity,
@@ -34,7 +43,12 @@ from sim_pilot.analysis.evidence_view import (
     render_session_summary,
 )
 from sim_pilot.analysis.explanation import ExplanationProvider, ExplanationStyle
-from sim_pilot.analysis.freshness import SnapshotCache
+from sim_pilot.analysis.freshness import (
+    SnapshotCache,
+    SnapshotCacheStatus,
+    SnapshotIdentity,
+    SnapshotVerification,
+)
 from sim_pilot.analysis.output import render_analysis
 from sim_pilot.analysis.progress import AnalysisProgress
 from sim_pilot.analysis.query import AnalysisQueryService
@@ -111,6 +125,7 @@ from sim_pilot.openttd.query_output import (
     render_world_collection,
     render_world_summary,
 )
+from sim_pilot.openttd.world_translation import canonical_entity_id
 from sim_pilot.persistence import PersistenceError
 from sim_pilot.persistence.sqlite import (
     SQLiteUnitOfWork,
@@ -172,11 +187,60 @@ task_app.add_typer(recovery_app, name="recovery")
 
 DEFAULT_PRODUCT_EVALUATION_FIXTURE = Path("tests/fixtures/product_evaluation_instructions.json")
 PRODUCT_EVALUATION_MAX_OUTPUT_TOKENS = 2048
+DEFAULT_ANALYSIS_MAXIMUM_SNAPSHOT_AGE_SECONDS = 5.0
 
 
 @dataclass
 class CLIContext:
     url: str
+
+
+@dataclass(frozen=True)
+class AnalysisSnapshotAcquisition:
+    snapshot: WorldSnapshot
+    source: SnapshotSource
+    maximum_acceptable_age_seconds: float | None
+    collection_duration_seconds: float | None
+    verification: SnapshotVerification | None = None
+    bridge_supported_actions: tuple[str, ...] = ()
+
+    def metadata(self, *, now: datetime | None = None) -> AnalysisSnapshotMetadata:
+        instant = now or datetime.now(UTC)
+        source = self.snapshot.metadata
+        verification = self.verification
+        return AnalysisSnapshotMetadata(
+            source=self.source,
+            snapshot_age_seconds=max(0.0, (instant - source.captured_at).total_seconds()),
+            maximum_acceptable_age_seconds=self.maximum_acceptable_age_seconds,
+            collection_duration_seconds=self.collection_duration_seconds,
+            collection_interval_game_days=(
+                source.capture_completed_game_date - source.capture_started_game_date
+            ),
+            world_id=source.world_id,
+            observer_company_id=source.observer_company_id,
+            bridge_company_context=(
+                None if verification is None else verification.identity.bridge_company_context
+            ),
+            save_generation=source.save_generation,
+            capability_fingerprint=source.capability_fingerprint,
+            snapshot_bridge_sequence=source.bridge_sequence,
+            identity_verification_sequence=(
+                None if verification is None else verification.bridge_sequence
+            ),
+            identity_verified_at=(None if verification is None else verification.verified_at),
+            bridge_synchronization_state=(
+                "snapshot_metadata_only"
+                if verification is None
+                else verification.synchronization_state
+            ),
+            openttd_version=(
+                source.game_version if verification is None else verification.openttd_version
+            ),
+            bridge_protocol_version=(
+                None if verification is None else verification.bridge_protocol_version
+            ),
+            bridge_script_version=(None if verification is None else verification.script_version),
+        )
 
 
 class CompilerProviderName(StrEnum):
@@ -361,8 +425,8 @@ def _exit_for(status: TaskStatus, recovery: bool = False) -> int:
 
 
 def _emit(value: object) -> None:
-    if hasattr(value, "model_dump_json"):
-        typer.echo(value.model_dump_json(indent=2))  # type: ignore[union-attr]
+    if isinstance(value, BaseModel):
+        typer.echo(value.model_dump_json(indent=2))
     else:
         typer.echo(json.dumps(value, indent=2, default=str))
 
@@ -756,8 +820,82 @@ def _world_from_observation(observation: Observation) -> WorldSnapshot:
 
 
 async def capture_openttd_world_snapshot() -> WorldSnapshot:
-    observation, _ = await _bridge_observation()
-    return _world_from_observation(observation)
+    return (await _collect_analysis_snapshot()).snapshot
+
+
+def _verification_from_health(
+    health: BridgeHealth, *, synchronization_state: Literal["identity_verified", "synchronized"]
+) -> SnapshotVerification:
+    bridge_snapshot = health.snapshot
+    company = None if bridge_snapshot is None else bridge_snapshot.company
+    if (
+        health.script_instance_id is None
+        or health.capability_fingerprint is None
+        or bridge_snapshot is None
+        or company is None
+        or health.active_company_context is None
+        or health.last_sequence is None
+        or health.openttd_version is None
+        or health.bridge_protocol_version is None
+        or health.script_version is None
+    ):
+        raise ValueError("bridge identity and company compatibility could not be established")
+    world_id = health.script_instance_id
+    return SnapshotVerification(
+        identity=SnapshotIdentity(
+            world_id=world_id,
+            save_generation=bridge_snapshot.save_generation,
+            capability_fingerprint=health.capability_fingerprint,
+            observer_company_id=canonical_entity_id(world_id, "company", company.company_id),
+            bridge_company_context=health.active_company_context,
+        ),
+        verified_at=datetime.now(UTC),
+        bridge_sequence=health.last_sequence,
+        synchronization_state=synchronization_state,
+        openttd_version=health.openttd_version,
+        bridge_protocol_version=health.bridge_protocol_version,
+        script_version=health.script_version,
+    )
+
+
+async def _probe_openttd_snapshot_identity() -> SnapshotVerification:
+    configuration = openttd_configuration()
+    client = OpenTTDAdminClient(configuration)
+    bridge = GameScriptBridgeClient(
+        client,
+        company_id=configuration.company_id,
+        allow_writes=False,
+        timeout_seconds=configuration.observation_timeout_seconds,
+    )
+    try:
+        health = await bridge.verify_identity()
+        return _verification_from_health(health, synchronization_state="identity_verified")
+    finally:
+        await bridge.close()
+
+
+async def _collect_analysis_snapshot() -> AnalysisSnapshotAcquisition:
+    started = perf_counter()
+    observation, health = await _bridge_observation()
+    duration = perf_counter() - started
+    snapshot = _world_from_observation(observation)
+    verification = _verification_from_health(health, synchronization_state="synchronized")
+    expected = SnapshotIdentity.from_snapshot(
+        snapshot,
+        bridge_company_context=verification.identity.bridge_company_context,
+    )
+    if expected != verification.identity:
+        raise ValueError("collected snapshot does not match synchronized bridge identity")
+    return AnalysisSnapshotAcquisition(
+        snapshot=snapshot,
+        source=SnapshotSource.FRESH_COLLECTION,
+        maximum_acceptable_age_seconds=0.0,
+        collection_duration_seconds=duration,
+        verification=verification,
+        bridge_supported_actions=(
+            () if health.capabilities is None else health.capabilities.supported_actions
+        ),
+    )
 
 
 def _analysis_compiler(provider: AnalysisProviderName, model_name: str | None) -> AnalysisCompiler:
@@ -790,14 +928,68 @@ def _analysis_explainer(
     raise ValueError(f"unsupported explanation provider: {provider!r}")
 
 
-async def _analysis_snapshot(path: Path | None, live: bool) -> WorldSnapshot:
-    if path is not None and live:
-        raise ValueError("--snapshot and --live are mutually exclusive")
+async def _analysis_snapshot(
+    path: Path | None,
+    live: bool,
+    fresh: bool = False,
+    maximum_age_seconds: float | None = None,
+) -> AnalysisSnapshotAcquisition:
+    if path is not None and (live or fresh):
+        raise ValueError("--snapshot cannot be combined with --live or --fresh")
+    if maximum_age_seconds is not None and maximum_age_seconds < 0:
+        raise ValueError("maximum snapshot age must not be negative")
     if path is not None:
-        return WorldSnapshot.model_validate_json(path.read_text(encoding="utf-8"), strict=True)
-    snapshot = await capture_openttd_world_snapshot()
-    SnapshotCache(analysis_session_directory() / "snapshot-cache.json").store(snapshot)
-    return snapshot
+        snapshot = WorldSnapshot.model_validate_json(path.read_text(encoding="utf-8"), strict=True)
+        age = max(0.0, (datetime.now(UTC) - snapshot.metadata.captured_at).total_seconds())
+        if maximum_age_seconds is not None and age > maximum_age_seconds:
+            raise ValueError("selected snapshot exceeds the requested maximum age")
+        return AnalysisSnapshotAcquisition(
+            snapshot=snapshot,
+            source=SnapshotSource.SELECTED_FILE,
+            maximum_acceptable_age_seconds=maximum_age_seconds,
+            collection_duration_seconds=None,
+        )
+
+    maximum_age = (
+        DEFAULT_ANALYSIS_MAXIMUM_SNAPSHOT_AGE_SECONDS
+        if maximum_age_seconds is None
+        else maximum_age_seconds
+    )
+    cache = SnapshotCache(analysis_session_directory() / "snapshot-cache.json")
+    with cache.exclusive():
+        if not (live or fresh or maximum_age == 0):
+            candidate = cache.candidate_status(maximum_age)
+            if candidate.status is SnapshotCacheStatus.REQUIRES_VERIFICATION:
+                verification = await _probe_openttd_snapshot_identity()
+                lookup = cache.load(
+                    verification.identity,
+                    maximum_age_seconds=maximum_age,
+                )
+                if lookup.status is SnapshotCacheStatus.HIT:
+                    assert lookup.snapshot is not None
+                    return AnalysisSnapshotAcquisition(
+                        snapshot=lookup.snapshot,
+                        source=SnapshotSource.COMPATIBLE_CACHE,
+                        maximum_acceptable_age_seconds=maximum_age,
+                        collection_duration_seconds=lookup.collection_duration_seconds,
+                        verification=verification,
+                    )
+        acquired = await _collect_analysis_snapshot()
+        verification = acquired.verification
+        assert verification is not None
+        cache.store(
+            acquired.snapshot,
+            identity=verification.identity,
+            collection_duration_seconds=acquired.collection_duration_seconds or 0.0,
+        )
+        return AnalysisSnapshotAcquisition(
+            snapshot=acquired.snapshot,
+            source=acquired.source,
+            maximum_acceptable_age_seconds=0.0 if live or fresh else maximum_age,
+            collection_duration_seconds=acquired.collection_duration_seconds,
+            verification=verification,
+            bridge_supported_actions=acquired.bridge_supported_actions,
+        )
 
 
 def _analysis_session_store() -> AnalysisSessionStore:
@@ -816,16 +1008,11 @@ def _emit_analysis(
         _emit(response)
         typer.echo(f"Analysis ID: {record.analysis_id}", err=True)
         return
-    age = max(
-        0.0,
-        (datetime.now(UTC) - record.snapshot.metadata.captured_at).total_seconds(),
-    )
     typer.echo(
         render_analysis(
             response,
             detailed=detailed,
             snapshot=record.snapshot,
-            snapshot_age_seconds=age,
             evidence=evidence,
         )
     )
@@ -865,6 +1052,10 @@ def analysis_ask(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
     fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[
+        float | None,
+        typer.Option("--max-snapshot-age", min=0, help="Maximum reusable snapshot age in seconds."),
+    ] = None,
     style: Annotated[ExplanationStyle, typer.Option("--style")] = ExplanationStyle.COMPACT,
 ) -> None:
     """Compile and answer a read-only gameplay question."""
@@ -879,12 +1070,19 @@ def analysis_ask(
         emit=lambda message: typer.echo(message, err=True),
     )
 
-    async def run() -> tuple[AnalysisCompilation, AnalysisResponse | None, WorldSnapshot]:
+    async def run() -> tuple[
+        AnalysisCompilation, AnalysisResponse | None, AnalysisSnapshotAcquisition
+    ]:
         if snapshot_file is None:
             progress.collecting()
-        current = await _analysis_snapshot(snapshot_file, live)
+        current_acquisition = await _analysis_snapshot(
+            snapshot_file, live, fresh, maximum_snapshot_age
+        )
+        current = current_acquisition.snapshot
         comparison = (
-            None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
+            None
+            if comparison_file is None
+            else (await _analysis_snapshot(comparison_file, False)).snapshot
         )
         compiler = _analysis_compiler(compiler_provider, model)
         if compiler_provider is not AnalysisProviderName.NONE:
@@ -900,7 +1098,7 @@ def analysis_ask(
             context=context,
         )
         if compilation.request is None:
-            return compilation, None, current
+            return compilation, None, current_acquisition
         request = compilation.request.model_copy(
             update={
                 "maximum_findings": maximum_findings,
@@ -921,17 +1119,18 @@ def analysis_ask(
             explanation_provider=_analysis_explainer(explanation_provider, model),
             style=style,
         )
-        return compilation, response, current
+        response = response.model_copy(update={"snapshot_metadata": current_acquisition.metadata()})
+        return compilation, response, current_acquisition
 
     try:
-        compilation, response, current = asyncio.run(run())
+        compilation, response, current_acquisition = asyncio.run(run())
         if response is None:
             if json_output:
                 _emit(compilation)
             else:
                 typer.echo(compilation.clarification or compilation.unsupported_reason)
             raise typer.Exit(INVALID_INPUT)
-        record = _analysis_session_store().save(response, current)
+        record = _analysis_session_store().save(response, current_acquisition.snapshot)
         _emit_analysis(
             response,
             record,
@@ -958,6 +1157,8 @@ def _direct_analysis(
     snapshot_file: Path | None,
     comparison_file: Path | None,
     live: bool,
+    fresh: bool,
+    maximum_snapshot_age: float | None,
     maximum_findings: int,
     entity_ids: tuple[str, ...],
     subject_type: AnalysisSubjectType | None,
@@ -973,9 +1174,14 @@ def _direct_analysis(
     async def run() -> tuple[AnalysisResponse, WorldSnapshot]:
         if snapshot_file is None:
             progress.collecting()
-        current = await _analysis_snapshot(snapshot_file, live)
+        current_acquisition = await _analysis_snapshot(
+            snapshot_file, live, fresh, maximum_snapshot_age
+        )
+        current = current_acquisition.snapshot
         comparison = (
-            None if comparison_file is None else await _analysis_snapshot(comparison_file, False)
+            None
+            if comparison_file is None
+            else (await _analysis_snapshot(comparison_file, False)).snapshot
         )
         request = AnalysisRequest(
             analysis_type=analysis_type,
@@ -988,10 +1194,12 @@ def _direct_analysis(
             maximum_findings=maximum_findings,
         )
         progress.analyzing(current)
-        return (
-            AnalysisService(default_analyzer_registry()).analyze(request, current, comparison),
-            current,
+        response = (
+            AnalysisService(default_analyzer_registry())
+            .analyze(request, current, comparison)
+            .model_copy(update={"snapshot_metadata": current_acquisition.metadata()})
         )
+        return response, current
 
     try:
         response, current = asyncio.run(run())
@@ -1006,6 +1214,8 @@ def _direct_options(
     snapshot_file: Path | None,
     comparison_file: Path | None,
     live: bool,
+    fresh: bool,
+    maximum_snapshot_age: float | None,
     maximum_findings: int,
     entity: list[str] | None,
     subject_type: AnalysisSubjectType | None,
@@ -1018,6 +1228,8 @@ def _direct_options(
         snapshot_file=snapshot_file,
         comparison_file=comparison_file,
         live=live,
+        fresh=fresh,
+        maximum_snapshot_age=maximum_snapshot_age,
         maximum_findings=maximum_findings,
         entity_ids=tuple(entity or ()),
         subject_type=subject_type,
@@ -1036,13 +1248,16 @@ def analyze_company(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.COMPANY_HEALTH,
         snapshot_file,
         comparison_file,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         None,
         None,
@@ -1062,13 +1277,16 @@ def analyze_vehicles(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.VEHICLE_PERFORMANCE,
         snapshot_file,
         comparison_file,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         entity,
         AnalysisSubjectType.VEHICLE,
@@ -1087,13 +1305,16 @@ def analyze_stations(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.STATION_PERFORMANCE,
         snapshot_file,
         None,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         entity,
         AnalysisSubjectType.STATION,
@@ -1112,13 +1333,16 @@ def analyze_routes(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.ROUTE_PERFORMANCE,
         snapshot_file,
         None,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         entity,
         AnalysisSubjectType.ROUTE,
@@ -1136,13 +1360,16 @@ def analyze_coverage(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.SERVICE_COVERAGE,
         snapshot_file,
         None,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         None,
         None,
@@ -1161,13 +1388,16 @@ def analyze_changes(
     json_output: Annotated[bool, typer.Option("--json")] = False,
     detailed: Annotated[bool, typer.Option("--detailed")] = False,
     quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    _fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh")] = False,
+    maximum_snapshot_age: Annotated[float | None, typer.Option("--max-snapshot-age", min=0)] = None,
 ) -> None:
     _direct_options(
         AnalysisType.WORLD_CHANGES,
         snapshot_file,
         comparison_file,
         live,
+        fresh,
+        maximum_snapshot_age,
         maximum_findings,
         None,
         None,
@@ -1200,6 +1430,40 @@ def analysis_evidence(analysis_id: str, finding_id: str) -> None:
         _fail(error, INVALID_INPUT)
 
 
+@analysis_app.command("inspect")
+def analysis_inspect(
+    analysis_id: str,
+    finding_id: str,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Validate a named finding target and report the live inspection capability."""
+    try:
+        record = _analysis_session_store().load(analysis_id)
+        action = resolve_inspection_action(record, finding_id)
+        current = asyncio.run(_analysis_snapshot(None, True))
+        verification = current.verification
+        if verification is None:
+            raise EntityInspectionError(
+                "missing_identity", "fresh collection did not establish bridge identity"
+            )
+        result = evaluate_unsupported_inspection(
+            action,
+            current.snapshot,
+            bridge_company_context=verification.identity.bridge_company_context,
+            supported_actions=current.bridge_supported_actions,
+        )
+        _emit(result) if json_output else typer.echo(render_inspection_result(result))
+    except (
+        EntityInspectionError,
+        OpenTTDError,
+        OSError,
+        RuntimeError,
+        ValidationError,
+        ValueError,
+    ) as error:
+        _fail(error, INVALID_INPUT)
+
+
 @analysis_app.command("entity")
 def analysis_entity(
     analysis_id: str,
@@ -1228,7 +1492,7 @@ def _openttd_entity(
     live: bool,
 ) -> None:
     try:
-        snapshot = asyncio.run(_analysis_snapshot(snapshot_file, live))
+        snapshot = asyncio.run(_analysis_snapshot(snapshot_file, live)).snapshot
         typer.echo(render_entity(snapshot, subject, reference))
     except (OpenTTDError, OSError, ValidationError, ValueError) as error:
         _fail(error, INVALID_INPUT)

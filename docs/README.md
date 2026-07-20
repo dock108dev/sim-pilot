@@ -25,8 +25,12 @@ Start with the root [README](../README.md), then use the guide that matches the 
   commands, evidence drill-down, freshness, comparisons, and limitations.
 - [Phase 9 interaction-ready intelligence](019-interaction-ready-intelligence.md): question forms,
   compact composition, session references, and explanation gating.
-- [Phase 9 founder validation](020-phase9-founder-interaction-validation.md): pending live and
-  founder product gate.
+- [Phase 9 founder validation](020-phase9-founder-interaction-validation.md): completed interaction
+  gate and the remaining Phase 9.1 gameplay-usefulness judgment.
+- [Phase 9.2 low-latency intelligence](021-phase9.2-low-latency-intelligence.md): measured
+  collection cost, bounded caching, identity verification, and freshness policy.
+- [Phase 10A named-entity inspection](022-phase10a-named-entity-inspection.md): live capability
+  discovery and the current explicit `unsupported` boundary.
 
 ## Product and implementation contracts
 

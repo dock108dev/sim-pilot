@@ -9,7 +9,14 @@ import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
-from sim_pilot.cli import CompilerProviderName, ReferenceDemoDecisionProvider, app
+from sim_pilot.analysis.contracts import SnapshotSource
+from sim_pilot.analysis.freshness import SnapshotIdentity, SnapshotVerification
+from sim_pilot.cli import (
+    AnalysisSnapshotAcquisition,
+    CompilerProviderName,
+    ReferenceDemoDecisionProvider,
+    app,
+)
 from sim_pilot.domain import (
     CapabilityCoverage,
     Company,
@@ -597,6 +604,10 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
         app,
         ["openttd", "analyze", "company", "--snapshot", str(snapshot_path), "--json"],
     )
+    detailed = runner.invoke(
+        app,
+        ["openttd", "analyze", "company", "--snapshot", str(snapshot_path), "--detailed"],
+    )
 
     assert ask.exit_code == 0, ask.output
     assert ask.output.index("The company is losing money at company level") > 0
@@ -605,6 +616,12 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
     assert "net operating result is -£1,000" in ask.output
     assert direct.exit_code == 0, direct.output
     assert '"analysis_type": "company_health"' in direct.output
+    assert '"source": "selected_file"' in direct.output
+    assert '"world_id": "fixture-world"' in direct.output
+    assert detailed.exit_code == 0, detailed.output
+    assert "Age:" in detailed.output
+    assert "source: selected_file" in detailed.output
+    assert "Capability fingerprint: fingerprint" in detailed.output
 
     record = next((tmp_path / "analysis-session").glob("analysis-*.json"))
     analysis_id = json.loads(record.read_text(encoding="utf-8"))["analysis_id"]
@@ -625,10 +642,21 @@ def test_analysis_cli_uses_snapshot_files_without_action_runtime(
 def test_analysis_cli_defaults_to_live_with_progress_and_supports_quiet(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def capture() -> WorldSnapshot:
-        return analysis_snapshot()
+    async def capture(
+        path: Path | None,
+        live: bool,
+        fresh: bool = False,
+        maximum_age_seconds: float | None = None,
+    ) -> AnalysisSnapshotAcquisition:
+        del path, live, fresh, maximum_age_seconds
+        return AnalysisSnapshotAcquisition(
+            snapshot=analysis_snapshot(),
+            source=SnapshotSource.FRESH_COLLECTION,
+            maximum_acceptable_age_seconds=5,
+            collection_duration_seconds=0.1,
+        )
 
-    monkeypatch.setattr("sim_pilot.cli.capture_openttd_world_snapshot", capture)
+    monkeypatch.setattr("sim_pilot.cli._analysis_snapshot", capture)
     monkeypatch.setattr(
         "sim_pilot.cli.analysis_session_directory", lambda: tmp_path / "analysis-session"
     )
@@ -684,6 +712,68 @@ def test_analysis_cli_resolves_single_vehicle_follow_up_from_session(
     assert incompatible.exit_code != 0
     assert "Which route do you mean" in incompatible.output
     assert '"clarification"' not in incompatible.output
+
+
+def test_analysis_inspect_is_explicit_and_returns_typed_unsupported_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vehicle = Vehicle(
+        id="vehicle-1",
+        type="rail",
+        name="Train 14",
+        age_days=20,
+        profit_this_year=-50,
+        profit_last_year=-100,
+        running_state="running",
+        coordinates=None,
+        in_depot=False,
+        owner_id="company-1",
+    )
+    world = analysis_snapshot(vehicles=(vehicle,))
+    identity = SnapshotIdentity.from_snapshot(world, bridge_company_context=0)
+    verification = SnapshotVerification(
+        identity=identity,
+        verified_at=datetime.now(UTC),
+        bridge_sequence=world.metadata.bridge_sequence,
+        synchronization_state="synchronized",
+        openttd_version="15.3",
+        bridge_protocol_version=2,
+        script_version=2,
+    )
+    calls = 0
+
+    async def acquire(*args: object, **kwargs: object) -> AnalysisSnapshotAcquisition:
+        nonlocal calls
+        del args, kwargs
+        calls += 1
+        return AnalysisSnapshotAcquisition(
+            snapshot=world,
+            source=SnapshotSource.FRESH_COLLECTION,
+            maximum_acceptable_age_seconds=0,
+            collection_duration_seconds=0.1,
+            verification=verification,
+            bridge_supported_actions=("set_company_name",),
+        )
+
+    monkeypatch.setattr("sim_pilot.cli._analysis_snapshot", acquire)
+    monkeypatch.setattr("sim_pilot.cli.analysis_session_directory", lambda: tmp_path)
+    runner = CliRunner()
+    analyzed = runner.invoke(app, ["openttd", "analyze", "vehicles", "--quiet"])
+    assert analyzed.exit_code == 0, analyzed.output
+    assert calls == 1
+
+    record_path = next(tmp_path.glob("analysis-*.json"))
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    analysis_id = payload["analysis_id"]
+    finding_id = payload["response"]["findings"][0]["finding_id"]
+    inspected = runner.invoke(app, ["analysis", "inspect", analysis_id, finding_id, "--json"])
+
+    assert inspected.exit_code == 0, inspected.output
+    assert calls == 2
+    assert '"status": "unsupported"' in inspected.output
+    assert '"executed": false' in inspected.output
+    assert '"economic_mutation": false' in inspected.output
+    assert '"canonical_id": "vehicle-1"' in inspected.output
 
 
 def test_openttd_bridge_doctor_reports_negotiated_health(

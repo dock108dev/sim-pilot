@@ -35,6 +35,7 @@ class ValidationResult(BaseModel):
     valid: bool
     message: str = Field(min_length=1)
     estimated_cost: float = Field(ge=0)
+    state_stale: bool = False
 
 
 def valid(cost: float = 0.0) -> ValidationResult:

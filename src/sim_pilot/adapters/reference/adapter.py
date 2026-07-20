@@ -95,6 +95,8 @@ ACTION_ADAPTER: TypeAdapter[SimulationAction] = TypeAdapter(SimulationAction)
 class ReferenceSimulationAdapter:
     """Translate canonical runtime domain actions to the reference engine."""
 
+    requires_fresh_observation_on_resume = False
+
     def __init__(
         self,
         simulation: ReferenceSimulation | None = None,

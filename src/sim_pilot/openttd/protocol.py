@@ -255,8 +255,8 @@ def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
         company_id = reader.u8()
         payload = CompanyStats(
             company_id=company_id,
-            vehicle_counts=tuple(reader.u16() for _ in range(5)),  # type: ignore[arg-type]
-            station_counts=tuple(reader.u16() for _ in range(5)),  # type: ignore[arg-type]
+            vehicle_counts=_read_five_counts(reader),
+            station_counts=_read_five_counts(reader),
         )
     elif packet_type == PacketType.SERVER_RCON:
         payload = RconResponse(colour=reader.u16(), message=reader.string())
@@ -267,6 +267,11 @@ def decode_packet(packet_type: int, data: bytes) -> DecodedPacket:
     else:
         payload = data
     return DecodedPacket(packet_type, payload)
+
+
+def _read_five_counts(reader: PacketReader) -> tuple[int, int, int, int, int]:
+    """Read the protocol's fixed rail, road, water, air, and total count tuple."""
+    return (reader.u16(), reader.u16(), reader.u16(), reader.u16(), reader.u16())
 
 
 def format_game_date(date_raw: int) -> str:

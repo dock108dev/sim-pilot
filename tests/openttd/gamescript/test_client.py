@@ -48,6 +48,42 @@ def test_protocol_v2_assembles_a_complete_paginated_world() -> None:
     assert [vehicle.name for vehicle in world.vehicles] == ["Train 1"]
 
 
+def test_full_resync_ignores_in_flight_world_pages_before_its_handshake() -> None:
+    async def scenario() -> GameScriptBridgeClient:
+        stale_payload = json.loads(world_sync_messages()[5])
+        stale_payload["message_id"] = "stale-world:99"
+        stale_payload["sequence"] = 99
+        stale_payload["payload"]["snapshot_id"] = "stale-world"
+        transport = FakeBridgeTransport([json.dumps(stale_payload), *world_sync_messages()])
+        client = GameScriptBridgeClient(transport, company_id=0)
+        await client.synchronize()
+        return client
+
+    client = asyncio.run(scenario())
+    assert client.health.synchronization_state is SynchronizationState.SYNCHRONIZED
+    assert client.health.world_snapshot is not None
+    assert client.health.world_snapshot.snapshot_id == "world-1"
+
+
+def test_identity_probe_stops_before_paginated_world_collection() -> None:
+    async def scenario() -> tuple[BridgeHealth, int]:
+        transport = FakeBridgeTransport(world_sync_messages())
+        client = GameScriptBridgeClient(transport, company_id=0)
+        health = await client.verify_identity()
+        return health, len(transport.messages)
+
+    health, remaining_messages = asyncio.run(scenario())
+    assert health.synchronization_state is SynchronizationState.IDENTITY_VERIFIED
+    assert health.script_instance_id == "bridge-instance"
+    assert health.snapshot is not None
+    assert health.snapshot.save_generation == 2
+    assert health.capabilities is not None
+    assert health.capability_fingerprint == health.capabilities.fingerprint
+    assert health.active_company_context == 0
+    assert health.world_snapshot is None
+    assert remaining_messages == 9
+
+
 def test_protocol_v2_handles_empty_and_multiple_entity_worlds() -> None:
     async def empty_scenario() -> GameScriptBridgeClient:
         values = world_sync_messages()

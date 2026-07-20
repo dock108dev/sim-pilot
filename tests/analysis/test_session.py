@@ -1,3 +1,4 @@
+import json
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +107,42 @@ def test_session_context_is_dropped_when_save_identity_changes(tmp_path: Path) -
 
     assert context.prior_analysis_id is None
     assert context.focus_entities == ()
+
+
+def test_pre_phase9_1_session_retains_context_without_inventing_guidance(tmp_path: Path) -> None:
+    world = snapshot()
+    store = AnalysisSessionStore(tmp_path / "sessions")
+    record = store.save(response(world), world)
+    path = tmp_path / "sessions" / f"{record.analysis_id.replace(':', '-')}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    del payload["response"]["presentation"]["inspection_guidance"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(record.analysis_id)
+    assert loaded.response.presentation is not None
+    assert loaded.response.presentation.inspection_guidance.status.value == "not_responsible"
+    assert "predates typed inspection guidance" in (
+        loaded.response.presentation.inspection_guidance.unavailable_reason or ""
+    )
+    assert store.compiler_context(world).prior_analysis_id == record.analysis_id
+
+
+def test_pre_phase9_2_session_retains_metadata_only_provenance(tmp_path: Path) -> None:
+    world = snapshot()
+    store = AnalysisSessionStore(tmp_path / "sessions")
+    record = store.save(response(world), world)
+    path = tmp_path / "sessions" / f"{record.analysis_id.replace(':', '-')}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    del payload["response"]["snapshot_metadata"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(record.analysis_id)
+
+    assert loaded.response.snapshot_metadata.world_id == world.metadata.world_id
+    assert (
+        loaded.response.snapshot_metadata.bridge_synchronization_state
+        == "retained_session_metadata_only"
+    )
 
 
 def test_session_store_rejects_path_traversal(tmp_path: Path) -> None:

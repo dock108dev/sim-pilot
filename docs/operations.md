@@ -165,10 +165,39 @@ diff rules are documented in [013-openttd-world-observation.md](013-openttd-worl
 
 ### Read-only gameplay analysis
 
-`sim-pilot ask` and `sim-pilot openttd analyze` require either `--snapshot FILE` or explicit
-`--live`. Compact output is default; `--detailed` and `--json` are available. Compiler and
+`sim-pilot ask` and `sim-pilot openttd analyze` accept a selected `--snapshot FILE`. Without one,
+they probe the live bridge identity and reuse a compatible snapshot up to five seconds old, or
+perform a fresh read-only collection when reuse is unsafe. `--live`, `--fresh`, and
+`--max-snapshot-age 0` force a complete collection; `--max-snapshot-age SECONDS` sets a stricter
+caller freshness policy within the 30-second cache ceiling.
+
+```bash
+uv run sim-pilot ask "Which vehicle lost the most money last year?"
+uv run sim-pilot ask --snapshot snapshot.json --detailed "How healthy is the company?"
+uv run sim-pilot ask --max-snapshot-age 2 "Which station has the most waiting cargo?"
+uv run sim-pilot openttd analyze vehicles --fresh --top 10
+```
+
+Compact output is default. `--detailed` exposes snapshot identity and freshness; `--json` emits the
+canonical response; `ask --evidence` expands evidence in the compact response. Compiler and
 explanation providers independently default to `none`; selecting `codex` or `openai` never enables
-OpenTTD writes. See [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md).
+OpenTTD writes.
+
+Each supported answer is retained under `SIM_PILOT_ANALYSIS_SESSION_DIRECTORY` for explicit local
+drill-down and compatible contextual follow-ups:
+
+```bash
+uv run sim-pilot analysis show
+uv run sim-pilot analysis evidence ANALYSIS_ID FINDING_ID
+uv run sim-pilot analysis entity ANALYSIS_ID vehicle VEHICLE_ID
+uv run sim-pilot analysis inspect ANALYSIS_ID FINDING_ID
+```
+
+`analysis inspect` performs a fresh identity/entity validation but currently returns `unsupported`:
+the proven OpenTTD 15.3 bridge cannot read a client viewport or verify that a named entity was
+opened. See [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md), the
+[intelligence guide](016-openttd-intelligence-guide.md), and the
+[Phase 10A capability decision](022-phase10a-named-entity-inspection.md).
 
 ## Approval and recovery
 

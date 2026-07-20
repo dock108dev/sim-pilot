@@ -55,11 +55,22 @@ are evidence from specific milestones, not the current product contract.
 - Route construction, vehicle/order mutation, schedules, finances beyond the exposed observation,
   UI control,
   memory scraping, and arbitrary console commands are unsupported.
+- `analysis inspect` can validate a finding's vehicle, station, town, or industry against fresh live
+  identity and entity state, but returns `unsupported` without execution. OpenTTD 15.3 can dispatch
+  some viewport scroll commands, yet the supported Admin/GameScript boundary cannot read a remote
+  client's viewport or prove that the named entity was opened or focused.
 - Live OpenTTD and GameScript tests require a separately configured disposable server and are
   skipped by the normal validation gate.
-- Phase 8B analysis is heuristic and read-only. It cannot prove congestion, construction
+- Routine analysis can reuse an owner-only on-disk snapshot for at most the caller's freshness
+  window (five seconds by default and never more than 30 seconds) after a live bridge identity
+  probe. This is bounded request-local caching, not background monitoring or a persistent
+  collector. A cache miss still incurs the full cooperative world collection interval.
+- Gameplay analysis is heuristic and read-only. It cannot prove congestion, construction
   feasibility, competitor intent, future profit, crash causality, or infrastructure-expense
-  causality. Analysis responses are not durably retained.
+  causality. Owner-only analysis session files retain responses and snapshots for evidence
+  drill-down and compatible contextual follow-ups, but they are separate from durable action-task
+  persistence and have no automatic retention, pruning, backup, or cross-machine transfer policy.
+  Pre-Phase-9.1 sessions remain context-readable but require a rerun for typed inspection guidance.
 
 ## Deferred decisions
 

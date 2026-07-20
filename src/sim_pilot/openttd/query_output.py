@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from sim_pilot.domain.world import WorldChange, WorldSnapshot
+from sim_pilot.domain.world import Coordinates, WorldChange, WorldSnapshot
 
 
 def render_table(headers: Sequence[str], rows: Iterable[Sequence[object]]) -> str:
@@ -31,10 +31,10 @@ def _short(identifier: str | None) -> str:
     return identifier if len(identifier) <= 18 else f"{identifier[:8]}…{identifier[-8:]}"
 
 
-def _coordinates(value: object) -> str:
+def _coordinates(value: Coordinates | None) -> str:
     if value is None:
         return "-"
-    return f"{value.x},{value.y}"  # type: ignore[attr-defined]
+    return f"{value.x},{value.y}"
 
 
 def render_world_summary(world: WorldSnapshot) -> str:

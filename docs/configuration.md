@@ -19,6 +19,7 @@ environment variable wins over the source default. Database selection follows th
 | `SIM_PILOT_COMPILER_MODEL` | `gpt-5.6` | OpenAI compiler model when no `--model` is supplied. |
 | `SIM_PILOT_DECISION_MODEL` | `gpt-5.6` | OpenAI decision model when no `--decision-model` is supplied. |
 | `SIM_PILOT_DECISION_TIMEOUT_SECONDS` | `30` | Positive OpenAI decision request timeout. |
+| `SIM_PILOT_ANALYSIS_SESSION_DIRECTORY` | `data/analysis-session` | Owner-only analysis records, retained snapshots, and the bounded live snapshot cache. |
 | `OPENAI_API_KEY` | unset | Credential consumed by the OpenAI SDK when the OpenAI provider is explicitly selected. |
 
 The compiler and decision providers default to `none`; setting a model or credential does not
@@ -82,6 +83,8 @@ The default test suite skips live access. These variables are read only by live 
 | `SIM_PILOT_LIVE_CODEX_INTELLIGENCE=1` plus the OpenTTD intelligence gate | Authenticated Codex compilation or explanation over bounded inputs. |
 | `SIM_PILOT_LIVE_OPENTTD_INTERACTION=1` | Phase 9 read-only live interaction regression. |
 | `SIM_PILOT_LIVE_CODEX_INTERACTION=1` plus the Phase 9 OpenTTD gate | Phase 9 Codex regression, capped by the test plan at two invocations. |
+| `SIM_PILOT_LIVE_OPENTTD_LATENCY=1` | Phase 9.2 read-only cold and compatible-cache latency checks. |
+| `SIM_PILOT_LIVE_OPENTTD_INSPECTION=1` | Phase 10A read-only inspection-capability verification; no UI or economic action is sent. |
 
 These gates authorize a test to attempt external access; they do not configure credentials or the
 OpenTTD connection themselves.

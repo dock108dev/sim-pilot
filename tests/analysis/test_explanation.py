@@ -147,9 +147,10 @@ def test_explanation_that_connects_selected_finding_and_recommendation_is_retain
         statements=(
             AnalysisExplanationStatement(
                 claim_type=ExplanationClaimType.RECOMMENDATION,
-                text="Start here because this is the selected company-level loss signal.",
+                text="Inspect Company because this is the selected company-level loss signal.",
                 finding_ids=(finding_id,),
                 recommendation_ids=(recommendation_id,),
+                entity_ids=("company-1",),
             ),
         )
     )
@@ -157,6 +158,58 @@ def test_explanation_that_connects_selected_finding_and_recommendation_is_retain
     retained = retain_valuable_explanation(validate_explanation(explanation, response), response)
 
     assert retained == explanation
+
+
+def test_explanation_with_unsupported_causal_certainty_is_rejected() -> None:
+    response = AnalysisService(default_analyzer_registry()).analyze(request(), snapshot())
+    finding = response.findings[0]
+    explanation = AnalysisExplanation(
+        statements=(
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.SUMMARY,
+                text="This result proves the route has insufficient demand.",
+                finding_ids=(finding.finding_id,),
+            ),
+        )
+    )
+
+    with pytest.raises(AnalysisInputError, match="unsupported causal certainty"):
+        validate_explanation(explanation, response)
+
+
+def test_explanation_recommendation_that_changes_target_is_rejected() -> None:
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        AnalysisRequest(analysis_type=AnalysisType.COMPANY_HEALTH, question="Health?"),
+        snapshot(
+            company=Company(
+                id="company-1",
+                name="Company",
+                cash=10,
+                loan=0,
+                income=10,
+                expenses=-100,
+            )
+        ),
+    )
+    assert response.presentation is not None
+    finding_id = response.presentation.decisive_finding_id
+    recommendation_id = response.presentation.recommendation_id
+    assert finding_id is not None
+    assert recommendation_id is not None
+    explanation = AnalysisExplanation(
+        statements=(
+            AnalysisExplanationStatement(
+                claim_type=ExplanationClaimType.RECOMMENDATION,
+                text="Inspect another operator next.",
+                finding_ids=(finding_id,),
+                recommendation_ids=(recommendation_id,),
+                entity_ids=("company-1",),
+            ),
+        )
+    )
+
+    with pytest.raises(AnalysisInputError, match="changes the inspection target"):
+        validate_explanation(explanation, response)
 
 
 def test_causal_multi_finding_answer_can_invoke_and_retain_useful_synthesis() -> None:

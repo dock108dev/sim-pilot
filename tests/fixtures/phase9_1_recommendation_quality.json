@@ -1,0 +1,83 @@
+[
+  {
+    "case_id": "losing-vehicle",
+    "question": "Which vehicle lost the most money last year?",
+    "world": "full",
+    "expected_target": "Train 14",
+    "expected_observation": "orders, loading waits, and empty return legs",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "weak-vehicle-type",
+    "question": "Which vehicle type loses the most money?",
+    "world": "full",
+    "expected_target": "Rail vehicles",
+    "expected_observation": "member vehicles' orders",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "worst-route",
+    "question": "Which route is performing worst?",
+    "world": "full",
+    "expected_target": "Buntborough Exchange",
+    "expected_observation": "member vehicles' profits",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "high-waiting-station",
+    "question": "Which station has the most waiting cargo?",
+    "world": "full",
+    "expected_target": "Buntborough Exchange",
+    "expected_observation": "vehicle frequency, waiting cargo types, and route destinations",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "idle-vehicle",
+    "question": "Are any vehicles idle?",
+    "world": "full",
+    "expected_target": "Bus 2",
+    "expected_observation": "current order, depot state, and whether service resumes",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "industry-opportunity",
+    "question": "Which industry looks like the best observed opportunity?",
+    "world": "full",
+    "expected_target": "Buntborough Coal Mine",
+    "expected_observation": "produced cargo, possible destinations, and nearby station catchments",
+    "expect_recommendation": true
+  },
+  {
+    "case_id": "missing-cargo-coverage",
+    "question": "Which cargo types are missing from my network?",
+    "world": "full",
+    "expected_target": null,
+    "expected_observation": "route cargo coverage is unavailable",
+    "expect_recommendation": false
+  },
+  {
+    "case_id": "healthy-company",
+    "question": "How healthy is my company?",
+    "world": "healthy",
+    "expected_target": null,
+    "expected_observation": "no urgent problem to inspect",
+    "expect_recommendation": false
+  },
+  {
+    "case_id": "insufficient-evidence",
+    "question": "Which vehicle lost the most money last year?",
+    "world": "empty-fleet",
+    "expected_target": null,
+    "expected_observation": "profit last year evidence is missing",
+    "expect_recommendation": false
+  },
+  {
+    "case_id": "false-premise-correction",
+    "question": "Why am I losing money?",
+    "world": "healthy",
+    "expected_target": null,
+    "expected_observation": "corrects the loss premise",
+    "expected_answer_prefix": "You are not losing money at company level",
+    "expect_recommendation": false
+  }
+]

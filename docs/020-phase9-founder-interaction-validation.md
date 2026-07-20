@@ -1,6 +1,7 @@
 # Phase 9 Founder Interaction Validation
 
-Status: complete; interaction-quality gate passed; Phase 10 automation gate pending owner confirmation.
+Status: Phase 9 complete; Phase 9.1 deterministic and live objective gates passed; Phase 9.1
+gameplay-usefulness judgment and the Phase 10 automation gate remain pending owner confirmation.
 
 The preserved baseline is
 [`evaluation/phase9-interaction-baseline.json`](evaluation/phase9-interaction-baseline.json). It
@@ -92,3 +93,33 @@ mutation. It is not currently a production capability: the OpenTTD bridge advert
 `set_company_name`, not client navigation or highlighting. `set_company_name` is not a recurring
 gameplay-value candidate and should not be promoted merely because it is available. No Phase 10
 implementation or prompt is authorized by this report.
+
+## Phase 9.1 recommendation-usefulness continuation
+
+Phase 9.1 replaces compact recommendation prose and generic follow-ups with the typed,
+deterministic `InspectionGuidance` contract described in
+[`019-interaction-ready-intelligence.md`](019-interaction-ready-intelligence.md). The focused
+quality catalog is `tests/fixtures/phase9_1_recommendation_quality.json`; it covers losing vehicles,
+weak vehicle types, worst routes, high-waiting stations, idle vehicles, observed industry
+opportunities, missing cargo coverage, healthy companies, insufficient evidence, and
+false-premise correction. Contract and catalog tests reject repeated findings, generic guidance,
+unsupported causal certainty, wrong entities, and over-budget guidance.
+
+The fresh final read-only review is
+`data/founder-intelligence/20260720T204539Z-phase9-review/manual-review.json`; its manifest pins
+world `spb-1636440848-1049736244`, company `Sim Pilot Founder Test`, comparison snapshot
+`spb-1636440848-1049736244:world:120445`, and current snapshot
+`spb-1636440848-1049736244:world:122501`. Both write flags were disabled and the run made zero
+model invocations. All 23 supported answers rendered a specific evidence-linked inspection or an
+explicit reason that no responsible next inspection was available. The 24-answer set averaged
+58.0 words, had a 77-word maximum, and had no answer over the 80-word interaction budget.
+
+The strengthened live regression separately passed against a fresh snapshot pair and asserted the
+typed guidance linkage for the six-question live set, missing and valid comparisons, and a
+contextual vehicle follow-up. Factual correctness, false-premise correction, contextual references,
+and the read-only boundary remained intact.
+
+The objective implementation and live-evidence gates pass. The subjective acceptance condition—an
+owner judgment that at least one recurring recommendation is consistently useful during actual
+gameplay—has not yet been recorded. The evidence is preserved for that review, and gameplay
+automation remains on hold until the owner records that judgment.

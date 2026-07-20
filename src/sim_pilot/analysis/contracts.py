@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Literal, Self
 
@@ -395,6 +396,70 @@ class AnswerBasis(StrEnum):
     INSUFFICIENT_DATA = "insufficient_data"
 
 
+class InspectionGuidanceStatus(StrEnum):
+    RECOMMENDED = "recommended"
+    NOT_RESPONSIBLE = "not_responsible"
+
+
+class InspectionGuidance(AnalysisModel):
+    """Structured, deterministic guidance for the player's next in-game inspection."""
+
+    status: InspectionGuidanceStatus
+    target_entity_type: AnalysisSubjectType | None = None
+    target_entity_id: str | None = Field(default=None, min_length=1)
+    target_label: str | None = Field(default=None, min_length=1)
+    observation: str | None = Field(default=None, min_length=1)
+    diagnostic_value: str | None = Field(default=None, min_length=1)
+    unavailable_reason: str | None = Field(default=None, min_length=1)
+    supporting_finding_ids: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_guidance_shape(self) -> Self:
+        if self.status is InspectionGuidanceStatus.RECOMMENDED:
+            if not self.target_label or not self.observation or not self.diagnostic_value:
+                raise ValueError(
+                    "recommended inspection guidance requires a target, observation, and "
+                    "diagnostic value"
+                )
+            if self.unavailable_reason is not None:
+                raise ValueError(
+                    "recommended inspection guidance cannot have an unavailable reason"
+                )
+            normalized = self.observation.casefold().strip(" .")
+            if normalized in {
+                "inspect",
+                "inspect further",
+                "investigate",
+                "investigate further",
+                "review",
+                "review further",
+            }:
+                raise ValueError("inspection guidance requires a concrete observation")
+            if len(self.observation.split()) > 18 or len(self.diagnostic_value.split()) > 18:
+                raise ValueError("inspection guidance exceeds the compact interaction budget")
+            if re.search(
+                r"(?i)\b(proves?|is caused by|is due to|guarantees?)\b",
+                f"{self.observation} {self.diagnostic_value}",
+            ):
+                raise ValueError("inspection guidance asserts unsupported causal certainty")
+        elif any(
+            value is not None
+            for value in (
+                self.target_entity_type,
+                self.target_entity_id,
+                self.target_label,
+                self.observation,
+                self.diagnostic_value,
+            )
+        ):
+            raise ValueError("unavailable inspection guidance cannot name an inspection target")
+        elif self.unavailable_reason is None:
+            raise ValueError("unavailable inspection guidance requires an explicit reason")
+        if self.target_entity_id is not None and self.target_entity_type is None:
+            raise ValueError("an inspection entity ID requires an entity type")
+        return self
+
+
 class AnalysisPresentation(AnalysisModel):
     """Deterministic compact-answer selection over authoritative analysis output."""
 
@@ -402,6 +467,7 @@ class AnalysisPresentation(AnalysisModel):
     basis: AnswerBasis
     decisive_finding_id: str | None = Field(default=None, min_length=1)
     recommendation_id: str | None = Field(default=None, min_length=1)
+    inspection_guidance: InspectionGuidance
     limitation: str | None = Field(default=None, min_length=1)
     follow_up: str | None = Field(default=None, min_length=1)
     evaluated_count: int | None = Field(default=None, ge=0)
@@ -427,9 +493,39 @@ class AnalysisPopulation(AnalysisModel):
         return self
 
 
+class SnapshotSource(StrEnum):
+    FRESH_COLLECTION = "fresh_collection"
+    COMPATIBLE_CACHE = "compatible_cache"
+    SELECTED_FILE = "selected_file"
+    SUPPLIED_SNAPSHOT = "supplied_snapshot"
+
+
+class AnalysisSnapshotMetadata(AnalysisModel):
+    """Canonical provenance and freshness of the snapshot used for an answer."""
+
+    source: SnapshotSource
+    snapshot_age_seconds: float = Field(ge=0)
+    maximum_acceptable_age_seconds: float | None = Field(default=None, ge=0)
+    collection_duration_seconds: float | None = Field(default=None, ge=0)
+    collection_interval_game_days: int = Field(ge=0)
+    world_id: str = Field(min_length=1)
+    observer_company_id: str | None = Field(default=None, min_length=1)
+    bridge_company_context: int | None = Field(default=None, ge=0, le=14)
+    save_generation: int = Field(ge=0)
+    capability_fingerprint: str = Field(min_length=1)
+    snapshot_bridge_sequence: int = Field(ge=1)
+    identity_verification_sequence: int | None = Field(default=None, ge=1)
+    identity_verified_at: AwareDatetime | None = None
+    bridge_synchronization_state: str = Field(min_length=1)
+    openttd_version: str | None = Field(default=None, min_length=1)
+    bridge_protocol_version: int | None = Field(default=None, ge=1)
+    bridge_script_version: int | None = Field(default=None, ge=1)
+
+
 class AnalysisResponse(AnalysisModel):
     request: AnalysisRequest
     snapshot_id: str = Field(min_length=1)
+    snapshot_metadata: AnalysisSnapshotMetadata
     status: AnalysisStatus
     answer: str = Field(min_length=1)
     findings: tuple[AnalysisFinding, ...] = ()
@@ -463,6 +559,7 @@ class AnalysisResponse(AnalysisModel):
         ):
             raise ValueError("recommendation references an unknown finding")
         if self.presentation is not None:
+            guidance = self.presentation.inspection_guidance
             if (
                 self.presentation.decisive_finding_id is not None
                 and self.presentation.decisive_finding_id not in finding_set
@@ -473,4 +570,27 @@ class AnalysisResponse(AnalysisModel):
                 and self.presentation.recommendation_id not in recommendation_set
             ):
                 raise ValueError("presentation references an unknown recommendation")
+            if not set(guidance.supporting_finding_ids).issubset(finding_set):
+                raise ValueError("inspection guidance references an unknown finding")
+            if guidance.status is InspectionGuidanceStatus.RECOMMENDED:
+                assert guidance.observation is not None
+                decisive_id = self.presentation.decisive_finding_id
+                if decisive_id is None or decisive_id not in guidance.supporting_finding_ids:
+                    raise ValueError("inspection guidance must support the decisive finding")
+                decisive = next(item for item in self.findings if item.finding_id == decisive_id)
+                evidence_entities = {
+                    item.entity_id for item in decisive.evidence if item.entity_id is not None
+                }
+                if (
+                    guidance.target_entity_id is not None
+                    and guidance.target_entity_id not in evidence_entities
+                ):
+                    raise ValueError("inspection guidance refers to the wrong entity")
+                normalized_observation = " ".join(guidance.observation.casefold().split())
+                repeated = {
+                    " ".join(self.answer.casefold().rstrip(".").split()),
+                    " ".join(decisive.summary.casefold().rstrip(".").split()),
+                }
+                if normalized_observation.rstrip(".") in repeated:
+                    raise ValueError("inspection guidance repeats the finding")
         return self

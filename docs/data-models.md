@@ -31,6 +31,11 @@ models never cross this boundary. The snapshot remains nested in the existing ob
 so Phase 8A changes no persisted table or repository interface. See
 [013-openttd-world-observation.md](013-openttd-world-observation.md).
 
+`src/sim_pilot/analysis/contracts.py` defines the separate read-only intelligence contracts:
+requests, evidence references, findings, recommendations, typed inspection guidance,
+presentations, snapshot freshness/provenance, and responses. These models do not enter the durable
+task tables.
+
 ## Runtime and repository records
 
 `src/sim_pilot/runtime/models.py` defines strict runtime evaluations, policy decisions,
@@ -74,6 +79,23 @@ remains uncertain.
 Sim Pilot uses snapshots plus the complete event log. Resume loads the latest task/checkpoint state
 instead of replaying every event to rebuild simulation state; events remain available for audit and
 consistency checks. This provides process-level resume, not exactly-once external execution.
+
+## Local analysis files
+
+Gameplay analysis uses owner-only JSON files rather than SQLite. The directory defaults to
+`data/analysis-session` and is configurable with `SIM_PILOT_ANALYSIS_SESSION_DIRECTORY`.
+
+- `analysis-<digest>.json` stores one `AnalysisSessionRecord`, including its response and complete
+  source snapshot.
+- `latest` stores the latest analysis ID used by `analysis show` and compatible contextual
+  follow-ups.
+- `snapshot-cache.json` stores one complete identity-bound live snapshot plus collection metadata.
+- `snapshot-cache.json.lock` serializes cache verification and refresh across CLI processes.
+
+Files are written atomically with owner-only permissions. Session records are retained until the
+operator removes them; there is no automatic pruning, backup, or migration into durable task
+storage. Cached state is never returned until a live probe re-establishes world, save generation,
+company, bridge context, and capability identity.
 
 ## Migration workflow
 

@@ -65,10 +65,13 @@ class AdapterValidation(Protocol):
     valid: bool
     message: str
     estimated_cost: float
+    state_stale: bool
 
 
 class SimulationAdapter(Protocol):
     """Contract implemented by runtime-facing simulation adapters."""
+
+    requires_fresh_observation_on_resume: bool
 
     async def initialize(self) -> None: ...
 

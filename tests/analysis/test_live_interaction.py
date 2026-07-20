@@ -11,7 +11,9 @@ from sim_pilot.analysis.contracts import (
     AnalysisResponse,
     AnalysisStatus,
     AnalysisSubjectType,
+    InspectionGuidanceStatus,
 )
+from sim_pilot.analysis.output import render_analysis
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
@@ -75,6 +77,7 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
         response = service.analyze(compilation.request, current)
         assert response.answer
         assert all(not item.executable for item in response.recommendations)
+        _assert_inspection_guidance(response, current)
         responses.append(response)
 
     missing = asyncio.run(compiler.compile("What changed?"))
@@ -82,6 +85,7 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
     missing_response = service.analyze(missing.request, current)
     assert missing_response.status is AnalysisStatus.INSUFFICIENT_DATA
     assert not missing_response.answer.startswith("Observed 0")
+    _assert_inspection_guidance(missing_response, current)
 
     compared = asyncio.run(
         compiler.compile(
@@ -97,6 +101,7 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
         AnalysisStatus.INSUFFICIENT_DATA,
     }
     assert not compared_response.answer.startswith("Observed 0")
+    _assert_inspection_guidance(compared_response, current)
 
     vehicle_response = responses[2]
     store = AnalysisSessionStore(tmp_path / "sessions")
@@ -111,6 +116,21 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
     assert follow_up.request.subject_type is AnalysisSubjectType.VEHICLE
     follow_up_response = service.analyze(follow_up.request, current)
     assert follow_up_response.answer
+    _assert_inspection_guidance(follow_up_response, current)
+
+
+def _assert_inspection_guidance(response: AnalysisResponse, world: WorldSnapshot) -> None:
+    assert response.presentation is not None
+    guidance = response.presentation.inspection_guidance
+    rendered = render_analysis(response, snapshot=world)
+    assert "\nInspect next\n" in rendered
+    if guidance.status is InspectionGuidanceStatus.RECOMMENDED:
+        assert guidance.target_label is not None
+        assert guidance.target_label in rendered
+        assert guidance.supporting_finding_ids == (response.presentation.decisive_finding_id,)
+    else:
+        assert guidance.unavailable_reason
+        assert "No responsible next inspection can be recommended" in rendered
 
 
 @pytest.mark.live

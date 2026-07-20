@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -58,9 +61,10 @@ class AnalysisSessionStore:
         path = self._record_path(identifier)
         if not path.is_file():
             raise ValueError(f"analysis session {identifier!r} was not found")
-        return AnalysisSessionRecord.model_validate_json(
-            path.read_text(encoding="utf-8"), strict=True
-        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        _add_legacy_inspection_guidance(payload)
+        _add_legacy_snapshot_metadata(payload)
+        return AnalysisSessionRecord.model_validate_json(json.dumps(payload), strict=True)
 
     def compiler_context(
         self,
@@ -143,6 +147,87 @@ def _context_compatible(previous: WorldSnapshot, current: WorldSnapshot) -> bool
         and previous.metadata.observer_company_id == current.metadata.observer_company_id
         and previous.metadata.capability_fingerprint == current.metadata.capability_fingerprint
     )
+
+
+def _add_legacy_inspection_guidance(payload: object) -> None:
+    """Keep pre-Phase-9.1 owner-only sessions readable without inventing guidance."""
+    if not isinstance(payload, dict):
+        return
+    payload_dict = cast(dict[str, object], payload)
+    response = payload_dict.get("response")
+    if not isinstance(response, dict):
+        return
+    response_dict = cast(dict[str, object], response)
+    presentation = response_dict.get("presentation")
+    if not isinstance(presentation, dict) or "inspection_guidance" in presentation:
+        return
+    presentation_dict = cast(dict[str, object], presentation)
+    presentation_dict["inspection_guidance"] = {
+        "schema_version": 1,
+        "status": "not_responsible",
+        "target_entity_type": None,
+        "target_entity_id": None,
+        "target_label": None,
+        "observation": None,
+        "diagnostic_value": None,
+        "unavailable_reason": (
+            "this retained analysis predates typed inspection guidance; run the question again"
+        ),
+        "supporting_finding_ids": [],
+    }
+
+
+def _add_legacy_snapshot_metadata(payload: object) -> None:
+    """Keep retained pre-Phase-9.2 sessions readable with honest provenance."""
+    if not isinstance(payload, dict):
+        return
+    payload_dict = cast(dict[str, object], payload)
+    response = payload_dict.get("response")
+    snapshot = payload_dict.get("snapshot")
+    if not isinstance(response, dict) or not isinstance(snapshot, dict):
+        return
+    response_dict = cast(dict[str, object], response)
+    if "snapshot_metadata" in response_dict:
+        return
+    metadata = cast(dict[str, object], snapshot).get("metadata")
+    if not isinstance(metadata, dict):
+        return
+    source = cast(dict[str, object], metadata)
+    age = 0.0
+    generated_at = response_dict.get("generated_at")
+    captured_at = source.get("captured_at")
+    if isinstance(generated_at, str) and isinstance(captured_at, str):
+        with suppress(ValueError):
+            age = max(
+                0.0,
+                (
+                    datetime.fromisoformat(generated_at) - datetime.fromisoformat(captured_at)
+                ).total_seconds(),
+            )
+    started = source.get("capture_started_game_date", 0)
+    completed = source.get("capture_completed_game_date", started)
+    response_dict["snapshot_metadata"] = {
+        "schema_version": 1,
+        "source": "supplied_snapshot",
+        "snapshot_age_seconds": age,
+        "maximum_acceptable_age_seconds": None,
+        "collection_duration_seconds": None,
+        "collection_interval_game_days": (
+            completed - started if isinstance(started, int) and isinstance(completed, int) else 0
+        ),
+        "world_id": source.get("world_id"),
+        "observer_company_id": source.get("observer_company_id"),
+        "bridge_company_context": None,
+        "save_generation": source.get("save_generation"),
+        "capability_fingerprint": source.get("capability_fingerprint"),
+        "snapshot_bridge_sequence": source.get("bridge_sequence"),
+        "identity_verification_sequence": None,
+        "identity_verified_at": None,
+        "bridge_synchronization_state": "retained_session_metadata_only",
+        "openttd_version": source.get("game_version"),
+        "bridge_protocol_version": None,
+        "bridge_script_version": None,
+    }
 
 
 def _current_entity(

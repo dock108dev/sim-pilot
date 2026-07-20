@@ -17,6 +17,7 @@ from sim_pilot.analysis.contracts import (
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisResponse,
+    AnalysisSnapshotMetadata,
     AnalysisStatus,
     AnalysisSubjectType,
     AnalysisType,
@@ -33,11 +34,14 @@ from sim_pilot.analysis.contracts import (
     ExplanationValue,
     FindingKind,
     FindingSeverity,
+    InspectionGuidance,
+    InspectionGuidanceStatus,
     PremiseType,
     QuestionForm,
     RankingDirection,
     RankingMetric,
     RankingRequest,
+    SnapshotSource,
 )
 from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import AnalyzerRegistry, default_analyzer_registry
@@ -56,10 +60,13 @@ __all__ = [
     "AnalysisRecommendation",
     "AnalysisRequest",
     "AnalysisResponse",
+    "AnalysisSnapshotMetadata",
     "AnalysisQueryService",
     "AnalysisStatus",
     "AnalysisSubjectType",
     "AnalysisType",
+    "InspectionGuidance",
+    "InspectionGuidanceStatus",
     "AnswerBasis",
     "AnswerConcept",
     "AnswerIntent",
@@ -83,4 +90,5 @@ __all__ = [
     "RankingMetric",
     "RankingRequest",
     "ScriptedAnalysisCompiler",
+    "SnapshotSource",
 ]

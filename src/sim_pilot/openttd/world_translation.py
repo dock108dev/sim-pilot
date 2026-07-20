@@ -323,6 +323,11 @@ def _coverage() -> tuple[CapabilityCoverage, ...]:
 
 
 def _id(world_id: str, kind: str, source_id: int) -> str:
+    return canonical_entity_id(world_id, kind, source_id)
+
+
+def canonical_entity_id(world_id: str, kind: str, source_id: int) -> str:
+    """Return the canonical opaque ID used at the bridge translation boundary."""
     digest = hashlib.sha256(f"{world_id}|{kind}|{source_id}".encode()).hexdigest()[:24]
     return f"{kind}:{digest}"
 

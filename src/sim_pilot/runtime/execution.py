@@ -98,7 +98,7 @@ async def run_runtime(
                     event_drafts=(EventDraft(RuntimeEventType.TASK_STARTED, {}),),
                 )
                 current = commit.task_record
-                if getattr(adapter, "requires_fresh_observation_on_resume", False):
+                if adapter.requires_fresh_observation_on_resume:
                     observation = await adapter.observe()
                     commit = services.persistence.commit_iteration(
                         current,
@@ -110,7 +110,7 @@ async def run_runtime(
                     current = commit.task_record
             elif context.task.status is not TaskStatus.RUNNING:
                 raise ValueError(f"task cannot run from {context.task.status.value}")
-            elif getattr(adapter, "requires_fresh_observation_on_resume", False):
+            elif adapter.requires_fresh_observation_on_resume:
                 observation = await adapter.observe()
                 commit = services.persistence.commit_iteration(
                     current,

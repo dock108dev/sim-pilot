@@ -11,7 +11,9 @@ from sim_pilot.analysis.compatibility import validate_comparison
 from sim_pilot.analysis.contracts import (
     AnalysisRequest,
     AnalysisResponse,
+    AnalysisSnapshotMetadata,
     AnalysisStatus,
+    SnapshotSource,
 )
 from sim_pilot.analysis.errors import AnalysisComparisonError, AnalyzerResultError
 from sim_pilot.analysis.interaction import compose_interaction
@@ -93,9 +95,27 @@ class AnalysisService:
             fallback_answer=result.answer,
             population=result.population,
         )
+        generated_at = self._clock()
+        metadata = snapshot.metadata
         return AnalysisResponse(
             request=request,
             snapshot_id=snapshot.metadata.snapshot_id,
+            snapshot_metadata=AnalysisSnapshotMetadata(
+                source=SnapshotSource.SUPPLIED_SNAPSHOT,
+                snapshot_age_seconds=max(
+                    0.0, (generated_at - metadata.captured_at).total_seconds()
+                ),
+                collection_interval_game_days=(
+                    metadata.capture_completed_game_date - metadata.capture_started_game_date
+                ),
+                world_id=metadata.world_id,
+                observer_company_id=metadata.observer_company_id,
+                save_generation=metadata.save_generation,
+                capability_fingerprint=metadata.capability_fingerprint,
+                snapshot_bridge_sequence=metadata.bridge_sequence,
+                bridge_synchronization_state="snapshot_metadata_only",
+                openttd_version=metadata.game_version,
+            ),
             status=status,
             answer=answer,
             findings=findings,
@@ -105,7 +125,7 @@ class AnalysisService:
             unsupported_parts=result.unsupported_parts,
             presentation=presentation,
             population=result.population,
-            generated_at=self._clock(),
+            generated_at=generated_at,
         )
 
 

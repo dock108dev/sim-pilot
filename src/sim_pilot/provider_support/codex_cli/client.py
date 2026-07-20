@@ -177,7 +177,7 @@ class AsyncioProcessRunner:
             timeout_error = CodexCLITimeoutError(
                 f"Codex CLI exceeded the {timeout_seconds:g}-second timeout"
             )
-            timeout_error.process_id = process.pid  # type: ignore[attr-defined]
+            timeout_error.process_id = process.pid
             raise timeout_error from error
         except CodexCLIOutputLimitError:
             for task in tasks:
