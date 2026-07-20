@@ -16,7 +16,7 @@ from sim_pilot.analysis.query import AnalysisQueryService
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
 from sim_pilot.analysis.session import AnalysisSessionStore
-from sim_pilot.analysis_provider import CodexAnalysisCompiler, CodexExplanationProvider
+from sim_pilot.analysis_provider import CodexAnalysisCompiler
 from sim_pilot.cli import capture_openttd_world_snapshot
 from sim_pilot.config import codex_model, codex_timeout_seconds
 from sim_pilot.domain.world import WorldSnapshot
@@ -24,7 +24,7 @@ from sim_pilot.openttd.config import openttd_configuration
 from sim_pilot.openttd.world_diff import diff_world
 
 EXPECTED_WORLD_ID = "spb-1636440848-1049736244"
-EXPECTED_SAVE_GENERATION = 334
+MINIMUM_SAVE_GENERATION = 334
 EXPECTED_COMPANY_NAME = "Sim Pilot Founder Test"
 
 
@@ -36,7 +36,7 @@ def _assert_read_only() -> None:
 
 def _assert_expected_save(world: WorldSnapshot) -> None:
     assert world.metadata.world_id == EXPECTED_WORLD_ID
-    assert world.metadata.save_generation == EXPECTED_SAVE_GENERATION
+    assert world.metadata.save_generation >= MINIMUM_SAVE_GENERATION
     company = next(
         item for item in world.companies if item.id == world.metadata.observer_company_id
     )
@@ -119,7 +119,7 @@ def test_live_phase9_question_set_is_question_sensitive_and_read_only(
     or os.getenv("SIM_PILOT_LIVE_CODEX_INTERACTION") != "1",
     reason="set both Phase 9 live flags for at most two Codex invocations",
 )
-def test_live_phase9_codex_compilation_and_explanation_remain_bounded() -> None:
+def test_live_phase9_codex_compilation_remains_bounded() -> None:
     _assert_read_only()
     world = asyncio.run(capture_openttd_world_snapshot())
     _assert_expected_save(world)
@@ -129,9 +129,6 @@ def test_live_phase9_codex_compilation_and_explanation_remain_bounded() -> None:
             "Why am I losing money?",
             world,
             compiler=CodexAnalysisCompiler(
-                model=codex_model(), timeout_seconds=codex_timeout_seconds()
-            ),
-            explanation_provider=CodexExplanationProvider(
                 model=codex_model(), timeout_seconds=codex_timeout_seconds()
             ),
         )

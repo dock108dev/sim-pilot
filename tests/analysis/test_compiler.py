@@ -15,12 +15,15 @@ from sim_pilot.analysis.contracts import (
     AnalysisSubjectType,
     AnalysisType,
     AnswerConcept,
+    AnswerIntent,
+    AnswerKind,
     AnswerPeriod,
     QuestionForm,
     RankingDirection,
     RankingMetric,
 )
 from sim_pilot.analysis.errors import AnalysisRequestError
+from sim_pilot.analysis.prompt import ANALYSIS_COMPILER_PROMPT
 
 
 def compile_question(question: str) -> AnalysisCompilation:
@@ -160,3 +163,24 @@ def test_provider_compilation_rejects_wrong_analyzer_for_exact_financial_questio
                 )
             )
         )
+
+
+def test_provider_compilation_rejects_wrong_core_answer_semantics() -> None:
+    with pytest.raises(AnalysisRequestError, match="answer intent"):
+        normalize_provider_compilation(
+            AnalysisCompilation(
+                request=AnalysisRequest(
+                    analysis_type=AnalysisType.FINANCIAL_SUMMARY,
+                    question="How much cash do I have?",
+                    answer_intent=AnswerIntent(
+                        concept=AnswerConcept.DEBT,
+                        kind=AnswerKind.FACT,
+                    ),
+                )
+            )
+        )
+
+
+def test_provider_prompt_delegates_answer_intent_to_trusted_normalization() -> None:
+    assert "Set\nanswer_intent to null" in ANALYSIS_COMPILER_PROMPT
+    assert "trusted deterministic normalizer" in ANALYSIS_COMPILER_PROMPT

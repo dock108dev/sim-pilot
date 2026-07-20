@@ -63,6 +63,11 @@ class WorldChangesAnalyzer:
         current: WorldSnapshot,
         comparison: WorldSnapshot | None,
     ) -> AnalyzerResult:
+        if comparison is None:
+            return AnalyzerResult(
+                status=AnalysisStatus.INSUFFICIENT_DATA,
+                answer="A compatible comparison snapshot is required to evaluate changes.",
+            )
         findings: list[AnalysisFinding] = []
         recommendations: list[AnalysisRecommendation] = []
         for index, change in enumerate(current.changes):
@@ -170,7 +175,7 @@ class WorldChangesAnalyzer:
         ]
         findings.sort(key=_priority_sort)
         limitations: tuple[str, ...] = ()
-        if comparison is not None and not current.changes:
+        if not current.changes:
             limitations = (
                 "No canonical typed changes were supplied; this analyzer does not reconstruct "
                 "adapter diffs.",

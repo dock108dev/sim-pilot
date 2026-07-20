@@ -3,20 +3,21 @@
 ANALYSIS_COMPILER_PROMPT = """
 Map the player question to the supplied AnalysisCompilation schema.
 Use only the closed analysis types and semantic fields in the schema.
-Preserve the player's answer intent: exact concept, metric, accounting period, ranking/fact/
-explanation/follow-up kind, asserted premise, and whether comparison evidence is required. A
-request must include answer_intent. Do not replace a requested metric with a nearby available one.
+Preserve the player's analyzer, subject, filter, ranking, period, and comparison semantics. Set
+answer_intent to null: the trusted deterministic normalizer derives canonical question forms,
+concept, metric, premise, conversational reference, and evidence requirements after validating the
+provider-selected request. Do not duplicate those conditional contracts in provider output. Do not
+replace a requested ranking metric with a nearby available one.
 Do not invent entity IDs, comparison snapshots, periods, evidence, or capabilities.
 The bounded resolution context is authoritative but not part of the player's question. Use its
 comparison_snapshot_id when the question requests change or comparison. Use focus_entities and
 prior_findings only to resolve explicit follow-up words such as "that"; do not scope broad ranking
 questions merely because context is available. Entity counts are descriptive only.
 Return clarification when required context is absent and unsupported_reason when the canonical
-snapshot cannot support the request. Set subject_type to null whenever subject_ids is empty; provide
-subject_type and subject_ids together only when the player supplied resolvable canonical entity IDs.
-Use an empty subject_ids array for an unscoped company, fleet, station, route, town, industry, or
-world question. Crash causality, predictive forecasts, construction, optimization, and gameplay
-mutation are unsupported rather than clarification requests. Analysis is read-only.
+snapshot cannot support the request. Set subject_type when the question names an entity class even
+when subject_ids is empty. Provide subject_ids only when the player supplied or context resolved
+canonical entity IDs. Crash causality, predictive forecasts, construction, optimization, and
+gameplay mutation are unsupported rather than clarification requests. Analysis is read-only.
 Requests must use only subjects, filters, and ranking metrics allowed by the supplied compatibility
 catalog. Normalize train to vehicle_type "rail", road vehicle to "road", ship to "water", and
 aircraft to "air". Idle vehicles map to vehicle_performance. Underserved stations map to
@@ -27,8 +28,9 @@ ranking. A station follow-up maps to station_performance or entity_summary, not 
 "Why am I losing money?" is company-level loss intent with an asserted premise and observed net
 operating result. Debt requests use financial_summary and loan. Available-cash requests use cash.
 "Which trains performed best last year?" preserves rail, descending profit_last_year, and last-year
-period. "Which routes have the most losing vehicles?" preserves negative_vehicle_count intent and
-must not become total vehicle_count. Comparison intent remains required even with a compatible ID.
+period. "Which routes have the most losing vehicles?" preserves route_negative_vehicle_count
+intent and must not become total vehicle_count. Comparison intent remains required even with a
+compatible ID.
 """.strip()
 
 ANALYSIS_EXPLANATION_PROMPT = """
@@ -43,5 +45,5 @@ recommendation_ids empty. Never attach recommendation IDs to summary or contribu
 Return only the structured AnalysisExplanation schema.
 """.strip()
 
-COMPILER_PROMPT_VERSION = "analysis-compiler-v4"
+COMPILER_PROMPT_VERSION = "analysis-compiler-v5"
 EXPLANATION_PROMPT_VERSION = "analysis-explanation-v1"

@@ -614,8 +614,22 @@ def normalize_provider_compilation(compilation: AnalysisCompilation) -> Analysis
     )
     if request.answer_intent is None:
         request = request.model_copy(update={"answer_intent": inferred})
-    elif request.answer_intent != inferred:
-        raise AnalysisRequestError("provider answer intent does not match the normalized question")
+    else:
+        supplied = request.answer_intent
+        if (
+            supplied.concept is not inferred.concept
+            or supplied.kind is not inferred.kind
+            or set(supplied.question_forms) != set(inferred.question_forms)
+            or supplied.requested_metric is not inferred.requested_metric
+            or supplied.period is not inferred.period
+            or supplied.premise is not inferred.premise
+            or supplied.comparison_required is not inferred.comparison_required
+            or supplied.reference_kind is not inferred.reference_kind
+        ):
+            raise AnalysisRequestError(
+                "provider answer intent does not match the normalized question"
+            )
+        request = request.model_copy(update={"answer_intent": inferred})
     expected_type = _required_analysis_type(normalized)
     if expected_type is not None and request.analysis_type is not expected_type:
         raise AnalysisRequestError(

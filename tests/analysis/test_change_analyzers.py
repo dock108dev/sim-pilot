@@ -53,7 +53,7 @@ def test_world_changes_classifies_material_and_data_quality_changes() -> None:
     result = WorldChangesAnalyzer().analyze(
         AnalysisRequest(analysis_type=AnalysisType.WORLD_CHANGES, question="Changes?"),
         current,
-        None,
+        snapshot("snapshot-previous", game_date=1),
     )
     assert len(result.findings) == 3
     assert all(
@@ -61,6 +61,32 @@ def test_world_changes_classifies_material_and_data_quality_changes() -> None:
     )
     assert any(item.kind is FindingKind.DATA_QUALITY for item in result.findings)
     assert all(item.severity is FindingSeverity.WARNING for item in result.findings)
+
+
+def test_world_changes_requires_supplied_comparison_even_with_embedded_changes() -> None:
+    current = snapshot().model_copy(
+        update={
+            "changes_from_snapshot_id": "snapshot-previous",
+            "changes": (
+                FieldChanged(
+                    entity_type="company",
+                    entity_id="company-1",
+                    field="cash",
+                    before=1_000,
+                    after=900,
+                ),
+            ),
+        }
+    )
+
+    result = WorldChangesAnalyzer().analyze(
+        AnalysisRequest(analysis_type=AnalysisType.WORLD_CHANGES, question="What changed?"),
+        current,
+        None,
+    )
+
+    assert result.status.value == "insufficient_data"
+    assert result.findings == ()
 
 
 def test_anomaly_thresholds_and_comparison_evidence() -> None:
