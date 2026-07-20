@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "rated_at": "2026-07-20T02:19:38Z",
+  "scope": "representative_subset",
+  "source_review": "data/founder-intelligence/20260720T015816Z-phase9-review/manual-review.json",
+  "case_ids": [
+    "phase9-loss-01",
+    "phase9-vehicle-worst-01",
+    "phase9-station-priority-01",
+    "phase9-change-missing-01",
+    "phase9-followup-station-01"
+  ],
+  "rating": {
+    "manual_rating": "correct",
+    "revealed_nonobvious_information": "partially",
+    "would_use_during_gameplay": "yes",
+    "answered_exact_question": "yes",
+    "too_verbose": "no",
+    "recommendation_useful": "partially",
+    "limitation_relevant": "yes",
+    "reviewer_notes": "Phase 9 materially fixes the Phase 8 interaction failures. The answers now lead with the direct conclusion, correct false premises, preserve the requested subject and metric, resolve conversational references, and return insufficient data rather than implying that no change occurred. The vehicle, station, route, debt, cash, and comparison answers are concise and trustworthy enough to use during gameplay. The strongest value is rapid identification of a specific entity and the evidence behind it. Some Inspect next lines remain generic, mechanically phrased, or simply restate the finding, so recommendation quality is not yet as strong as answer quality. Several limitations are technically accurate but unnecessary for very simple answers, especially zero debt. The route and vehicle recommendations should prefer readable entity labels over internal phrasing. These are secondary polish issues rather than blockers. Phase 9 passes the interaction-quality gate."
+  }
+}

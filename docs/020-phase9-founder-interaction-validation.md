@@ -1,6 +1,6 @@
 # Phase 9 Founder Interaction Validation
 
-Status: implementation and live regression complete; founder ratings pending.
+Status: complete; interaction-quality gate passed; Phase 10 automation gate pending owner confirmation.
 
 The preserved baseline is
 [`evaluation/phase9-interaction-baseline.json`](evaluation/phase9-interaction-baseline.json). It
@@ -12,9 +12,10 @@ ranking, subject-insensitive priority review, comparison status, false-premise h
 identity, redundant explanation invocation, and compact output structure. The focused evaluation
 catalog is `tests/fixtures/phase9_interaction_questions.json`.
 
-Founder ratings, exact-question rate, gameplay-use intent, strongest and weakest answers, remaining
-gaps, and the Phase 10 gate decision will be recorded only after owner review. No automation
-decision has been made.
+The founder rating is preserved in
+[`evaluation/phase9-founder-rating.json`](evaluation/phase9-founder-rating.json). It applies to the
+five-case representative subset selected from the 24-question run rather than five independently
+submitted ratings.
 
 ## First live regression
 
@@ -51,11 +52,43 @@ model invocations.
 The set contains 24 questions, including rephrasings, valid and missing comparisons, unsupported
 forecasting, false premises, rankings, and three contextual follow-ups. Objective results are 3
 `completed`, 18 `completed_with_limitations`, 2 honest `insufficient_data`, and 1 `unsupported`.
-Answers average 41.3 words, the longest is 60 words, and none exceed 60 words. Subjective review
-fields remain intentionally blank pending founder ratings.
+Answers average 41.3 words, the longest is 60 words, and none exceed 60 words. Per-case subjective
+fields in the full review remain blank because the owner chose one aggregate rating for the bounded
+five-case subset.
 
 Live review exposed and closed four additional interaction defects before this artifact was
 accepted for rating: vehicle-type labels no longer collapse to the company, “lost the most” is
 compiled as lowest profit, company-direction answers no longer overclaim from one interval, and
 anomaly comparison evidence is typed consistently. Contextual station and vehicle answers now name
 their resolved subject in the first sentence.
+
+## Founder rating and success targets
+
+The representative subset received `correct`, `answered_exact_question=yes`, `too_verbose=no`,
+`would_use_during_gameplay=yes`, and no unsafe signal. The owner explicitly concluded that Phase 9
+passes the interaction-quality gate. This satisfies the subjective correctness, exact-question,
+verbosity, safety, and gameplay-use targets for the reviewed subset. It is an aggregate founder
+judgment, not a statistically independent per-case rate across all 24 results.
+
+The deterministic review and regression suite separately confirmed that all missing-comparison
+cases return `insufficient_data`, false premises are corrected, named subjects remain preserved,
+and rankings use the requested metric and direction.
+
+The strongest answers identify a specific vehicle, station, or route immediately and attach the
+decisive evidence. The weakest remaining surface is `Inspect next`: some lines are generic,
+mechanical, repeat the finding, or use internal route and vehicle phrasing. Some simple factual
+answers also retain technically correct but low-value limitations, especially the zero-debt case.
+These are interaction polish issues, not P0 correctness or safety defects.
+
+## Phase 10 automation gate
+
+Phase 9 is complete, but bounded gameplay automation should remain **on hold**. The owner rated
+recommendations only `partially` useful, so the requirement for one consistently useful advisory
+recommendation whose execution would save meaningful effort is not yet demonstrated.
+
+The best product candidate is **inspect or highlight the named entity from the decisive finding**.
+It follows the strongest observed value, has clear intent, is bounded, and avoids economic game
+mutation. It is not currently a production capability: the OpenTTD bridge advertises only
+`set_company_name`, not client navigation or highlighting. `set_company_name` is not a recurring
+gameplay-value candidate and should not be promoted merely because it is available. No Phase 10
+implementation or prompt is authorized by this report.
