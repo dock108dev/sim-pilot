@@ -75,6 +75,27 @@ def compose_interaction(
     required_metric = _required_metric(request)
 
     if intent is not None and intent.comparison_required:
+        if (
+            request.analysis_type is AnalysisType.ANOMALY_DETECTION
+            and comparison is not None
+            and request.comparison_snapshot_id == comparison.metadata.snapshot_id
+            and not findings
+        ):
+            direct = "No observed change met the bounded anomaly thresholds."
+            return (
+                AnalysisStatus.COMPLETED,
+                direct,
+                AnalysisPresentation(
+                    direct_answer=direct,
+                    basis=AnswerBasis.CONFIRMED_FACT,
+                    limitation=(
+                        "These are fixed change alerts, not statistical anomalies or learned "
+                        "baselines."
+                    ),
+                    evaluated_count=0,
+                    excluded_count=0,
+                ),
+            )
         comparison_problem = _comparison_problem(request, comparison, findings)
         if comparison_problem is not None:
             direct = f"I cannot answer the comparison because {comparison_problem}"
@@ -288,6 +309,11 @@ def _direct_answer(
             f"The observed company cash balance available in this snapshot is {_currency(value)}."
         )
     if concept is AnswerConcept.CHANGE:
+        if any(term in request.question.lower() for term in ("improving", "getting worse")):
+            return (
+                "I cannot determine the company's overall direction from this interval; "
+                f"the most material observed change is: {finding.summary}"
+            )
         return f"The most material evaluated change is: {finding.summary}"
     if concept is AnswerConcept.IDLE:
         return f"At least one idle vehicle was detected: {_primary_label(finding, snapshot)}."
@@ -368,6 +394,15 @@ def _material_limitation(
         return "The snapshot does not expose committed future costs or infrastructure liabilities."
     if intent is not None and intent.concept is AnswerConcept.DEBT:
         return "The snapshot does not expose loan terms or repayment burden."
+    if finding.metric_name == RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT.value:
+        return "Aggregate profit does not account for fleet size or capital cost."
+    if finding.metric_name in {
+        RankingMetric.ROUTE_AGGREGATE_PROFIT.value,
+        RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT.value,
+    }:
+        return (
+            "Routes are inferred from normalized orders; order changes can change route identity."
+        )
     values = (*finding.limitations, *limitations)
     return next(iter(dict.fromkeys(values)), None)
 

@@ -20,7 +20,7 @@ from sim_pilot.analysis.contracts import (
 from sim_pilot.analysis.output import render_analysis
 from sim_pilot.analysis.registry import default_analyzer_registry
 from sim_pilot.analysis.service import AnalysisService
-from sim_pilot.domain.world import Company, Vehicle
+from sim_pilot.domain.world import Company, FieldChanged, Vehicle
 from tests.analysis.helpers import snapshot
 
 
@@ -135,7 +135,7 @@ def test_change_question_without_typed_delta_evidence_is_insufficient() -> None:
     assert "no evaluated typed change evidence" in response.answer
 
 
-def test_anomaly_question_without_evaluated_delta_evidence_is_insufficient() -> None:
+def test_anomaly_question_with_compatible_pair_reports_no_threshold_match() -> None:
     previous = _company_world().model_copy(
         update={
             "metadata": _company_world().metadata.model_copy(
@@ -153,8 +153,42 @@ def test_anomaly_question_without_evaluated_delta_evidence_is_insufficient() -> 
         compilation.request, _company_world(), previous
     )
 
-    assert response.status is AnalysisStatus.INSUFFICIENT_DATA
-    assert "no evaluated typed change evidence" in response.answer
+    assert response.status is AnalysisStatus.COMPLETED
+    assert response.answer == "No observed change met the bounded anomaly thresholds."
+    assert response.presentation is not None
+    assert "fixed change alerts" in (response.presentation.limitation or "")
+
+
+def test_company_direction_question_does_not_overclaim_from_one_change() -> None:
+    previous = _company_world().model_copy(
+        update={
+            "metadata": _company_world().metadata.model_copy(
+                update={"snapshot_id": "snapshot-previous", "game_date": 10}
+            )
+        }
+    )
+    current = _company_world().model_copy(
+        update={
+            "changes_from_snapshot_id": "snapshot-previous",
+            "changes": (
+                FieldChanged(
+                    entity_type="company",
+                    entity_id="company-1",
+                    field="cash",
+                    before=1_000_000,
+                    after=2_000_000,
+                ),
+            ),
+        }
+    )
+    compilation = _compile("Is the company improving?", comparison="snapshot-previous")
+    assert compilation.request is not None
+
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        compilation.request, current, previous
+    )
+
+    assert response.answer.startswith("I cannot determine the company's overall direction")
 
 
 def test_best_train_ranking_keeps_type_metric_period_and_direction() -> None:
