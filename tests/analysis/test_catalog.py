@@ -39,7 +39,7 @@ def test_catalog_accepts_supported_vehicle_filter_and_ranking() -> None:
     assert capability.analysis_type is AnalysisType.VEHICLE_PERFORMANCE
 
 
-def test_catalog_rejects_unsupported_metric_filter_and_missing_comparison() -> None:
+def test_catalog_rejects_unsupported_metric_and_filter() -> None:
     with pytest.raises(AnalysisRequestError, match="ranking metric"):
         validate_analysis_request(
             AnalysisRequest(
@@ -65,22 +65,20 @@ def test_catalog_rejects_unsupported_metric_filter_and_missing_comparison() -> N
                 ),
             )
         )
-    with pytest.raises(AnalysisRequestError, match="requires a comparison"):
-        validate_analysis_request(
-            AnalysisRequest(
-                analysis_type=AnalysisType.ANOMALY_DETECTION,
-                question="What changed unusually?",
-            )
+    capability = validate_analysis_request(
+        AnalysisRequest(
+            analysis_type=AnalysisType.ANOMALY_DETECTION,
+            question="What changed unusually?",
         )
+    )
+    assert capability.analysis_type is AnalysisType.ANOMALY_DETECTION
 
 
 def test_entity_summary_requires_an_explicit_subject() -> None:
-    with pytest.raises(AnalysisRequestError, match="requires an explicit subject"):
-        validate_analysis_request(
-            AnalysisRequest(
-                analysis_type=AnalysisType.ENTITY_SUMMARY,
-                question="Summarize it.",
-            )
+    with pytest.raises(ValueError, match="requires subject IDs"):
+        AnalysisRequest(
+            analysis_type=AnalysisType.ENTITY_SUMMARY,
+            question="Summarize it.",
         )
 
 

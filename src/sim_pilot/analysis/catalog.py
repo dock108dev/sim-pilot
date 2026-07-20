@@ -83,6 +83,7 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
         AnalysisType.COMPANY_HEALTH: _capability(
             AnalysisType.COMPANY_HEALTH,
             subjects=_WORLD_COMPANY,
+            ranking=(RankingMetric.NET_OPERATING_RESULT,),
             coverage=("companies", "vehicles"),
         ),
         AnalysisType.FINANCIAL_SUMMARY: _capability(
@@ -94,6 +95,7 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
                 RankingMetric.COMPANY_VALUE,
                 RankingMetric.INCOME,
                 RankingMetric.EXPENSES,
+                RankingMetric.NET_OPERATING_RESULT,
             ),
             coverage=("companies",),
         ),
@@ -110,6 +112,7 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
                 RankingMetric.PROFIT_THIS_YEAR,
                 RankingMetric.PROFIT_LAST_YEAR,
                 RankingMetric.AGE_DAYS,
+                RankingMetric.RUNNING_STATE,
             ),
             coverage=("vehicles",),
         ),
@@ -125,7 +128,11 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
                 AnalysisFilterField.OWNER_ID,
                 AnalysisFilterField.STATION_ID,
             ),
-            ranking=(RankingMetric.WAITING_CARGO, RankingMetric.VEHICLE_COUNT),
+            ranking=(
+                RankingMetric.WAITING_CARGO,
+                RankingMetric.VEHICLE_COUNT,
+                RankingMetric.CARGO_PER_VEHICLE,
+            ),
             coverage=("stations", "cargo"),
         ),
         AnalysisType.ROUTE_PERFORMANCE: _capability(
@@ -145,6 +152,7 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
                 RankingMetric.ROUTE_AGGREGATE_PROFIT,
                 RankingMetric.ROUTE_MEDIAN_PROFIT,
                 RankingMetric.VEHICLE_COUNT,
+                RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT,
             ),
             coverage=("routes", "vehicles"),
         ),
@@ -156,6 +164,7 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
                 RankingMetric.POPULATION,
                 RankingMetric.PRODUCTION,
                 RankingMetric.OPPORTUNITY_SCORE,
+                RankingMetric.CARGO_TYPE_COVERAGE,
             ),
             coverage=("towns", "industries", "stations"),
         ),
@@ -175,14 +184,31 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
         ),
         AnalysisType.FLEET_SUMMARY: _capability(
             AnalysisType.FLEET_SUMMARY,
-            subjects=_WORLD_COMPANY,
+            subjects=(*_WORLD_COMPANY, AnalysisSubjectType.VEHICLE),
             filters=_VEHICLE_FILTERS,
+            ranking=(
+                RankingMetric.VEHICLE_COUNT,
+                RankingMetric.NEGATIVE_PROFIT_VEHICLE_COUNT,
+                RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+            ),
             coverage=("companies", "vehicles", "routes"),
         ),
         AnalysisType.WORLD_CHANGES: _capability(
             AnalysisType.WORLD_CHANGES,
-            subjects=(AnalysisSubjectType.WORLD,),
-            ranking=(RankingMetric.MATERIALITY,),
+            subjects=(
+                AnalysisSubjectType.WORLD,
+                AnalysisSubjectType.COMPANY,
+                AnalysisSubjectType.VEHICLE,
+                AnalysisSubjectType.STATION,
+                AnalysisSubjectType.ROUTE,
+                AnalysisSubjectType.INDUSTRY,
+                AnalysisSubjectType.TOWN,
+            ),
+            ranking=(
+                RankingMetric.MATERIALITY,
+                RankingMetric.POPULATION,
+                RankingMetric.PROFIT_LAST_YEAR,
+            ),
         ),
         AnalysisType.ANOMALY_DETECTION: _capability(
             AnalysisType.ANOMALY_DETECTION,
@@ -192,8 +218,16 @@ DEFAULT_ANALYSIS_CATALOG = MappingProxyType(
         ),
         AnalysisType.PRIORITY_REVIEW: _capability(
             AnalysisType.PRIORITY_REVIEW,
-            subjects=_WORLD_COMPANY,
-            ranking=(RankingMetric.MATERIALITY,),
+            subjects=(
+                AnalysisSubjectType.WORLD,
+                AnalysisSubjectType.COMPANY,
+                AnalysisSubjectType.VEHICLE,
+                AnalysisSubjectType.STATION,
+                AnalysisSubjectType.ROUTE,
+                AnalysisSubjectType.INDUSTRY,
+                AnalysisSubjectType.TOWN,
+            ),
+            ranking=(RankingMetric.PRIORITY_SCORE,),
             coverage=("companies", "vehicles", "stations", "routes", "towns", "industries"),
         ),
         AnalysisType.ENTITY_SUMMARY: _capability(
@@ -255,15 +289,16 @@ def validate_analysis_request(request: AnalysisRequest) -> AnalysisCapability:
             f"ranking metric {request.ranking.metric.value} is unsupported for "
             f"{request.analysis_type.value}"
         )
-    if (
-        capability.comparison is ComparisonRequirement.REQUIRED
-        and request.comparison_snapshot_id is None
-    ):
-        raise AnalysisRequestError(f"{request.analysis_type.value} requires a comparison snapshot")
     intent = request.answer_intent
     if intent is not None:
-        if intent.comparison_required and request.comparison_snapshot_id is None:
-            raise AnalysisRequestError("answer intent requires a comparison snapshot")
+        if (
+            intent.requested_metric is not None
+            and intent.requested_metric not in capability.ranking_metrics
+        ):
+            raise AnalysisRequestError(
+                f"answer metric {intent.requested_metric.value} is unsupported for "
+                f"{request.analysis_type.value}"
+            )
         if (
             request.ranking is not None
             and intent.requested_metric is not None

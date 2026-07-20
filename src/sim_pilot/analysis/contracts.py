@@ -88,27 +88,38 @@ class RankingDirection(StrEnum):
 
 
 class RankingMetric(StrEnum):
+    """Canonical metric catalog shared by intent, ranking, evidence, and output."""
+
     CASH = "cash"
     LOAN = "loan"
     COMPANY_VALUE = "company_value"
     INCOME = "income"
     EXPENSES = "expenses"
+    NET_OPERATING_RESULT = "net_operating_result"
     PROFIT_THIS_YEAR = "profit_this_year"
     PROFIT_LAST_YEAR = "profit_last_year"
     AGE_DAYS = "age_days"
+    RUNNING_STATE = "running_state"
     WAITING_CARGO = "waiting_cargo"
+    CARGO_PER_VEHICLE = "cargo_per_vehicle"
+    CARGO_TYPE_COVERAGE = "cargo_type_coverage"
     VEHICLE_COUNT = "vehicle_count"
+    NEGATIVE_PROFIT_VEHICLE_COUNT = "negative_profit_vehicle_count"
+    VEHICLE_TYPE_AGGREGATE_PROFIT = "vehicle_type_aggregate_profit"
     ROUTE_AGGREGATE_PROFIT = "route_aggregate_profit"
     ROUTE_MEDIAN_PROFIT = "route_median_profit"
+    ROUTE_NEGATIVE_VEHICLE_COUNT = "route_negative_vehicle_count"
     POPULATION = "population"
     PRODUCTION = "production"
     OPPORTUNITY_SCORE = "opportunity_score"
+    PRIORITY_SCORE = "priority_score"
     MATERIALITY = "materiality"
 
 
 class RankingRequest(AnalysisModel):
     metric: RankingMetric
     direction: RankingDirection
+    limit: int = Field(default=1, ge=1, le=20)
 
 
 class AnswerConcept(StrEnum):
@@ -133,32 +144,81 @@ class AnswerKind(StrEnum):
     ENTITY_FOLLOW_UP = "entity_follow_up"
 
 
+class QuestionForm(StrEnum):
+    STATUS = "status"
+    EXISTENCE = "existence"
+    QUANTITY = "quantity"
+    RANKING = "ranking"
+    COMPARISON = "comparison"
+    CAUSE = "cause"
+    RECOMMENDATION = "recommendation"
+    SUMMARY = "summary"
+    EVIDENCE = "evidence"
+    DRILL_DOWN = "drill_down"
+    PREMISE_CHECK = "premise_check"
+
+
 class AnswerPeriod(StrEnum):
     OBSERVED = "observed"
+    CURRENT = "current"
+    THIS_YEAR = "this_year"
     CURRENT_YEAR = "current_year"
     LAST_YEAR = "last_year"
+    CURRENT_SNAPSHOT = "current_snapshot"
+    PREVIOUS_SNAPSHOT = "previous_snapshot"
+    BETWEEN_SNAPSHOTS = "between_snapshots"
 
 
-class AnswerMetric(StrEnum):
-    NET_OPERATING_RESULT = "net_operating_result"
-    CASH = "cash"
-    LOAN = "loan"
-    COMPANY_VALUE = "company_value"
-    INCOME = "income"
-    EXPENSES = "expenses"
-    PROFIT_THIS_YEAR = "profit_this_year"
-    PROFIT_LAST_YEAR = "profit_last_year"
-    AGE_DAYS = "age_days"
-    RUNNING_STATE = "running_state"
-    WAITING_CARGO = "waiting_cargo"
-    VEHICLE_COUNT = "vehicle_count"
-    NEGATIVE_VEHICLE_COUNT = "negative_vehicle_count"
-    ROUTE_AGGREGATE_PROFIT = "route_aggregate_profit"
-    ROUTE_MEDIAN_PROFIT = "route_median_profit"
-    POPULATION = "population"
-    PRODUCTION = "production"
-    OPPORTUNITY_SCORE = "opportunity_score"
-    MATERIALITY = "materiality"
+AnswerMetric = RankingMetric
+
+
+class PremiseType(StrEnum):
+    COMPANY_LOSING = "company_losing"
+    ROUTE_LOSING = "route_losing"
+    STATION_CONGESTED = "station_congested"
+    PERFORMANCE_WORSE = "performance_worse"
+
+
+class ConversationReferenceKind(StrEnum):
+    VEHICLE = "vehicle"
+    ROUTE = "route"
+    STATION = "station"
+    FINDING = "finding"
+    TOP_OPPORTUNITY = "top_opportunity"
+
+
+class EvidenceRequirementKind(StrEnum):
+    CURRENT_SNAPSHOT = "current_snapshot"
+    COMPARISON_SNAPSHOT = "comparison_snapshot"
+    COMPATIBLE_IDENTITY = "compatible_identity"
+    METRIC_CURRENT = "metric_current"
+    METRIC_BOTH_SNAPSHOTS = "metric_both_snapshots"
+    ELIGIBLE_POPULATION = "eligible_population"
+    RESOLVED_SUBJECT = "resolved_subject"
+    CANDIDATE_CONTRIBUTORS = "candidate_contributors"
+
+
+class EvidenceRequirement(AnalysisModel):
+    kind: EvidenceRequirementKind
+    metric: RankingMetric | None = None
+    subject_type: AnalysisSubjectType | None = None
+
+
+class ResolvedConversationReference(AnalysisModel):
+    kind: ConversationReferenceKind
+    phrase: str = Field(min_length=1, max_length=100)
+    prior_analysis_id: str = Field(pattern=r"^analysis:[0-9a-f]{20}$")
+    subject_type: AnalysisSubjectType | None = None
+    entity_id: str | None = Field(default=None, min_length=1)
+    finding_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_target(self) -> Self:
+        if self.entity_id is None and self.finding_id is None:
+            raise ValueError("a resolved conversational reference requires a target")
+        if self.entity_id is not None and self.subject_type is None:
+            raise ValueError("an entity reference requires subject_type")
+        return self
 
 
 class AnswerIntent(AnalysisModel):
@@ -166,10 +226,22 @@ class AnswerIntent(AnalysisModel):
 
     concept: AnswerConcept
     kind: AnswerKind
-    requested_metric: AnswerMetric | None = None
+    question_forms: tuple[QuestionForm, ...] = Field(default=(), max_length=4)
+    requested_metric: RankingMetric | None = None
     period: AnswerPeriod | None = None
+    premise: PremiseType | None = None
     premise_asserted: bool = False
     comparison_required: bool = False
+    reference_kind: ConversationReferenceKind | None = None
+    evidence_requirements: tuple[EvidenceRequirement, ...] = Field(default=(), max_length=10)
+
+    @model_validator(mode="after")
+    def validate_semantics(self) -> Self:
+        if len(set(self.question_forms)) != len(self.question_forms):
+            raise ValueError("question forms must be unique")
+        if self.premise is not None and QuestionForm.PREMISE_CHECK not in self.question_forms:
+            raise ValueError("a premise requires premise_check question form")
+        return self
 
 
 class AnalysisRequest(AnalysisModel):
@@ -184,11 +256,14 @@ class AnalysisRequest(AnalysisModel):
     maximum_findings: int = Field(default=5, ge=1, le=20)
     include_recommendations: bool = True
     answer_intent: AnswerIntent | None = None
+    resolved_reference: ResolvedConversationReference | None = None
 
     @model_validator(mode="after")
     def validate_subject(self) -> Self:
-        if bool(self.subject_ids) != (self.subject_type is not None):
-            raise ValueError("subject_type and subject_ids must be supplied together")
+        if self.subject_ids and self.subject_type is None:
+            raise ValueError("subject_ids require subject_type")
+        if self.analysis_type is AnalysisType.ENTITY_SUMMARY and not self.subject_ids:
+            raise ValueError("entity_summary requires subject IDs")
         if len(set(self.subject_ids)) != len(self.subject_ids):
             raise ValueError("subject_ids must be unique")
         return self
@@ -324,6 +399,25 @@ class AnalysisPresentation(AnalysisModel):
     excluded_count: int | None = Field(default=None, ge=0)
 
 
+class AnalysisPopulation(AnalysisModel):
+    eligible_count: int = Field(ge=0)
+    evaluated_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    exclusion_reasons: tuple[str, ...] = ()
+    metric: RankingMetric | None = None
+    period: AnswerPeriod | None = None
+    direction: RankingDirection | None = None
+    tie_break: str = "canonical entity ID ascending"
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> Self:
+        if self.evaluated_count + self.excluded_count != self.eligible_count:
+            raise ValueError("evaluated and excluded counts must equal eligible count")
+        if self.excluded_count and not self.exclusion_reasons:
+            raise ValueError("excluded entities require an exclusion reason")
+        return self
+
+
 class AnalysisResponse(AnalysisModel):
     request: AnalysisRequest
     snapshot_id: str = Field(min_length=1)
@@ -336,6 +430,7 @@ class AnalysisResponse(AnalysisModel):
     unsupported_parts: tuple[str, ...] = ()
     explanation: AnalysisExplanation | None = None
     presentation: AnalysisPresentation | None = None
+    population: AnalysisPopulation | None = None
     generated_at: AwareDatetime
 
     @model_validator(mode="after")

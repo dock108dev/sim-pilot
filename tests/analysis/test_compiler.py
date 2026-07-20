@@ -62,7 +62,7 @@ def test_deterministic_compiler_uses_supplied_comparison_context() -> None:
         ("Why did this train crash?", "unsupported"),
         ("Fix my worst route", "unsupported"),
         ("Which route is bad?", "clarification"),
-        ("Are there unusual changes?", "clarification"),
+        ("Are there unusual changes?", "request"),
         ("What should I do?", "clarification"),
         ("Is this okay?", "clarification"),
     ),
@@ -73,6 +73,7 @@ def test_compiler_is_honest_about_unsupported_and_ambiguous_questions(
     result = compile_question(question)
     assert (result.unsupported_reason is not None) is (outcome == "unsupported")
     assert (result.clarification is not None) is (outcome == "clarification")
+    assert (result.request is not None) is (outcome == "request")
 
 
 def test_compilation_requires_exactly_one_outcome() -> None:

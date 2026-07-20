@@ -54,7 +54,7 @@ def test_analysis_request_is_semantic_strict_and_immutable() -> None:
 
 
 def test_request_rejects_ambiguous_subject_and_filter_arity() -> None:
-    with pytest.raises(ValidationError, match="subject_type and subject_ids"):
+    with pytest.raises(ValidationError, match="requires subject IDs"):
         AnalysisRequest(
             analysis_type=AnalysisType.ENTITY_SUMMARY,
             question="Summarize it.",

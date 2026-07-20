@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sim_pilot.analysis.contracts import (
     AnalysisFinding,
+    AnalysisPopulation,
     AnalysisRecommendation,
     AnalysisRequest,
     AnalysisStatus,
@@ -27,6 +28,7 @@ class AnalyzerResult(BaseModel):
     assumptions: tuple[str, ...] = ()
     limitations: tuple[str, ...] = ()
     unsupported_parts: tuple[str, ...] = ()
+    population: AnalysisPopulation | None = None
 
 
 class Analyzer(Protocol):

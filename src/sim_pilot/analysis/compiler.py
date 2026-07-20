@@ -20,6 +20,11 @@ from sim_pilot.analysis.contracts import (
     AnswerKind,
     AnswerMetric,
     AnswerPeriod,
+    ConversationReferenceKind,
+    EvidenceRequirement,
+    EvidenceRequirementKind,
+    PremiseType,
+    QuestionForm,
     RankingDirection,
     RankingMetric,
     RankingRequest,
@@ -158,33 +163,11 @@ class DeterministicAnalysisCompiler:
                 return AnalysisCompilation(
                     clarification="Name one route or continue from a single unambiguous route."
                 )
-        if (
-            "compare" in normalized
-            and "before" in normalized
-            and (context is None or context.comparison_snapshot_id is None)
-        ):
-            return AnalysisCompilation(
-                clarification="Supply an explicit compatible comparison snapshot."
-            )
         analysis_type = _analysis_type(normalized)
         if analysis_type is None:
             return AnalysisCompilation(
                 unsupported_reason=(
                     "The question does not map to the supported deterministic analysis catalog."
-                )
-            )
-        if analysis_type is AnalysisType.WORLD_CHANGES and (
-            context is None or context.comparison_snapshot_id is None
-        ):
-            return AnalysisCompilation(
-                clarification="Supply an explicit compatible comparison snapshot."
-            )
-        if analysis_type is AnalysisType.ANOMALY_DETECTION and (
-            context is None or context.comparison_snapshot_id is None
-        ):
-            return AnalysisCompilation(
-                clarification=(
-                    "Supply an explicit compatible comparison snapshot for anomaly review."
                 )
             )
         filters: tuple[AnalysisFilter, ...] = ()
@@ -214,7 +197,7 @@ class DeterministicAnalysisCompiler:
                 ),
             )
         ranking = _ranking(normalized, analysis_type)
-        subject_type: AnalysisSubjectType | None = None
+        subject_type = _subject_scope(normalized, analysis_type)
         subject_ids: tuple[str, ...] = ()
         if any(term in normalized for term in ("this route", "that route")):
             assert context is not None
@@ -233,15 +216,31 @@ class DeterministicAnalysisCompiler:
             filters=filters,
             ranking=ranking,
             comparison_snapshot_id=(None if context is None else context.comparison_snapshot_id),
-            answer_intent=answer_intent_for_question(normalized, analysis_type, ranking),
+            answer_intent=answer_intent_for_question(
+                normalized, analysis_type, ranking, subject_type
+            ),
         )
         validate_analysis_request(request)
         return AnalysisCompilation(request=request)
 
 
 def _analysis_type(question: str) -> AnalysisType | None:
+    if "vehicle type" in question and any(
+        term in question for term in ("dragging", "loses", "loss", "least profitable")
+    ):
+        return AnalysisType.FLEET_SUMMARY
     rules = (
-        (("changed", "what changed", "improving", "getting worse"), AnalysisType.WORLD_CHANGES),
+        (
+            (
+                "changed",
+                "what changed",
+                "improving",
+                "getting worse",
+                "gained",
+                "became unprofitable",
+            ),
+            AnalysisType.WORLD_CHANGES,
+        ),
         (("unusual", "anomal"), AnalysisType.ANOMALY_DETECTION),
         (("pay attention", "inspect first", "what next", "priority"), AnalysisType.PRIORITY_REVIEW),
         (("station", "waiting cargo", "capacity"), AnalysisType.STATION_PERFORMANCE),
@@ -288,7 +287,10 @@ def _ranking(question: str, analysis_type: AnalysisType) -> RankingRequest | Non
         )
     if analysis_type is AnalysisType.ROUTE_PERFORMANCE:
         if "losing vehicles" in question:
-            return None
+            return RankingRequest(
+                metric=RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT,
+                direction=RankingDirection.DESCENDING,
+            )
         if any(term in question for term in ("worst", "losing", "least", "bad")):
             return RankingRequest(
                 metric=RankingMetric.ROUTE_AGGREGATE_PROFIT,
@@ -299,6 +301,46 @@ def _ranking(question: str, analysis_type: AnalysisType) -> RankingRequest | Non
                 metric=RankingMetric.ROUTE_AGGREGATE_PROFIT,
                 direction=RankingDirection.DESCENDING,
             )
+    if analysis_type is AnalysisType.FLEET_SUMMARY and "vehicle type" in question:
+        return RankingRequest(
+            metric=RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+            direction=RankingDirection.ASCENDING,
+        )
+    if analysis_type is AnalysisType.PRIORITY_REVIEW:
+        return RankingRequest(
+            metric=RankingMetric.PRIORITY_SCORE,
+            direction=RankingDirection.DESCENDING,
+        )
+    return None
+
+
+def _subject_scope(question: str, analysis_type: AnalysisType) -> AnalysisSubjectType | None:
+    if analysis_type is AnalysisType.WORLD_CHANGES:
+        for terms, subject in (
+            (
+                ("vehicle", "train", "truck", "bus", "ship", "aircraft"),
+                AnalysisSubjectType.VEHICLE,
+            ),
+            (("town",), AnalysisSubjectType.TOWN),
+            (("station",), AnalysisSubjectType.STATION),
+            (("route",), AnalysisSubjectType.ROUTE),
+            (("industry",), AnalysisSubjectType.INDUSTRY),
+            (("company",), AnalysisSubjectType.COMPANY),
+        ):
+            if any(term in question for term in terms):
+                return subject
+    if analysis_type is AnalysisType.PRIORITY_REVIEW:
+        for terms, subject in (
+            (("station",), AnalysisSubjectType.STATION),
+            (("vehicle", "train", "truck", "bus", "ship", "aircraft"), AnalysisSubjectType.VEHICLE),
+            (("route",), AnalysisSubjectType.ROUTE),
+            (("industry",), AnalysisSubjectType.INDUSTRY),
+            (("town",), AnalysisSubjectType.TOWN),
+        ):
+            if any(term in question for term in terms):
+                return subject
+    if analysis_type is AnalysisType.FLEET_SUMMARY and "vehicle type" in question:
+        return AnalysisSubjectType.VEHICLE
     return None
 
 
@@ -306,6 +348,7 @@ def answer_intent_for_question(
     question: str,
     analysis_type: AnalysisType,
     ranking: RankingRequest | None,
+    subject_type: AnalysisSubjectType | None = None,
 ) -> AnswerIntent:
     comparison_required = any(
         term in question
@@ -316,33 +359,65 @@ def answer_intent_for_question(
             return AnswerIntent(
                 concept=AnswerConcept.LOSS,
                 kind=AnswerKind.EXPLANATION,
+                question_forms=(QuestionForm.PREMISE_CHECK, QuestionForm.CAUSE),
                 requested_metric=AnswerMetric.NET_OPERATING_RESULT,
-                period=AnswerPeriod.OBSERVED,
+                period=AnswerPeriod.CURRENT,
+                premise=PremiseType.COMPANY_LOSING,
                 premise_asserted=True,
+                evidence_requirements=_evidence_requirements(
+                    (QuestionForm.PREMISE_CHECK, QuestionForm.CAUSE),
+                    AnswerMetric.NET_OPERATING_RESULT,
+                    AnalysisSubjectType.COMPANY,
+                ),
             )
         return AnswerIntent(
             concept=AnswerConcept.HEALTH,
             kind=AnswerKind.FACT,
+            question_forms=(QuestionForm.STATUS, QuestionForm.SUMMARY),
             requested_metric=AnswerMetric.NET_OPERATING_RESULT,
-            period=AnswerPeriod.OBSERVED,
+            period=AnswerPeriod.CURRENT,
+            evidence_requirements=_evidence_requirements(
+                (QuestionForm.STATUS, QuestionForm.SUMMARY),
+                AnswerMetric.NET_OPERATING_RESULT,
+                AnalysisSubjectType.COMPANY,
+            ),
         )
     if analysis_type is AnalysisType.FINANCIAL_SUMMARY:
         if "debt" in question or "loan" in question:
             return AnswerIntent(
                 concept=AnswerConcept.DEBT,
                 kind=AnswerKind.FACT,
+                question_forms=(
+                    (QuestionForm.QUANTITY,) if "how much" in question else (QuestionForm.STATUS,)
+                ),
                 requested_metric=AnswerMetric.LOAN,
-                period=AnswerPeriod.OBSERVED,
+                period=AnswerPeriod.CURRENT,
                 premise_asserted="too much" in question,
+                evidence_requirements=_evidence_requirements(
+                    (QuestionForm.STATUS,),
+                    AnswerMetric.LOAN,
+                    AnalysisSubjectType.COMPANY,
+                ),
             )
         if "cash" in question:
             return AnswerIntent(
                 concept=AnswerConcept.AVAILABLE_CASH,
                 kind=AnswerKind.FACT,
+                question_forms=(QuestionForm.QUANTITY,),
                 requested_metric=AnswerMetric.CASH,
-                period=AnswerPeriod.OBSERVED,
+                period=AnswerPeriod.CURRENT,
+                evidence_requirements=_evidence_requirements(
+                    (QuestionForm.QUANTITY,),
+                    AnswerMetric.CASH,
+                    AnalysisSubjectType.COMPANY,
+                ),
             )
     if analysis_type in {AnalysisType.WORLD_CHANGES, AnalysisType.ANOMALY_DETECTION}:
+        metric = None
+        if "population" in question or "town" in question:
+            metric = AnswerMetric.POPULATION
+        elif "profit" in question or "unprofitable" in question:
+            metric = AnswerMetric.PROFIT_LAST_YEAR
         return AnswerIntent(
             concept=(
                 AnswerConcept.ANOMALY
@@ -350,34 +425,82 @@ def answer_intent_for_question(
                 else AnswerConcept.CHANGE
             ),
             kind=AnswerKind.RANKING,
-            period=AnswerPeriod.OBSERVED,
+            question_forms=(QuestionForm.COMPARISON,),
+            requested_metric=metric,
+            period=AnswerPeriod.BETWEEN_SNAPSHOTS,
             comparison_required=True,
+            evidence_requirements=_evidence_requirements(
+                (QuestionForm.COMPARISON,),
+                metric,
+                subject_type or AnalysisSubjectType.WORLD,
+            ),
         )
     if analysis_type is AnalysisType.VEHICLE_PERFORMANCE:
         if "idle" in question or "sitting" in question:
             return AnswerIntent(
                 concept=AnswerConcept.IDLE,
                 kind=AnswerKind.FACT,
-                period=AnswerPeriod.OBSERVED,
+                question_forms=(QuestionForm.EXISTENCE,),
+                requested_metric=AnswerMetric.RUNNING_STATE,
+                period=AnswerPeriod.CURRENT_SNAPSHOT,
+                evidence_requirements=_evidence_requirements(
+                    (QuestionForm.EXISTENCE,),
+                    AnswerMetric.RUNNING_STATE,
+                    AnalysisSubjectType.VEHICLE,
+                ),
             )
         metric = _answer_metric(ranking)
+        forms = (QuestionForm.RANKING,) if ranking is not None else (QuestionForm.SUMMARY,)
         return AnswerIntent(
             concept=AnswerConcept.PERFORMANCE,
             kind=AnswerKind.RANKING if ranking is not None else AnswerKind.FACT,
+            question_forms=forms,
             requested_metric=metric,
             period=_period(metric),
             comparison_required=comparison_required,
+            evidence_requirements=_evidence_requirements(
+                forms, metric, subject_type or AnalysisSubjectType.VEHICLE
+            ),
         )
     if analysis_type is AnalysisType.ROUTE_PERFORMANCE:
-        losing_vehicles = "losing vehicles" in question
-        metric = AnswerMetric.NEGATIVE_VEHICLE_COUNT if losing_vehicles else _answer_metric(ranking)
+        metric = _answer_metric(ranking)
+        reference = (
+            ConversationReferenceKind.ROUTE
+            if any(term in question for term in ("this route", "that route"))
+            else None
+        )
+        premise = PremiseType.ROUTE_LOSING if "losing money" in question else None
+        forms = (
+            (QuestionForm.PREMISE_CHECK, QuestionForm.CAUSE, QuestionForm.DRILL_DOWN)
+            if premise is not None
+            else (QuestionForm.RANKING,)
+        )
         return AnswerIntent(
             concept=AnswerConcept.PERFORMANCE,
             kind=AnswerKind.ENTITY_FOLLOW_UP if "this route" in question else AnswerKind.RANKING,
+            question_forms=forms,
             requested_metric=metric,
-            period=AnswerPeriod.LAST_YEAR if metric is not None else AnswerPeriod.OBSERVED,
-            premise_asserted="losing money" in question,
+            period=AnswerPeriod.LAST_YEAR,
+            premise=premise,
+            premise_asserted=premise is not None,
             comparison_required=comparison_required,
+            reference_kind=reference,
+            evidence_requirements=_evidence_requirements(
+                forms, metric or AnswerMetric.ROUTE_AGGREGATE_PROFIT, AnalysisSubjectType.ROUTE
+            ),
+        )
+    if analysis_type is AnalysisType.FLEET_SUMMARY and "vehicle type" in question:
+        return AnswerIntent(
+            concept=AnswerConcept.PERFORMANCE,
+            kind=AnswerKind.RANKING,
+            question_forms=(QuestionForm.RANKING,),
+            requested_metric=AnswerMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+            period=AnswerPeriod.LAST_YEAR,
+            evidence_requirements=_evidence_requirements(
+                (QuestionForm.RANKING,),
+                AnswerMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+                AnalysisSubjectType.VEHICLE,
+            ),
         )
     concepts = {
         AnalysisType.STATION_PERFORMANCE: AnswerConcept.PRIORITY,
@@ -388,12 +511,21 @@ def answer_intent_for_question(
         AnalysisType.ENTITY_SUMMARY: AnswerConcept.ENTITY,
     }
     metric = _answer_metric(ranking)
+    if analysis_type is AnalysisType.SERVICE_COVERAGE and "cargo type" in question:
+        metric = AnswerMetric.CARGO_TYPE_COVERAGE
+    forms = (
+        (QuestionForm.RECOMMENDATION, QuestionForm.RANKING)
+        if analysis_type is AnalysisType.PRIORITY_REVIEW
+        else ((QuestionForm.RANKING,) if ranking is not None else (QuestionForm.SUMMARY,))
+    )
     return AnswerIntent(
         concept=concepts.get(analysis_type, AnswerConcept.PERFORMANCE),
         kind=AnswerKind.RANKING if ranking is not None else AnswerKind.FACT,
+        question_forms=forms,
         requested_metric=metric,
         period=_period(metric),
         comparison_required=comparison_required,
+        evidence_requirements=_evidence_requirements(forms, metric, subject_type),
     )
 
 
@@ -403,7 +535,9 @@ def normalize_provider_compilation(compilation: AnalysisCompilation) -> Analysis
     if request is None:
         return compilation
     normalized = " ".join(request.question.casefold().split())
-    inferred = answer_intent_for_question(normalized, request.analysis_type, request.ranking)
+    inferred = answer_intent_for_question(
+        normalized, request.analysis_type, request.ranking, request.subject_type
+    )
     if request.answer_intent is None:
         request = request.model_copy(update={"answer_intent": inferred})
     elif request.answer_intent != inferred:
@@ -431,15 +565,74 @@ def _required_analysis_type(question: str) -> AnalysisType | None:
 def _answer_metric(ranking: RankingRequest | None) -> AnswerMetric | None:
     if ranking is None:
         return None
-    try:
-        return AnswerMetric(ranking.metric.value)
-    except ValueError:
-        return None
+    return ranking.metric
 
 
 def _period(metric: AnswerMetric | None) -> AnswerPeriod | None:
     if metric is AnswerMetric.PROFIT_LAST_YEAR:
         return AnswerPeriod.LAST_YEAR
     if metric is AnswerMetric.PROFIT_THIS_YEAR:
-        return AnswerPeriod.CURRENT_YEAR
-    return AnswerPeriod.OBSERVED if metric is not None else None
+        return AnswerPeriod.THIS_YEAR
+    if metric in {
+        AnswerMetric.VEHICLE_TYPE_AGGREGATE_PROFIT,
+        AnswerMetric.ROUTE_AGGREGATE_PROFIT,
+        AnswerMetric.ROUTE_MEDIAN_PROFIT,
+        AnswerMetric.ROUTE_NEGATIVE_VEHICLE_COUNT,
+    }:
+        return AnswerPeriod.LAST_YEAR
+    return AnswerPeriod.CURRENT_SNAPSHOT if metric is not None else None
+
+
+def _evidence_requirements(
+    forms: tuple[QuestionForm, ...],
+    metric: RankingMetric | None,
+    subject_type: AnalysisSubjectType | None,
+) -> tuple[EvidenceRequirement, ...]:
+    values = [EvidenceRequirement(kind=EvidenceRequirementKind.CURRENT_SNAPSHOT)]
+    if QuestionForm.COMPARISON in forms:
+        values.extend(
+            (
+                EvidenceRequirement(kind=EvidenceRequirementKind.COMPARISON_SNAPSHOT),
+                EvidenceRequirement(kind=EvidenceRequirementKind.COMPATIBLE_IDENTITY),
+            )
+        )
+        if metric is not None:
+            values.append(
+                EvidenceRequirement(
+                    kind=EvidenceRequirementKind.METRIC_BOTH_SNAPSHOTS,
+                    metric=metric,
+                    subject_type=subject_type,
+                )
+            )
+    elif metric is not None:
+        values.append(
+            EvidenceRequirement(
+                kind=EvidenceRequirementKind.METRIC_CURRENT,
+                metric=metric,
+                subject_type=subject_type,
+            )
+        )
+    if QuestionForm.RANKING in forms:
+        values.append(
+            EvidenceRequirement(
+                kind=EvidenceRequirementKind.ELIGIBLE_POPULATION,
+                metric=metric,
+                subject_type=subject_type,
+            )
+        )
+    if QuestionForm.CAUSE in forms:
+        values.append(
+            EvidenceRequirement(
+                kind=EvidenceRequirementKind.CANDIDATE_CONTRIBUTORS,
+                metric=metric,
+                subject_type=subject_type,
+            )
+        )
+    if QuestionForm.DRILL_DOWN in forms:
+        values.append(
+            EvidenceRequirement(
+                kind=EvidenceRequirementKind.RESOLVED_SUBJECT,
+                subject_type=subject_type,
+            )
+        )
+    return tuple(values)
