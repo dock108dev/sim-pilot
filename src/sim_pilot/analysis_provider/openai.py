@@ -8,7 +8,11 @@ from openai import AsyncOpenAI, OpenAIError
 from pydantic import BaseModel
 
 from sim_pilot.analysis.catalog import compiler_capability_catalog
-from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompilerContext
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    AnalysisCompilerContext,
+    normalize_provider_compilation,
+)
 from sim_pilot.analysis.contracts import AnalysisExplanation
 from sim_pilot.analysis.explanation import ExplanationInput
 from sim_pilot.analysis.prompt import ANALYSIS_COMPILER_PROMPT, ANALYSIS_EXPLANATION_PROMPT
@@ -98,7 +102,7 @@ class OpenAIAnalysisCompiler(_OpenAIProvider):
             output_type=AnalysisCompilation,
         )
         assert isinstance(result, AnalysisCompilation)
-        return result
+        return normalize_provider_compilation(result)
 
 
 class OpenAIExplanationProvider(_OpenAIProvider):

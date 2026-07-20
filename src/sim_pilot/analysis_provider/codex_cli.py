@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 
 from sim_pilot.analysis.catalog import compiler_capability_catalog
-from sim_pilot.analysis.compiler import AnalysisCompilation, AnalysisCompilerContext
+from sim_pilot.analysis.compiler import (
+    AnalysisCompilation,
+    AnalysisCompilerContext,
+    normalize_provider_compilation,
+)
 from sim_pilot.analysis.contracts import AnalysisExplanation
 from sim_pilot.analysis.explanation import ExplanationInput
 from sim_pilot.analysis.prompt import (
@@ -64,7 +68,7 @@ class CodexAnalysisCompiler:
         except CodexCLIError as error:
             raise RuntimeError(f"Codex analysis compilation failed: {error}") from error
         self.last_metadata = metadata
-        return result
+        return normalize_provider_compilation(result)
 
 
 def _compiler_context_payload(context: AnalysisCompilerContext | None) -> str:

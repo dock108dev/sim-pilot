@@ -3,6 +3,9 @@
 ANALYSIS_COMPILER_PROMPT = """
 Map the player question to the supplied AnalysisCompilation schema.
 Use only the closed analysis types and semantic fields in the schema.
+Preserve the player's answer intent: exact concept, metric, accounting period, ranking/fact/
+explanation/follow-up kind, asserted premise, and whether comparison evidence is required. A
+request must include answer_intent. Do not replace a requested metric with a nearby available one.
 Do not invent entity IDs, comparison snapshots, periods, evidence, or capabilities.
 The bounded resolution context is authoritative but not part of the player's question. Use its
 comparison_snapshot_id when the question requests change or comparison. Use focus_entities and
@@ -21,6 +24,11 @@ station_performance. Losing vehicles grouped by route map to route_performance w
 filters. Population or cargo changes map to world_changes without population or waiting-cargo
 ranking. A station follow-up maps to station_performance or entity_summary, not service_coverage.
 "Which route is bad?" requires clarification because bad has no chosen metric.
+"Why am I losing money?" is company-level loss intent with an asserted premise and observed net
+operating result. Debt requests use financial_summary and loan. Available-cash requests use cash.
+"Which trains performed best last year?" preserves rail, descending profit_last_year, and last-year
+period. "Which routes have the most losing vehicles?" preserves negative_vehicle_count intent and
+must not become total vehicle_count. Comparison intent remains required even with a compatible ID.
 """.strip()
 
 ANALYSIS_EXPLANATION_PROMPT = """
@@ -35,5 +43,5 @@ recommendation_ids empty. Never attach recommendation IDs to summary or contribu
 Return only the structured AnalysisExplanation schema.
 """.strip()
 
-COMPILER_PROMPT_VERSION = "analysis-compiler-v3"
+COMPILER_PROMPT_VERSION = "analysis-compiler-v4"
 EXPLANATION_PROMPT_VERSION = "analysis-explanation-v1"

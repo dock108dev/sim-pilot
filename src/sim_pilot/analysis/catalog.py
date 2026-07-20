@@ -260,4 +260,16 @@ def validate_analysis_request(request: AnalysisRequest) -> AnalysisCapability:
         and request.comparison_snapshot_id is None
     ):
         raise AnalysisRequestError(f"{request.analysis_type.value} requires a comparison snapshot")
+    intent = request.answer_intent
+    if intent is not None:
+        if intent.comparison_required and request.comparison_snapshot_id is None:
+            raise AnalysisRequestError("answer intent requires a comparison snapshot")
+        if (
+            request.ranking is not None
+            and intent.requested_metric is not None
+            and intent.requested_metric.value != request.ranking.metric.value
+        ):
+            raise AnalysisRequestError(
+                "answer intent metric does not match the requested ranking metric"
+            )
     return capability

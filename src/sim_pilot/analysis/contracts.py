@@ -111,6 +111,67 @@ class RankingRequest(AnalysisModel):
     direction: RankingDirection
 
 
+class AnswerConcept(StrEnum):
+    HEALTH = "health"
+    LOSS = "loss"
+    DEBT = "debt"
+    AVAILABLE_CASH = "available_cash"
+    CHANGE = "change"
+    PERFORMANCE = "performance"
+    IDLE = "idle"
+    COVERAGE = "coverage"
+    OPPORTUNITY = "opportunity"
+    PRIORITY = "priority"
+    ANOMALY = "anomaly"
+    ENTITY = "entity"
+
+
+class AnswerKind(StrEnum):
+    FACT = "fact"
+    RANKING = "ranking"
+    EXPLANATION = "explanation"
+    ENTITY_FOLLOW_UP = "entity_follow_up"
+
+
+class AnswerPeriod(StrEnum):
+    OBSERVED = "observed"
+    CURRENT_YEAR = "current_year"
+    LAST_YEAR = "last_year"
+
+
+class AnswerMetric(StrEnum):
+    NET_OPERATING_RESULT = "net_operating_result"
+    CASH = "cash"
+    LOAN = "loan"
+    COMPANY_VALUE = "company_value"
+    INCOME = "income"
+    EXPENSES = "expenses"
+    PROFIT_THIS_YEAR = "profit_this_year"
+    PROFIT_LAST_YEAR = "profit_last_year"
+    AGE_DAYS = "age_days"
+    RUNNING_STATE = "running_state"
+    WAITING_CARGO = "waiting_cargo"
+    VEHICLE_COUNT = "vehicle_count"
+    NEGATIVE_VEHICLE_COUNT = "negative_vehicle_count"
+    ROUTE_AGGREGATE_PROFIT = "route_aggregate_profit"
+    ROUTE_MEDIAN_PROFIT = "route_median_profit"
+    POPULATION = "population"
+    PRODUCTION = "production"
+    OPPORTUNITY_SCORE = "opportunity_score"
+    MATERIALITY = "materiality"
+
+
+class AnswerIntent(AnalysisModel):
+    """Question semantics used only to shape an evidence-backed answer."""
+
+    concept: AnswerConcept
+    kind: AnswerKind
+    requested_metric: AnswerMetric | None = None
+    period: AnswerPeriod | None = None
+    premise_asserted: bool = False
+    comparison_required: bool = False
+
+
 class AnalysisRequest(AnalysisModel):
     adapter_type: Literal["openttd"] = "openttd"
     analysis_type: AnalysisType
@@ -122,6 +183,7 @@ class AnalysisRequest(AnalysisModel):
     comparison_snapshot_id: str | None = Field(default=None, min_length=1)
     maximum_findings: int = Field(default=5, ge=1, le=20)
     include_recommendations: bool = True
+    answer_intent: AnswerIntent | None = None
 
     @model_validator(mode="after")
     def validate_subject(self) -> Self:
@@ -242,6 +304,26 @@ class AnalysisStatus(StrEnum):
     FAILED = "failed"
 
 
+class AnswerBasis(StrEnum):
+    CONFIRMED_FACT = "confirmed_fact"
+    FINDING = "finding"
+    INFERENCE = "inference"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
+class AnalysisPresentation(AnalysisModel):
+    """Deterministic compact-answer selection over authoritative analysis output."""
+
+    direct_answer: str = Field(min_length=1)
+    basis: AnswerBasis
+    decisive_finding_id: str | None = Field(default=None, min_length=1)
+    recommendation_id: str | None = Field(default=None, min_length=1)
+    limitation: str | None = Field(default=None, min_length=1)
+    follow_up: str | None = Field(default=None, min_length=1)
+    evaluated_count: int | None = Field(default=None, ge=0)
+    excluded_count: int | None = Field(default=None, ge=0)
+
+
 class AnalysisResponse(AnalysisModel):
     request: AnalysisRequest
     snapshot_id: str = Field(min_length=1)
@@ -253,6 +335,7 @@ class AnalysisResponse(AnalysisModel):
     limitations: tuple[str, ...] = ()
     unsupported_parts: tuple[str, ...] = ()
     explanation: AnalysisExplanation | None = None
+    presentation: AnalysisPresentation | None = None
     generated_at: AwareDatetime
 
     @model_validator(mode="after")
@@ -274,4 +357,15 @@ class AnalysisResponse(AnalysisModel):
             for item in self.recommendations
         ):
             raise ValueError("recommendation references an unknown finding")
+        if self.presentation is not None:
+            if (
+                self.presentation.decisive_finding_id is not None
+                and self.presentation.decisive_finding_id not in finding_set
+            ):
+                raise ValueError("presentation references an unknown finding")
+            if (
+                self.presentation.recommendation_id is not None
+                and self.presentation.recommendation_id not in recommendation_set
+            ):
+                raise ValueError("presentation references an unknown recommendation")
         return self

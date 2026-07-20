@@ -8,8 +8,16 @@ from sim_pilot.analysis.compiler import (
     AnalysisCompilerContext,
     DeterministicAnalysisCompiler,
     ScriptedAnalysisCompiler,
+    normalize_provider_compilation,
 )
-from sim_pilot.analysis.contracts import AnalysisType, RankingDirection, RankingMetric
+from sim_pilot.analysis.contracts import (
+    AnalysisRequest,
+    AnalysisType,
+    AnswerConcept,
+    RankingDirection,
+    RankingMetric,
+)
+from sim_pilot.analysis.errors import AnalysisRequestError
 
 
 def compile_question(question: str) -> AnalysisCompilation:
@@ -77,3 +85,29 @@ def test_scripted_compiler_exhaustion_is_explicit() -> None:
     asyncio.run(compiler.compile("First"))
     with pytest.raises(RuntimeError, match="exhausted"):
         asyncio.run(compiler.compile("Second"))
+
+
+def test_provider_compilation_fills_missing_typed_answer_intent() -> None:
+    normalized = normalize_provider_compilation(
+        AnalysisCompilation(
+            request=AnalysisRequest(
+                analysis_type=AnalysisType.FINANCIAL_SUMMARY,
+                question="Am I carrying too much debt?",
+            )
+        )
+    )
+    assert normalized.request is not None
+    assert normalized.request.answer_intent is not None
+    assert normalized.request.answer_intent.concept is AnswerConcept.DEBT
+
+
+def test_provider_compilation_rejects_wrong_analyzer_for_exact_financial_question() -> None:
+    with pytest.raises(AnalysisRequestError, match="requiring financial_summary"):
+        normalize_provider_compilation(
+            AnalysisCompilation(
+                request=AnalysisRequest(
+                    analysis_type=AnalysisType.COMPANY_HEALTH,
+                    question="Am I carrying too much debt?",
+                )
+            )
+        )
