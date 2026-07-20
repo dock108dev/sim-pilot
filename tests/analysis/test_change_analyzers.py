@@ -59,6 +59,7 @@ def test_world_changes_classifies_material_and_data_quality_changes() -> None:
     assert all(
         item.evidence[0].comparison_snapshot_id == "snapshot-previous" for item in result.findings
     )
+    assert all(item.evidence[0].source_type.value == "snapshot_change" for item in result.findings)
     assert any(item.kind is FindingKind.DATA_QUALITY for item in result.findings)
     assert all(item.severity is FindingSeverity.WARNING for item in result.findings)
 

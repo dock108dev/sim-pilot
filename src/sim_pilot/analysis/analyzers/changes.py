@@ -35,7 +35,7 @@ from sim_pilot.analysis.contracts import (
     RankingDirection,
     RankingMetric,
 )
-from sim_pilot.analysis.evidence import field_evidence, observer_company
+from sim_pilot.analysis.evidence import observer_company
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.domain.world import (
     CargoFlow,
@@ -510,13 +510,14 @@ def _change_finding(
         comparison_value=previous,
         confidence=EvidenceConfidence.MEDIUM,
         evidence=(
-            field_evidence(
-                current,
+            EvidenceReference(
+                source_type=EvidenceSourceType.SNAPSHOT_CHANGE,
+                snapshot_id=current.metadata.snapshot_id,
                 entity_type=entity_type,
                 entity_id=entity_id,
                 field=field,
-                value=value,
-                comparison=comparison,
+                observed_value=value,
+                comparison_snapshot_id=comparison.metadata.snapshot_id,
                 comparison_value=previous,
             ),
         ),
