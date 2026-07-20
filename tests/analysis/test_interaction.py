@@ -316,3 +316,58 @@ def test_selected_recommendation_is_supported_by_the_decisive_finding() -> None:
         item for item in response.recommendations if item.recommendation_id == selected
     )
     assert decisive in recommendation.supporting_finding_ids
+    rendered = render_analysis(response, snapshot=snapshot(vehicles=(losing,)))
+    assert recommendation.title in rendered
+    assert rendered.count(recommendation.rationale) == 0
+
+
+def test_worst_vehicle_answer_names_the_vehicle_and_loss_first() -> None:
+    losing = Vehicle(
+        id="loss",
+        type="road",
+        name="Loss Leader",
+        age_days=10,
+        profit_this_year=-100,
+        profit_last_year=-351,
+        running_state="running",
+        coordinates=None,
+        in_depot=False,
+        owner_id="company-1",
+    )
+    compilation = _compile("Which vehicle lost the most money last year?")
+    assert compilation.request is not None
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        compilation.request, snapshot(vehicles=(losing,))
+    )
+
+    assert response.answer == "Loss Leader (V-001) ranks lowest, losing £351 last year."
+
+
+def test_vehicle_type_dragging_question_corrects_a_false_loss_premise() -> None:
+    road = Vehicle(
+        id="road",
+        type="road",
+        name="Road Earner",
+        age_days=10,
+        profit_this_year=100,
+        profit_last_year=100,
+        running_state="running",
+        coordinates=None,
+        in_depot=False,
+        owner_id="company-1",
+    )
+    rail = road.model_copy(
+        update={"id": "rail", "type": "rail", "name": "Rail Earner", "profit_last_year": 200}
+    )
+    compilation = _compile("Which vehicle type is dragging down the company?")
+    assert compilation.request is not None
+    response = AnalysisService(default_analyzer_registry()).analyze(
+        compilation.request, snapshot(vehicles=(road, rail))
+    )
+
+    assert response.answer == (
+        "No vehicle type lost money overall; road vehicles had the lowest aggregate "
+        "last-year profit at £100."
+    )
+    rendered = render_analysis(response, snapshot=snapshot(vehicles=(road, rail)))
+    assert "Road vehicles: vehicle type aggregate profit is £100." in rendered

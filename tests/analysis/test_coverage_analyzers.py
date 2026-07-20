@@ -84,5 +84,6 @@ def test_industry_and_combined_coverage_use_exposed_scores() -> None:
         None,
     )
     assert industry.findings[0].metric_value == 97.0
+    assert industry.findings[0].summary.startswith("Mine has no observed")
     assert len(combined.findings) == 3
     assert all(item.analysis_type is AnalysisType.SERVICE_COVERAGE for item in combined.findings)

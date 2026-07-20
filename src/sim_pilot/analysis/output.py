@@ -125,8 +125,16 @@ def _render_compact(
         None,
     )
     if recommendation is not None:
-        lines.extend(("", "Inspect next", recommendation.rationale))
-    elif presentation.follow_up is not None:
+        recommendation_text = (
+            recommendation.title
+            if finding is not None and recommendation.rationale == finding.summary
+            else recommendation.rationale
+        )
+        lines.extend(("", "Inspect next", recommendation_text))
+    elif presentation.follow_up is not None and (
+        finding is None
+        or presentation.follow_up not in {finding.summary, presentation.direct_answer}
+    ):
         lines.extend(("", "Inspect next", presentation.follow_up))
     if response.explanation is not None:
         lines.extend(("", "Why it matters", response.explanation.statements[0].text))
@@ -146,6 +154,15 @@ def _render_compact(
 
 def _compact_evidence(finding: AnalysisFinding, snapshot: WorldSnapshot | None) -> str:
     identity = _finding_identity(finding, snapshot).removesuffix(" — ")
+    if finding.metric_name == "vehicle_type_aggregate_profit":
+        vehicle_type: str | None = None
+        for item in finding.evidence:
+            candidate = item.metric_inputs.get("vehicle_type")
+            if isinstance(candidate, str):
+                vehicle_type = candidate
+                break
+        if vehicle_type is not None:
+            identity = f"{vehicle_type.title()} vehicles"
     prefix = f"{identity}: " if identity else ""
     value = finding.metric_value
     if finding.metric_name in {

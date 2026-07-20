@@ -55,7 +55,7 @@ class VehiclePerformanceAnalyzer:
                         kind=FindingKind.OBSERVED_FACT,
                         severity=FindingSeverity.WARNING,
                         title=f"Unprofitable vehicle {vehicle.name}",
-                        summary=f"The vehicle lost {abs(vehicle.profit_last_year)} last year.",
+                        summary=(f"{vehicle.name} lost {abs(vehicle.profit_last_year)} last year."),
                         metric_name="profit_last_year",
                         metric_value=vehicle.profit_last_year,
                         confidence=EvidenceConfidence.HIGH,

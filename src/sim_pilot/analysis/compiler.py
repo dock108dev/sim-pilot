@@ -292,7 +292,7 @@ def _analysis_type(question: str) -> AnalysisType | None:
 
 def _ranking(question: str, analysis_type: AnalysisType) -> RankingRequest | None:
     if analysis_type is AnalysisType.VEHICLE_PERFORMANCE:
-        if any(term in question for term in ("least", "losing", "worst", "underperform")):
+        if any(term in question for term in ("least", "losing", "lost", "worst", "underperform")):
             return RankingRequest(
                 metric=RankingMetric.PROFIT_LAST_YEAR,
                 direction=RankingDirection.ASCENDING,

@@ -20,6 +20,7 @@ from sim_pilot.analysis.contracts import (
     FindingKind,
     FindingSeverity,
     PremiseType,
+    RankingDirection,
     RankingMetric,
 )
 from sim_pilot.domain.models import JsonValue
@@ -303,12 +304,35 @@ def _direct_answer(
     if request.ranking is not None:
         label = _primary_label(finding, snapshot)
         metric = finding.metric_name
+        if metric == RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT.value:
+            vehicle_type = "unknown"
+            for evidence in finding.evidence:
+                candidate = evidence.metric_inputs.get("vehicle_type")
+                if isinstance(candidate, str):
+                    vehicle_type = candidate
+                    break
+            label = f"{vehicle_type.title()} vehicles"
+            if (
+                isinstance(value, (int, float))
+                and value >= 0
+                and any(term in request.question.lower() for term in ("dragging", "losing", "loss"))
+            ):
+                return (
+                    f"No vehicle type lost money overall; {label.lower()} had the lowest "
+                    f"aggregate last-year profit at {_currency(value)}."
+                )
         if metric in {
             RankingMetric.PROFIT_LAST_YEAR.value,
             RankingMetric.PROFIT_THIS_YEAR.value,
             RankingMetric.ROUTE_AGGREGATE_PROFIT.value,
             RankingMetric.VEHICLE_TYPE_AGGREGATE_PROFIT.value,
         }:
+            if request.ranking.direction is RankingDirection.ASCENDING and isinstance(
+                value, (int, float)
+            ):
+                if value < 0:
+                    return f"{label} ranks lowest, losing {_currency(abs(value))} last year."
+                return f"{label} ranks lowest at {_currency(value)} for the requested period."
             return f"{label} ranks first at {_currency(value)} for the requested period."
         if metric == RankingMetric.ROUTE_NEGATIVE_VEHICLE_COUNT.value:
             return f"{label} has the most losing vehicles: {value}."

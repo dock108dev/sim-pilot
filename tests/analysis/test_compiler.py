@@ -42,6 +42,14 @@ def test_deterministic_compiler_maps_informal_vehicle_question() -> None:
     assert result.request.ranking.direction is RankingDirection.ASCENDING
 
 
+def test_deterministic_compiler_maps_lost_the_most_to_lowest_profit() -> None:
+    result = compile_question("Which vehicle lost the most money last year?")
+    assert result.request is not None
+    assert result.request.ranking is not None
+    assert result.request.ranking.metric is RankingMetric.PROFIT_LAST_YEAR
+    assert result.request.ranking.direction is RankingDirection.ASCENDING
+
+
 def test_deterministic_compiler_ranks_profitable_routes_descending() -> None:
     result = compile_question("Which route makes the most money?")
     assert result.request is not None

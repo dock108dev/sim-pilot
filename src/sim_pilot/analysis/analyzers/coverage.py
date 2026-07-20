@@ -167,8 +167,8 @@ def _industry_analysis(
                 severity=FindingSeverity.OPPORTUNITY,
                 title=f"Unserved industry {industry.name}",
                 summary=(
-                    f"No selected-company nearby station is observed; production is {production} "
-                    f"and opportunity score is {score}."
+                    f"{industry.name} has no observed selected-company nearby station; "
+                    f"production is {production} and opportunity score is {score}."
                 ),
                 metric_name="opportunity_score",
                 metric_value=score,
