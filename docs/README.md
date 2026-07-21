@@ -31,6 +31,8 @@ Start with the root [README](../README.md), then use the guide that matches the 
   collection cost, bounded caching, identity verification, and freshness policy.
 - [Phase 10A named-entity inspection](022-phase10a-named-entity-inspection.md): live capability
   discovery and the current explicit `unsupported` boundary.
+- [Rail Route control](023-rail-route-control.md): version-pinned macOS discovery, verified
+  pause/resume control, terminal usage, and semantic route-control gate.
 
 ## Product and implementation contracts
 
@@ -43,6 +45,7 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [013 — OpenTTD world observation](013-openttd-world-observation.md)
 - [014 — Gameplay analysis engine](014-gameplay-analysis-engine.md)
 - [018 — Answer-first product interaction](018-answer-first-product-interaction.md)
+- [023 — Rail Route terminal control](023-rail-route-control.md)
 
 The RFCs define public behavior. The implementation guides describe how to work with the current
 tree. When they disagree, update the guide or stop and resolve the contract conflict before changing

@@ -72,6 +72,24 @@ are evidence from specific milestones, not the current product contract.
   persistence and have no automatic retention, pruning, backup, or cross-machine transfer policy.
   Pre-Phase-9.1 sessions remain context-readable but require a rerun for typed inspection guidance.
 
+## Rail Route
+
+- The supported target is the Steam macOS build of Rail Route 2.3.24 in fullscreen-window mode.
+  Version changes fail closed until the screen contract is revalidated.
+- The verified action catalog contains only `pause` and `resume`; `status` is read-only. Natural
+  language is parsed deterministically and does not invoke a model.
+- Observation recognizes the selected pause, normal-speed, or accelerated-speed control from a
+  fresh screenshot. A menu, loading screen, disabled tutorial control, changed layout, unavailable
+  screen recording, or ambiguous recognition fails before input or fails verification without an
+  automatic retry.
+- Sim Pilot activates Rail Route and sends its Space binding through macOS Accessibility. It does
+  not inject code, modify the game installation, read process memory, or use an official game API.
+- Trains, signals, platforms, routes, schedules, construction, and contracts are not semantically
+  observable through the current boundary. Route-setting and all other gameplay actions are
+  explicitly unsupported.
+- The direct Rail Route control slice does not yet create durable runtime tasks or append lifecycle
+  events. It is a bounded capability proof for the terminal interaction, not delegated automation.
+
 ## Deferred decisions
 
 The following require product or operational direction rather than a documentation-only fix:
@@ -81,4 +99,5 @@ The following require product or operational direction rather than a documentati
 - security-scanner ownership and CI failure thresholds;
 - remote-service authentication, authorization, encryption, and tenant isolation;
 - further OpenTTD observation surfaces or actions beyond the two verified writes;
+- a stable semantic Rail Route observation/control bridge for named gameplay actions;
 - a managed retention policy for provider and evaluation recordings.

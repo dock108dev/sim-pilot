@@ -139,6 +139,8 @@ from sim_pilot.product_evaluation import (
 )
 from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.provider_support.codex_cli.errors import CodexCLIError
+from sim_pilot.rail_route import RailRouteController, RailRouteDiscovery, parse_control_intent
+from sim_pilot.rail_route.errors import RailRouteError
 from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
@@ -162,6 +164,7 @@ INVALID_INPUT = 20
 PERSISTENCE_FAILURE = 21
 MIGRATION_FAILURE = 22
 OPENTTD_FAILURE = 23
+RAIL_ROUTE_FAILURE = 24
 
 app = typer.Typer(help="Durable local runtime for the deterministic reference simulation.")
 db_app = typer.Typer(help="Manage durable schema state.")
@@ -174,11 +177,13 @@ openttd_action_app = typer.Typer(help="Run a directly validated and verified Ope
 openttd_bridge_app = typer.Typer(help="Operate the versioned OpenTTD GameScript bridge.")
 openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled bridge action.")
 evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation exercises.")
+rail_route_app = typer.Typer(help="Control a local Rail Route game with verified plain English.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
 app.add_typer(analysis_app, name="analysis")
 app.add_typer(evaluate_app, name="evaluate")
+app.add_typer(rail_route_app, name="rail-route")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_analyze_app, name="analyze")
 openttd_app.add_typer(openttd_bridge_app, name="bridge")
@@ -434,6 +439,71 @@ def _emit(value: object) -> None:
 def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
     typer.echo(f"error[{type(error).__name__}]: {error}", err=True)
     raise typer.Exit(code)
+
+
+def _rail_route_controller() -> RailRouteController:
+    return RailRouteController()
+
+
+@rail_route_app.command("doctor")
+def rail_route_doctor() -> None:
+    """Inspect the installed game, running process, version, and permissions."""
+    try:
+        _emit(RailRouteDiscovery().inspect())
+    except RailRouteError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_app.command("status")
+def rail_route_status(
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit the typed observation.")
+    ] = False,
+) -> None:
+    """Observe the live game without sending input."""
+    try:
+        observation = _rail_route_controller().observe()
+        _emit(observation) if json_output else typer.echo(
+            f"Rail Route {observation.installation.version}: {observation.screen_state.value}"
+        )
+    except RailRouteError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_app.command("do")
+def rail_route_do(
+    instruction: Annotated[str, typer.Argument(help="Plain-English Rail Route instruction.")],
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit the typed control result.")
+    ] = False,
+) -> None:
+    """Validate, execute at most one input, then verify the effect."""
+    try:
+        result = _rail_route_controller().execute(parse_control_intent(instruction))
+        _emit(result) if json_output else typer.echo(result.message)
+    except RailRouteError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_app.command("play")
+def rail_route_play() -> None:
+    """Run an interactive, capability-gated Rail Route control session."""
+    controller = _rail_route_controller()
+    typer.echo("Sim Pilot Rail Route — verified actions: status, pause, resume")
+    typer.echo("Type quit to leave the session.")
+    while True:
+        try:
+            instruction = typer.prompt("rail-route")
+        except (EOFError, KeyboardInterrupt):
+            typer.echo("")
+            return
+        if instruction.strip().lower() in {"exit", "quit"}:
+            return
+        try:
+            result = controller.execute(parse_control_intent(instruction))
+            typer.echo(result.message)
+        except RailRouteError as error:
+            typer.echo(f"error[{type(error).__name__}]: {error}", err=True)
 
 
 def _openttd_adapter(

@@ -3,7 +3,8 @@
 Sim Pilot is a local Python runtime that converts natural-language objectives into validated,
 verified actions against deterministic simulations. It includes a reference simulation, durable
 SQLite task execution, explicit OpenAI and authenticated Codex CLI providers, and a bounded
-OpenTTD 15.3 integration.
+OpenTTD 15.3 integration. A version-pinned macOS Rail Route control slice supports verified
+pause/resume commands from a plain-English terminal session.
 
 The runtime executes one action per cycle and treats every model-produced decision as untrusted
 until deterministic policy and adapter validation succeed. Model-backed providers and live-game
@@ -108,13 +109,32 @@ Codex or OpenAI compilation and explanation are optional and must be selected ex
 freshness, evidence drill-down, and limitations. Named client-window inspection currently returns
 `unsupported` because the proven OpenTTD boundary has no verifiable viewport postcondition.
 
+## Control Rail Route
+
+Rail Route 2.3.24 on macOS can be observed and paused or resumed through its own Space binding.
+Sim Pilot validates that an active single-player game view is visible, sends at most one input,
+then verifies the selected time control from a new screen observation:
+
+```bash
+uv run sim-pilot rail-route doctor
+uv run sim-pilot rail-route status
+uv run sim-pilot rail-route do "pause the game"
+uv run sim-pilot rail-route do "resume the game"
+uv run sim-pilot rail-route play
+```
+
+The interactive prompt accepts plain-English status, pause, and resume instructions. Named trains,
+signals, platforms, and route-setting remain unsupported until the game exposes a semantic identity
+and independently verifiable postcondition. See the
+[Rail Route control guide](docs/023-rail-route-control.md).
+
 ## Architecture at a glance
 
 ```text
 CLI -> Runtime -> Domain <- Adapters
         |                  |
         v                  v
-   Persistence       Simulation / OpenTTD
+   Persistence       Simulation / OpenTTD / Rail Route
 ```
 
 - `sim_pilot.domain` owns strict public models.

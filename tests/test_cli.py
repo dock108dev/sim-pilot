@@ -35,12 +35,15 @@ from sim_pilot.provider_support.codex_cli.errors import (
     CodexCLIExecutableNotFoundError,
     CodexCLIUnauthenticatedError,
 )
+from sim_pilot.rail_route import RailRouteController
+from sim_pilot.rail_route.models import RailRouteScreenState
 from sim_pilot.runtime.decision_context import DecisionContext, DecisionProviderResult
 from sim_pilot.runtime.decision_errors import DecisionProviderUnavailableError
 from tests.analysis.helpers import snapshot as analysis_snapshot
 from tests.intent_compiler.helpers import response, valid_specification
 from tests.openttd.gamescript.helpers import capabilities, snapshot
 from tests.openttd.helpers import FakeOpenTTDClient, state
+from tests.rail_route.test_control import observation as rail_route_observation
 
 
 def test_database_create_run_show_events_and_cancel(tmp_path: Path) -> None:
@@ -78,6 +81,38 @@ def test_database_create_run_show_events_and_cancel(tmp_path: Path) -> None:
     assert "action_prepared" in events.output
     cancelled = runner.invoke(app, [*prefix, "task", "cancel", str(task_id)])
     assert cancelled.exit_code == 0
+
+
+def test_rail_route_plain_english_pause_is_verified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observations = iter(
+        [
+            rail_route_observation(RailRouteScreenState.RUNNING),
+            rail_route_observation(RailRouteScreenState.PAUSED),
+        ]
+    )
+    controller = RailRouteController(
+        observe=lambda: next(observations),
+        send_pause_toggle=lambda: None,
+        verification_interval_seconds=0,
+    )
+    monkeypatch.setattr("sim_pilot.cli._rail_route_controller", lambda: controller)
+
+    result = CliRunner().invoke(app, ["rail-route", "do", "pause the game"])
+
+    assert result.exit_code == 0, result.output
+    assert "effect verified" in result.output
+
+
+def test_rail_route_route_instruction_fails_closed() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["rail-route", "do", "route train 12 to platform 2"],
+    )
+
+    assert result.exit_code == 24
+    assert "route-setting is not enabled" in result.output
 
 
 def test_compile_and_create_from_instruction(
