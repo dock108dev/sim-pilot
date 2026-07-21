@@ -1,6 +1,5 @@
 """Validate, execute once, re-observe, and verify Rail Route controls."""
 
-import subprocess
 import time
 from collections.abc import Callable
 
@@ -9,6 +8,7 @@ from sim_pilot.rail_route.errors import (
     RailRouteObservationError,
     RailRouteVerificationError,
 )
+from sim_pilot.rail_route.macos import activate_rail_route, send_space_key
 from sim_pilot.rail_route.models import (
     RailRouteAction,
     RailRouteControlResult,
@@ -102,21 +102,8 @@ class RailRouteController:
 
 
 def _send_space() -> None:
-    completed = subprocess.run(
-        [
-            "osascript",
-            "-e",
-            'tell application "Rail Route" to activate',
-            "-e",
-            "delay 0.2",
-            "-e",
-            'tell application "System Events" to key code 49',
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        raise RailRouteObservationError(
-            completed.stderr.strip() or "unable to send the Rail Route pause binding"
-        )
+    try:
+        activate_rail_route()
+        send_space_key()
+    except RuntimeError as error:
+        raise RailRouteObservationError(str(error)) from error

@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from sim_pilot.rail_route.errors import RailRouteDiscoveryError
+from sim_pilot.rail_route.macos import accessibility_trusted
 from sim_pilot.rail_route.models import RailRouteInstallation
 
 SUPPORTED_VERSION = "2.3.24"
@@ -79,20 +80,5 @@ class RailRouteDiscovery:
 
     @staticmethod
     def _accessibility_enabled() -> bool:
-        """Prove System Events can inspect Rail Route from this terminal host.
-
-        The legacy ``UI elements enabled`` property is global and can report false even when the
-        responsible terminal application is present and enabled in macOS Accessibility settings.
-        Exercise the exact process boundary used by the controller instead.
-        """
-        completed = subprocess.run(
-            [
-                "osascript",
-                "-e",
-                'tell application "System Events" to tell process "Rail Route" to count windows',
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        return completed.returncode == 0 and completed.stdout.strip().isdigit()
+        """Read the native per-process Accessibility trust decision."""
+        return accessibility_trusted()

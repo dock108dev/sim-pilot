@@ -10,6 +10,7 @@ from PIL import Image
 
 from sim_pilot.rail_route.discovery import RailRouteDiscovery
 from sim_pilot.rail_route.errors import RailRouteObservationError
+from sim_pilot.rail_route.macos import activate_rail_route
 from sim_pilot.rail_route.models import RailRouteObservation, RailRouteScreenState
 
 _YELLOW_RED_MINIMUM = 180
@@ -64,16 +65,10 @@ class RailRouteScreenObserver:
 
     @staticmethod
     def _activate() -> None:
-        completed = subprocess.run(
-            ["osascript", "-e", 'tell application "Rail Route" to activate', "-e", "delay 0.2"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            raise RailRouteObservationError(
-                completed.stderr.strip() or "unable to activate Rail Route"
-            )
+        try:
+            activate_rail_route()
+        except RuntimeError as error:
+            raise RailRouteObservationError(str(error)) from error
 
 
 def _yellow_score(image: Image.Image, bounds: tuple[float, float, float, float]) -> int:
