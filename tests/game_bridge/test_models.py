@@ -20,6 +20,22 @@ from sim_pilot.game_bridge.models import (
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "game_bridge" / "v2"
 
 
+def _v3_fixture(name: str) -> bytes:
+    value = json.loads((FIXTURES / name).read_text())
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    if name == "client_hello.json":
+        value["payload"]["requested_protocol_version"] = 3
+        value["payload"]["expected_adapter_version"] = "rail-route-ui-observer-v1"
+    elif name == "bridge_hello.json":
+        value["payload"]["negotiated_protocol_version"] = 3
+    elif name == "capability_manifest.json":
+        value["payload"]["gameplay_actions"] = []
+    elif name == "full_snapshot_response.json":
+        value["payload"]["snapshot"]["adapter_version"] = "rail-route-ui-observer-v1"
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
 @pytest.mark.parametrize(
     "name,message_type",
     [
@@ -27,15 +43,13 @@ FIXTURES = Path(__file__).parents[1] / "fixtures" / "game_bridge" / "v2"
         ("bridge_hello.json", MessageType.BRIDGE_HELLO),
         ("capability_manifest.json", MessageType.CAPABILITY_MANIFEST),
         ("full_snapshot_response.json", MessageType.FULL_SNAPSHOT_RESPONSE),
-        ("set_route_request.json", MessageType.SET_ROUTE_REQUEST),
-        ("set_route_response.json", MessageType.SET_ROUTE_RESPONSE),
         ("protocol_error.json", MessageType.PROTOCOL_ERROR),
     ],
 )
 def test_cross_language_golden_fixtures_are_strict_and_canonical(
     name: str, message_type: MessageType
 ) -> None:
-    raw = (FIXTURES / name).read_bytes().strip()
+    raw = _v3_fixture(name)
     parsed = parse_envelope(raw)
 
     assert parsed.message_type is message_type
@@ -43,7 +57,7 @@ def test_cross_language_golden_fixtures_are_strict_and_canonical(
 
 
 def test_unknown_missing_wrong_type_and_unknown_message_fail_closed() -> None:
-    raw = json.loads((FIXTURES / "bridge_hello.json").read_text())
+    raw = json.loads(_v3_fixture("bridge_hello.json"))
     with pytest.raises(ValidationError):
         BridgeEnvelope.model_validate({**raw, "unknown": True}, strict=True)
     missing = {key: value for key, value in raw.items() if key != "game_id"}
@@ -56,11 +70,11 @@ def test_unknown_missing_wrong_type_and_unknown_message_fail_closed() -> None:
 
 
 def test_payload_type_and_required_correlation_fail_closed() -> None:
-    raw = json.loads((FIXTURES / "bridge_hello.json").read_text())
+    raw = json.loads(_v3_fixture("bridge_hello.json"))
     raw["payload"] = {"healthy": True, "detail": None}
     with pytest.raises(ValidationError, match="BridgeHelloPayload"):
         parse_envelope(json.dumps(raw).encode())
-    raw = json.loads((FIXTURES / "bridge_hello.json").read_text())
+    raw = json.loads(_v3_fixture("bridge_hello.json"))
     raw["correlation_id"] = None
     with pytest.raises(ValidationError, match="correlation"):
         parse_envelope(json.dumps(raw).encode())
@@ -84,9 +98,12 @@ def test_identity_and_coverage_semantics_are_explicit() -> None:
         )
 
 
-def test_action_catalog_is_exact_and_surfaces_are_deterministic() -> None:
-    with pytest.raises(ValidationError, match="only gameplay action"):
-        CapabilityManifestPayload(observation_surfaces=("game_state",), gameplay_actions=("pause",))
+def test_action_catalog_is_empty_and_surfaces_are_deterministic() -> None:
+    with pytest.raises(ValidationError, match="at most 0"):
+        CapabilityManifestPayload.model_validate(
+            {"observation_surfaces": ("game_state",), "gameplay_actions": ("pause",)},
+            strict=True,
+        )
     with pytest.raises(ValidationError, match="sorted"):
         CapabilityManifestPayload(observation_surfaces=("trains", "game_state"))
 

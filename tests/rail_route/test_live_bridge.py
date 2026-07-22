@@ -26,7 +26,7 @@ async def _exercise_live_bridge() -> None:
         first = await client.request_full_snapshot()
         bridge_id = first.bridge_instance_id
         session_id = first.game_session_id
-        assert capabilities.gameplay_actions == ("set_route",)
+        assert capabilities.gameplay_actions == ()
         assert first.game_id == "rail-route"
         assert first.game_version == "2.3.24"
         game_state = next(

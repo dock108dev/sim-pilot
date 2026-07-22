@@ -1,6 +1,6 @@
 # ADR-018: Atomic Rail Route `set_route`
 
-**Status:** Accepted
+**Status:** Superseded by ADR-019; retained as experimental evidence
 
 **Date:** 2026-07-21
 
@@ -26,6 +26,10 @@ name exists) and validates play mode, signal support, existing route/lock/occupa
 path, path occupancy/allocation, and Rail Route's public routability predicate. It invokes one typed
 route-creation method once. It exposes no arbitrary method name or argument list.
 
+Topology enumeration permits non-free nodes only so discovery cannot misreport a UI route preview
+as missing topology. Sim Pilot then rejects every occupied or allocated node explicitly and calls
+Rail Route's strict public routability predicate before submission.
+
 The client then captures a fresh snapshot and accepts success only if identities are continuous,
 the expected route/allocation appears exactly once, and unrelated active routes are unchanged. An
 executed request that cannot be verified is reported as an error and is never retried.
@@ -38,3 +42,9 @@ executed request that cannot be verified is reported as an error and is never re
 - Protocol v1 clients and the v1 read-only adapter are intentionally incompatible with this
   authority boundary.
 - Live promotion requires one disposable Test Yard proof; Prague observation is insufficient.
+
+## Supersession
+
+Live attempts were rejected before mutation and showed that direct method invocation was not the
+right production boundary. ADR-019 retains the topology findings but moves actuation to the normal
+player-visible UI. Protocol v3 removes this request from the installed bridge.

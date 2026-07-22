@@ -19,7 +19,7 @@ from sim_pilot.game_bridge import (
 from .errors import RailRouteBridgeCompatibilityError
 from .installer import DEFAULT_STATE_DIRECTORY
 
-RAIL_ROUTE_ADAPTER_VERSION = "rail-route-set-route-v1"
+RAIL_ROUTE_ADAPTER_VERSION = "rail-route-ui-observer-v1"
 RAIL_ROUTE_GAME_ID = "rail-route"
 RAIL_ROUTE_GAME_VERSION = "2.3.24"
 DEFAULT_PORT = 18461

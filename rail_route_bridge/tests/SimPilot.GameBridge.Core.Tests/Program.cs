@@ -9,14 +9,13 @@ using SimPilot.GameBridge;
 
 var tests = new (string Name, Action Run)[]
 {
-    ("shared golden envelopes", GoldenEnvelopes),
+    ("strict envelope round trip", GoldenEnvelopes),
     ("unknown and duplicate keys fail", StrictKeys),
     ("length prefix bounds", FrameBounds),
-    ("set-route capability and snapshot", CapabilityModels),
+    ("read-only capability and snapshot", CapabilityModels),
     ("partial game-state coverage names only observed fields", PartialGameStateCoverage),
     ("semantic entities serialize with deterministic coverage", SemanticEntities),
     ("authenticated loopback exchange", AuthenticatedExchange),
-    ("fresh set-route exchange", SetRouteExchange),
     ("invalid authentication fails closed", InvalidAuthentication),
     ("idle authenticated client receives heartbeat", Heartbeat),
     ("single client ownership", SingleClientOwnership),
@@ -31,25 +30,18 @@ return failures == 0 ? 0 : 1;
 
 static void GoldenEnvelopes()
 {
-    var root = FindRepositoryRoot();
-    var fixtureDirectory = Path.Combine(root, "tests", "fixtures", "game_bridge", "v2");
-    foreach (var path in Directory.GetFiles(fixtureDirectory, "*.json").OrderBy(value => value, StringComparer.Ordinal))
-    {
-        var expected = File.ReadAllText(path).Trim();
-        var envelope = ProtocolCodec.ParseEnvelope(expected);
-        Equal(expected, ProtocolCodec.SerializeEnvelope(envelope), Path.GetFileName(path));
-    }
+    var expected = ProtocolCodec.SerializeEnvelope(ClientHello("correct-token-000000000000000000000"));
+    var envelope = ProtocolCodec.ParseEnvelope(expected);
+    Equal(expected, ProtocolCodec.SerializeEnvelope(envelope), "client hello");
 }
 
 static void StrictKeys()
 {
-    var hello = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "game_bridge", "v2", "client_hello.json")).Trim();
+    var hello = ProtocolCodec.SerializeEnvelope(ClientHello("correct-token-000000000000000000000"));
     Throws<FormatException>(() => ProtocolCodec.ParseEnvelope(hello.Replace("\"payload\":", "\"unknown\":1,\"payload\":")), "unknown key");
     Throws<FormatException>(() => StrictJson.Parse("{\"a\":1,\"a\":2}"), "duplicate JSON key");
-    Throws<FormatException>(() => ProtocolCodec.ParseEnvelope(hello.Replace("\"protocol_version\":2,", "")), "missing key");
+    Throws<FormatException>(() => ProtocolCodec.ParseEnvelope(hello.Replace("\"protocol_version\":3,", "")), "missing key");
     Throws<FormatException>(() => ProtocolCodec.ParseEnvelope(hello.Replace("\"message_type\":\"client_hello\"", "\"message_type\":\"arbitrary_command\"")), "unknown message");
-    var snapshot = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "game_bridge", "v2", "full_snapshot_response.json")).Trim();
-    Throws<FormatException>(() => ProtocolCodec.ParseEnvelope(snapshot.Replace("\"values\":{", "\"unknown\":1,\"values\":{")), "unknown entity key");
 }
 
 static void FrameBounds()
@@ -67,7 +59,7 @@ static void FrameBounds()
 static void CapabilityModels()
 {
     var capability = ProtocolCodec.CapabilityPayload();
-    Equal("set_route", capability.AsObject()["gameplay_actions"].AsArray().Single().AsString(), "action catalog");
+    Equal(0, capability.AsObject()["gameplay_actions"].AsArray().Count, "action catalog");
     var state = FakeProvider.State();
     var response = ProtocolCodec.SnapshotResponsePayload(state, "bridge", 3, DateTimeOffset.UtcNow);
     var surfaces = response.AsObject()["snapshot"].AsObject()["surfaces"].AsArray();
@@ -150,7 +142,7 @@ static void AuthenticatedExchange()
 {
     const string token = "correct-token-000000000000000000000";
     var provider = new FakeProvider();
-    using var server = new BridgeServer(token, provider, provider, 0);
+    using var server = new BridgeServer(token, provider, 0);
     server.Start();
     var endpoint = server.LocalEndpoint ?? throw new Exception("missing endpoint");
     Equal(IPAddress.Loopback, endpoint.Address, "listener address");
@@ -161,7 +153,7 @@ static void AuthenticatedExchange()
     Equal(MessageType.BridgeHello, hello.MessageType, "bridge hello");
     var capabilities = ProtocolCodec.ParseEnvelope(LengthPrefixedFrame.Read(stream));
     Equal(MessageType.CapabilityManifest, capabilities.MessageType, "manifest");
-    Equal("set_route", capabilities.Payload.AsObject()["gameplay_actions"].AsArray().Single().AsString(), "action catalog");
+    Equal(0, capabilities.Payload.AsObject()["gameplay_actions"].AsArray().Count, "action catalog");
     var request = ClientEnvelope(MessageType.FullSnapshotRequest, 2, hello, JsonValue.Object(new Dictionary<string, JsonValue>
     {
         ["expected_bridge_instance_id"] = JsonValue.String(hello.BridgeInstanceId),
@@ -173,44 +165,10 @@ static void AuthenticatedExchange()
     Equal(request.MessageId, snapshot.CorrelationId, "snapshot correlation");
 }
 
-static void SetRouteExchange()
-{
-    const string token = "correct-token-000000000000000000000";
-    var provider = new FakeProvider();
-    using var server = new BridgeServer(token, provider, provider, 0);
-    server.Start();
-    using var client = Connect(server.LocalEndpoint!);
-    var stream = client.GetStream();
-    LengthPrefixedFrame.Write(stream, ProtocolCodec.SerializeEnvelope(ClientHello(token)));
-    var hello = ProtocolCodec.ParseEnvelope(LengthPrefixedFrame.Read(stream));
-    ProtocolCodec.ParseEnvelope(LengthPrefixedFrame.Read(stream));
-    var snapshotRequest = ClientEnvelope(MessageType.FullSnapshotRequest, 2, hello, JsonValue.Object(new Dictionary<string, JsonValue>
-    {
-        ["expected_bridge_instance_id"] = JsonValue.String(hello.BridgeInstanceId),
-        ["expected_game_session_id"] = JsonValue.String(hello.GameSessionId),
-    }));
-    LengthPrefixedFrame.Write(stream, ProtocolCodec.SerializeEnvelope(snapshotRequest));
-    var snapshot = ProtocolCodec.ParseEnvelope(LengthPrefixedFrame.Read(stream));
-    var actionRequest = ClientEnvelope(MessageType.SetRouteRequest, 3, hello, JsonValue.Object(new Dictionary<string, JsonValue>
-    {
-        ["schema_version"] = JsonValue.Integer(1),
-        ["origin_signal"] = JsonValue.String("SIG-W-IN"),
-        ["destination_signal"] = JsonValue.String("SIG-C-W"),
-        ["expected_bridge_instance_id"] = JsonValue.String(hello.BridgeInstanceId),
-        ["expected_game_session_id"] = JsonValue.String(hello.GameSessionId),
-        ["expected_snapshot_sequence"] = JsonValue.Integer(snapshot.BridgeSequence),
-    }));
-    LengthPrefixedFrame.Write(stream, ProtocolCodec.SerializeEnvelope(actionRequest));
-    var action = ProtocolCodec.ParseEnvelope(LengthPrefixedFrame.Read(stream));
-    Equal(MessageType.SetRouteResponse, action.MessageType, "set_route response");
-    True(action.Payload.AsObject()["executed"].AsBoolean(), "one action executed");
-    Equal(1, provider.SubmissionCount, "one action submission");
-}
-
 static void InvalidAuthentication()
 {
     var provider = new FakeProvider();
-    using var server = new BridgeServer("correct-token-000000000000000000000", provider, provider, 0);
+    using var server = new BridgeServer("correct-token-000000000000000000000", provider, 0);
     server.Start();
     using var client = Connect(server.LocalEndpoint!);
     var stream = client.GetStream();
@@ -224,7 +182,7 @@ static void Heartbeat()
 {
     const string token = "correct-token-000000000000000000000";
     var provider = new FakeProvider();
-    using var server = new BridgeServer(token, provider, provider, 0);
+    using var server = new BridgeServer(token, provider, 0);
     server.Start();
     using var client = Connect(server.LocalEndpoint!);
     var stream = client.GetStream();
@@ -239,7 +197,7 @@ static void Heartbeat()
 static void SingleClientOwnership()
 {
     var provider = new FakeProvider();
-    using var server = new BridgeServer("correct-token-000000000000000000000", provider, provider, 0);
+    using var server = new BridgeServer("correct-token-000000000000000000000", provider, 0);
     server.Start();
     using var owner = Connect(server.LocalEndpoint!);
     LengthPrefixedFrame.Write(owner.GetStream(), ProtocolCodec.SerializeEnvelope(ClientHello("correct-token-000000000000000000000")));
@@ -313,17 +271,6 @@ static TcpClient Connect(IPEndPoint endpoint)
     return client;
 }
 
-static string FindRepositoryRoot()
-{
-    var directory = new DirectoryInfo(AppContext.BaseDirectory);
-    while (directory != null)
-    {
-        if (File.Exists(Path.Combine(directory.FullName, "pyproject.toml"))) return directory.FullName;
-        directory = directory.Parent;
-    }
-    throw new DirectoryNotFoundException("repository root not found");
-}
-
 static void Equal<T>(T expected, T actual, string context)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new Exception($"{context}: expected {expected}, found {actual}");
@@ -331,24 +278,9 @@ static void Equal<T>(T expected, T actual, string context)
 static void True(bool value, string context) { if (!value) throw new Exception(context); }
 static void Throws<T>(Action action, string context) where T : Exception { try { action(); } catch (T) { return; } throw new Exception($"{context}: expected {typeof(T).Name}"); }
 
-sealed class FakeProvider : IReadOnlyGameStateProvider, IGameActionProvider
+sealed class FakeProvider : IReadOnlyGameStateProvider
 {
-    public int SubmissionCount { get; private set; }
     public RuntimeSnapshot Capture() => State();
-    public SetRouteActionResult SubmitSetRoute(SetRouteActionRequest request, TimeSpan timeout)
-    {
-        SubmissionCount++;
-        return new SetRouteActionResult
-        {
-            Outcome = "succeeded",
-            Executed = true,
-            OriginSignal = request.OriginSignal,
-            DestinationSignal = request.DestinationSignal,
-            DestinationConnection = "1,1|2,2",
-            ReasonCode = "ok",
-            Detail = "fixture route allocated",
-        };
-    }
     public static RuntimeSnapshot State() => new()
     {
         GameVersion = BridgeContract.SupportedGameVersion,

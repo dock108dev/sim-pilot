@@ -26,36 +26,3 @@ public sealed class ObservationSurfaceState
         Detail = detail,
     };
 }
-
-public sealed class SetRouteActionRequest
-{
-    public string OriginSignal { get; set; } = string.Empty;
-    public string DestinationSignal { get; set; } = string.Empty;
-    public string ExpectedBridgeInstanceId { get; set; } = string.Empty;
-    public string ExpectedGameSessionId { get; set; } = string.Empty;
-    public long ExpectedSnapshotSequence { get; set; }
-}
-
-public sealed class SetRouteActionResult
-{
-    public string Outcome { get; set; } = "rejected";
-    public bool Executed { get; set; }
-    public string OriginSignal { get; set; } = string.Empty;
-    public string DestinationSignal { get; set; } = string.Empty;
-    public string? DestinationConnection { get; set; }
-    public string ReasonCode { get; set; } = "internal_error";
-    public string Detail { get; set; } = "route request failed closed";
-
-    public static SetRouteActionResult Rejected(SetRouteActionRequest request, string reasonCode, string detail) => new()
-    {
-        OriginSignal = request.OriginSignal,
-        DestinationSignal = request.DestinationSignal,
-        ReasonCode = reasonCode,
-        Detail = detail,
-    };
-}
-
-public interface IGameActionProvider
-{
-    SetRouteActionResult SubmitSetRoute(SetRouteActionRequest request, TimeSpan timeout);
-}

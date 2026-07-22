@@ -79,10 +79,11 @@ target. The token is generated during explicit installation and is not supplied 
 | `SIM_PILOT_RAIL_ROUTE_BRIDGE_TOKEN_FILE` | platform owner-data directory | Owner-only random authentication token shared by client and plugin. |
 | `SIM_PILOT_RAIL_ROUTE_BRIDGE_CONNECTION_TIMEOUT_SECONDS` | `5` | Positive connect and handshake timeout. |
 | `SIM_PILOT_RAIL_ROUTE_BRIDGE_READ_TIMEOUT_SECONDS` | `5` | Positive framed-message read timeout. |
-| `SIM_PILOT_RAIL_ROUTE_BRIDGE_MAXIMUM_MESSAGE_BYTES` | `1048576` | Positive limit no greater than the protocol-v2 ceiling. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_MAXIMUM_MESSAGE_BYTES` | `1048576` | Positive limit no greater than the protocol-v3 ceiling. |
 
-There is no general Rail Route bridge write flag. Game Bridge Protocol v2 advertises exactly
-`set_route`; configuration cannot widen the catalog, enable retries, or expose arbitrary methods.
+There is no Rail Route bridge write flag. Game Bridge Protocol v3 has an empty action catalog;
+configuration cannot widen it, enable retries, or expose arbitrary methods. UI capability is
+restricted in code to the canonical Test Yard.
 
 ## Opt-in live-test gates
 

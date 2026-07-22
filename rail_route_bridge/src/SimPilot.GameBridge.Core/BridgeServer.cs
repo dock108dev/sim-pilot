@@ -13,7 +13,6 @@ public sealed class BridgeServer : IDisposable
 {
     private readonly string authenticationToken;
     private readonly IReadOnlyGameStateProvider stateProvider;
-    private readonly IGameActionProvider actionProvider;
     private readonly TcpListener listener;
     private readonly string bridgeInstanceId = Guid.NewGuid().ToString("D");
     private readonly HashSet<string> messageIds = new(StringComparer.Ordinal);
@@ -22,13 +21,12 @@ public sealed class BridgeServer : IDisposable
     private int activeClient;
     private long sequence;
 
-    public BridgeServer(string authenticationToken, IReadOnlyGameStateProvider stateProvider, IGameActionProvider actionProvider, int port = BridgeContract.DefaultPort)
+    public BridgeServer(string authenticationToken, IReadOnlyGameStateProvider stateProvider, int port = BridgeContract.DefaultPort)
     {
         if (string.IsNullOrWhiteSpace(authenticationToken) || Encoding.UTF8.GetByteCount(authenticationToken) < 32)
             throw new ArgumentException("authentication token must contain at least 32 UTF-8 bytes", nameof(authenticationToken));
         this.authenticationToken = authenticationToken;
         this.stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
-        this.actionProvider = actionProvider ?? throw new ArgumentNullException(nameof(actionProvider));
         listener = new TcpListener(IPAddress.Loopback, port);
     }
 
@@ -128,7 +126,6 @@ public sealed class BridgeServer : IDisposable
         }
         SendHelloAndCapabilities(stream, hello.MessageId);
         var lastClientSequence = hello.BridgeSequence;
-        long? lastSnapshotSequence = null;
         while (!stopping && client.Connected)
         {
             Envelope request;
@@ -178,28 +175,7 @@ public sealed class BridgeServer : IDisposable
                     SendError(stream, request.MessageId, "stale_identity", "snapshot identity is stale; resynchronize", false);
                     return;
                 }
-                lastSnapshotSequence = SendSnapshot(stream, request.MessageId, state);
-            }
-            else if (request.MessageType == MessageType.SetRouteRequest)
-            {
-                var payload = request.Payload.AsObject();
-                var action = new SetRouteActionRequest
-                {
-                    OriginSignal = payload["origin_signal"].AsString(),
-                    DestinationSignal = payload["destination_signal"].AsString(),
-                    ExpectedBridgeInstanceId = payload["expected_bridge_instance_id"].AsString(),
-                    ExpectedGameSessionId = payload["expected_game_session_id"].AsString(),
-                    ExpectedSnapshotSequence = (long)payload["expected_snapshot_sequence"].AsNumber(),
-                };
-                SetRouteActionResult result;
-                if (action.ExpectedBridgeInstanceId != bridgeInstanceId || action.ExpectedGameSessionId != currentState.GameSessionId)
-                    result = SetRouteActionResult.Rejected(action, "stale_identity", "action identity does not match the synchronized bridge session");
-                else if (!lastSnapshotSequence.HasValue || lastSnapshotSequence.Value != action.ExpectedSnapshotSequence)
-                    result = SetRouteActionResult.Rejected(action, "stale_snapshot", "set_route requires the latest full snapshot on this connection");
-                else
-                    result = actionProvider.SubmitSetRoute(action, TimeSpan.FromSeconds(2));
-                Send(stream, MessageType.SetRouteResponse, request.MessageId, ProtocolCodec.SetRouteResponsePayload(result));
-                lastSnapshotSequence = null;
+                SendSnapshot(stream, request.MessageId, state);
             }
             else if (request.MessageType == MessageType.ResynchronizationRequest) SendHelloAndCapabilities(stream, request.MessageId);
             else { SendError(stream, request.MessageId, "unknown_message_type", "message is not accepted from a client", false); return; }

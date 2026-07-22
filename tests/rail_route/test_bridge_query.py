@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -13,9 +14,13 @@ from sim_pilot.rail_route.bridge import (
 
 
 def _snapshot():
-    envelope = parse_envelope(
-        Path("tests/fixtures/game_bridge/v2/full_snapshot_response.json").read_bytes()
+    value = json.loads(
+        Path("tests/fixtures/game_bridge/v2/full_snapshot_response.json").read_text()
     )
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    value["payload"]["snapshot"]["adapter_version"] = "rail-route-ui-observer-v1"
+    envelope = parse_envelope(json.dumps(value).encode())
     assert isinstance(envelope.payload, FullSnapshotResponsePayload)
     return envelope.payload.snapshot
 

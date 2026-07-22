@@ -37,10 +37,8 @@ async def prove_read_only_bridge(*, user_data: Path = DEFAULT_USER_DATA) -> Brid
     paused = first.game_state.get("paused") is True and second.game_state.get("paused") is True
     if not paused:
         reasons.append("game must remain paused for a deterministic non-mutation proof")
-    if capabilities.gameplay_actions != ("set_route",) or second_capabilities.gameplay_actions != (
-        "set_route",
-    ):
-        reasons.append("bridge action catalog was not exactly set_route")
+    if capabilities.gameplay_actions or second_capabilities.gameplay_actions:
+        reasons.append("read-only bridge gameplay-action catalog was not empty")
     if first.bridge_instance_id != second.bridge_instance_id:
         reasons.append("bridge instance changed between observations")
     if first.game_session_id != second.game_session_id:

@@ -1,4 +1,4 @@
-"""Game-neutral Sim Pilot Game Bridge Protocol v2."""
+"""Game-neutral Sim Pilot read-only Game Bridge Protocol v3."""
 
 from sim_pilot.game_bridge.client import ClientState, GameBridgeClient, GameBridgeConfiguration
 from sim_pilot.game_bridge.errors import (
@@ -27,7 +27,6 @@ from sim_pilot.game_bridge.models import (
     ObservationSurface,
     ObservedEntity,
     Platform,
-    SetRouteResponsePayload,
     parse_envelope,
 )
 
@@ -58,6 +57,5 @@ __all__ = [
     "ObservationSurface",
     "ObservedEntity",
     "Platform",
-    "SetRouteResponsePayload",
     "parse_envelope",
 ]

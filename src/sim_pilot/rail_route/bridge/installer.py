@@ -235,7 +235,7 @@ class RailRouteBridgeInstaller:
             changed=True,
             game_root=self.game_root,
             affected_files=tuple(record.relative_path for record in records),
-            message="installed pinned BepInEx loader and atomic set_route Rail Route bridge",
+            message="installed pinned BepInEx loader and read-only UI-observer bridge",
         )
 
     def _upgrade_owned_plugin(
@@ -294,7 +294,9 @@ class RailRouteBridgeInstaller:
             changed=True,
             game_root=self.game_root,
             affected_files=(str(PLUGIN_RELATIVE_PATH),),
-            message="upgraded verified owned plugin to the atomic set_route bridge and enabled it",
+            message=(
+                "upgraded verified owned plugin to the read-only UI-observer bridge and enabled it"
+            ),
         )
 
     def verify(self) -> BridgeCompatibilityReport:

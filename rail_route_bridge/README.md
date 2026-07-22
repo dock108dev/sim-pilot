@@ -2,9 +2,9 @@
 
 This directory contains the game-neutral C# protocol/server core and the version-pinned Rail Route
 BepInEx plugin. The server binds IPv4 loopback, requires the owner-only token, accepts one client,
-enforces strict framing/schema/sequence rules, and advertises exactly one gameplay action:
-`set_route`. That action resolves public signal friendly names, performs deterministic interlocking
-preflight, submits one typed route request on the Unity main thread, and never retries.
+enforces strict framing/schema/sequence rules, and advertises an empty gameplay-action catalog.
+Player-visible UI input is implemented in Python; the bridge supplies read-only identity,
+preconditions, and postconditions.
 
 Run the package-free offline core/golden/integration suite:
 

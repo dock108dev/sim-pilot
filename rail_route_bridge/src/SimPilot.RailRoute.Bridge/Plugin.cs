@@ -17,7 +17,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.simpilot.railroute.bridge";
     public const string PluginName = "Sim Pilot Rail Route Bridge";
-    public const string PluginVersion = "2.0.0";
+    public const string PluginVersion = "3.0.0";
 
     private void Awake()
     {
@@ -34,7 +34,7 @@ public sealed class Plugin : BaseUnityPlugin
             startupStage = "read authentication token";
             var token = File.ReadAllText(tokenPath).Trim();
             startupStage = "create persistent runtime host";
-            hostObject = new GameObject("Sim Pilot Rail Route Set Route Bridge Runtime")
+            hostObject = new GameObject("Sim Pilot Rail Route UI Observer Bridge Runtime")
             {
                 hideFlags = HideFlags.HideAndDontSave,
             };
@@ -100,7 +100,7 @@ internal sealed class RailRouteBridgeRuntimeHost : MonoBehaviour
     {
         log = logger;
         stateProvider = new RailRouteStateProvider();
-        server = new BridgeServer(token, stateProvider, stateProvider, port);
+        server = new BridgeServer(token, stateProvider, port);
         server.Start();
         log.LogInfo($"Semantic bridge listening on {server.LocalEndpoint}.");
     }
@@ -109,7 +109,6 @@ internal sealed class RailRouteBridgeRuntimeHost : MonoBehaviour
     {
         try
         {
-            stateProvider?.ExecutePendingAction();
             stateProvider?.RefreshFromGame();
         }
         catch (Exception error)
@@ -127,12 +126,11 @@ internal sealed class RailRouteBridgeRuntimeHost : MonoBehaviour
     }
 }
 
-internal sealed class RailRouteStateProvider : IReadOnlyGameStateProvider, IGameActionProvider
+internal sealed class RailRouteStateProvider : IReadOnlyGameStateProvider
 {
     private readonly object sync = new();
     private RuntimeSnapshot current;
     private bool lastLoaded;
-    private PendingSetRoute? pendingAction;
 
     internal RailRouteStateProvider()
     {
@@ -209,112 +207,6 @@ internal sealed class RailRouteStateProvider : IReadOnlyGameStateProvider, IGame
                 Limitations = current.Limitations,
             };
         }
-    }
-
-    public SetRouteActionResult SubmitSetRoute(SetRouteActionRequest request, TimeSpan timeout)
-    {
-        var pending = new PendingSetRoute(request);
-        lock (sync)
-        {
-            if (pendingAction != null)
-                return SetRouteActionResult.Rejected(request, "action_busy", "another gameplay action is already pending");
-            pendingAction = pending;
-        }
-        if (pending.Completed.Wait(timeout)) return pending.Result!;
-        lock (sync)
-        {
-            if (ReferenceEquals(pendingAction, pending)) pendingAction = null;
-            pending.Cancelled = true;
-        }
-        return SetRouteActionResult.Rejected(request, "action_timeout", "the Unity main thread did not accept the action before its deadline");
-    }
-
-    internal void ExecutePendingAction()
-    {
-        PendingSetRoute? pending;
-        lock (sync)
-        {
-            pending = pendingAction;
-            pendingAction = null;
-            if (pending == null || pending.Cancelled) return;
-        }
-        try
-        {
-            pending.Result = ExecuteSetRoute(pending.Request);
-            RefreshFromGame();
-        }
-        catch (Exception error)
-        {
-            pending.Result = SetRouteActionResult.Rejected(pending.Request, "internal_error", $"set_route failed closed before verification: {error.GetType().Name}");
-        }
-        finally { pending.Completed.Set(); }
-    }
-
-    private SetRouteActionResult ExecuteSetRoute(SetRouteActionRequest request)
-    {
-        var dependencies = Game.Context.Ctx.Deps;
-        var controller = dependencies?.GameController;
-        if (dependencies == null || controller == null || !controller.Loaded)
-            return SetRouteActionResult.Rejected(request, "game_unavailable", "no loaded game is available");
-        lock (sync)
-        {
-            if (request.ExpectedGameSessionId != current.GameSessionId)
-                return SetRouteActionResult.Rejected(request, "stale_identity", "the game session changed before execution");
-            if (current.GameMode != "play")
-                return SetRouteActionResult.Rejected(request, "wrong_game_mode", "set_route is allowed only in play mode");
-        }
-
-        var origins = dependencies.NodeRepository.GetSemaphores().Where(signal => string.Equals(SignalName(signal), request.OriginSignal, StringComparison.Ordinal)).ToArray();
-        var destinations = dependencies.NodeRepository.GetSemaphores().Where(signal => string.Equals(SignalName(signal), request.DestinationSignal, StringComparison.Ordinal)).ToArray();
-        if (origins.Length != 1)
-            return SetRouteActionResult.Rejected(request, origins.Length == 0 ? "origin_not_found" : "ambiguous_origin", "origin must resolve to exactly one signal by canonical name");
-        if (destinations.Length != 1)
-            return SetRouteActionResult.Rejected(request, destinations.Length == 0 ? "destination_not_found" : "ambiguous_destination", "destination must resolve to exactly one signal by canonical name");
-        var origin = origins[0];
-        var destination = destinations[0];
-        if (ReferenceEquals(origin, destination))
-            return SetRouteActionResult.Rejected(request, "same_signal", "origin and destination must be different signals");
-        if (!origin.Active || !destination.Active || origin.Type.ToString() != "Manual")
-            return SetRouteActionResult.Rejected(request, "unsupported_signal", "the route requires active signals and a manual origin signal");
-        if (origin.Locked || origin.CurrentRouteTo != null || origin.Trains.Count != 0)
-            return SetRouteActionResult.Rejected(request, "origin_conflict", "the origin signal is locked, occupied, or already has a route");
-
-        var paths = dependencies.Interlocking.GetPossiblePaths(origin, false, false, false)
-            .Where(path => ReferenceEquals(path.NextSemaphore, destination)).ToArray();
-        if (paths.Length == 0)
-            return SetRouteActionResult.Rejected(request, "topology_not_found", "no interlocking path connects the requested signals");
-        if (paths.Length != 1)
-            return SetRouteActionResult.Rejected(request, "ambiguous_topology", "more than one interlocking path connects the requested signals");
-        var path = paths[0];
-        if (path.Route == null || path.Route.Count == 0 || path.Destination == null)
-            return SetRouteActionResult.Rejected(request, "invalid_topology", "the interlocking returned an incomplete path");
-        if (path.Route.Any(node => node.Trains.Count != 0))
-            return SetRouteActionResult.Rejected(request, "occupied_path", "a train occupies the requested path");
-        if (path.Route.Any(node => Convert.ToInt64(node.AllocationState, CultureInfo.InvariantCulture) != 0))
-            return SetRouteActionResult.Rejected(request, "allocation_conflict", "the requested path conflicts with an existing allocation");
-        if (!path.CanUseForRouting(false, false, false))
-            return SetRouteActionResult.Rejected(request, "route_not_usable", "Rail Route rejected the path during deterministic preflight");
-
-        var created = dependencies.RoutingController.CreatePath(origin, path.Destination, false, false);
-        if (created == null || origin.CurrentRouteTo == null)
-            return new SetRouteActionResult
-            {
-                OriginSignal = request.OriginSignal,
-                DestinationSignal = request.DestinationSignal,
-                Executed = true,
-                ReasonCode = "unexpected_state",
-                Detail = "one route request was executed but Rail Route did not expose the expected allocation",
-            };
-        return new SetRouteActionResult
-        {
-            Outcome = "succeeded",
-            Executed = true,
-            OriginSignal = request.OriginSignal,
-            DestinationSignal = request.DestinationSignal,
-            DestinationConnection = ConnectionId(origin.CurrentRouteTo),
-            ReasonCode = "ok",
-            Detail = "one route request was executed and Rail Route exposed the allocation",
-        };
     }
 
     internal void MarkUnavailable(string detail)
@@ -588,15 +480,6 @@ internal sealed class RailRouteStateProvider : IReadOnlyGameStateProvider, IGame
         internal IncomingCandidate(Game.Train.Train train, string source) { Train = train; Source = source; }
         internal Game.Train.Train Train { get; }
         internal string Source { get; }
-    }
-
-    private sealed class PendingSetRoute
-    {
-        internal PendingSetRoute(SetRouteActionRequest request) { Request = request; }
-        internal SetRouteActionRequest Request { get; }
-        internal System.Threading.ManualResetEventSlim Completed { get; } = new(false);
-        internal SetRouteActionResult? Result { get; set; }
-        internal bool Cancelled { get; set; }
     }
 
     private static string ArchitectureName(Architecture value) => value switch

@@ -1,9 +1,9 @@
 # Sim Pilot Test Yard Specification
 
-**Status:** Canonical macOS artifact created; live v2 action proof pending
+**Status:** Canonical macOS artifact created; live protocol-v3 UI proof pending
 
 The canonical Sim Pilot Test Yard is a disposable Rail Route `2.3.24` map for proving exactly one
-semantic action without touching ordinary gameplay. It is stored at
+UI action without touching ordinary gameplay. It is stored at
 `tests/fixtures/rail_route/test_yard/v1/artifact` with its machine-readable contract in the adjacent
 `manifest.json`.
 
@@ -20,7 +20,7 @@ Phase 3 boundary:
 
 An earlier pre-action draft proposed stations, platforms, a switch, and scheduled trains. That
 fixture was never created and would introduce unrelated moving state. It was superseded when
-ADR-018 narrowed Phase 3 to one signal-to-signal route allocation. Richer dispatch and conflict
+ADR-019 narrows Phase 3 to one UI-driven signal-to-signal route allocation. Richer dispatch and conflict
 scenarios require a later versioned fixture and capability decision.
 
 ## Artifact record
@@ -41,12 +41,12 @@ Windows remains unverified.
 ## Live acceptance
 
 Import or copy the artifact as disposable data, load it in play mode, and pause before the first
-snapshot. The v2 bridge must prove:
+snapshot. Protocol v3 and the UI controller must prove:
 
-1. exact bridge capability catalog `set_route` and all four unique signal names;
+1. an empty bridge action catalog, UI capability `set_route_ui`, and all four unique signal names;
 2. continuous bridge, game-session, map, and available save identities;
 3. a fresh pre-action snapshot with a free origin and no existing route;
-4. exactly one topology/occupancy/conflict-validated request;
+4. one verified origin click followed by a fresh observation and one destination click;
 5. a fresh post-action snapshot exposing `SIG-W-IN -> SIG-C-W` and no unrelated route change.
 
 If execution is ambiguous or verification fails, report the request as potentially executed and do

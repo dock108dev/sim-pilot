@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,10 +17,17 @@ from sim_pilot.rail_route.models import RailRouteAction, RailRouteIntent
 
 
 def _fixture(name: str) -> BridgeEnvelope:
-    return parse_envelope(Path(f"tests/fixtures/game_bridge/v2/{name}.json").read_bytes())
+    value = json.loads(Path(f"tests/fixtures/game_bridge/v2/{name}.json").read_text())
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    if name == "capability_manifest":
+        value["payload"]["gameplay_actions"] = []
+    elif name == "full_snapshot_response":
+        value["payload"]["snapshot"]["adapter_version"] = "rail-route-ui-observer-v1"
+    return parse_envelope(json.dumps(value).encode())
 
 
-def test_bridge_capabilities_command_advertises_only_set_route(
+def test_bridge_capabilities_command_advertises_empty_action_catalog(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     payload = _fixture("capability_manifest").payload
@@ -33,7 +41,7 @@ def test_bridge_capabilities_command_advertises_only_set_route(
     result = CliRunner().invoke(app, ["rail-route", "bridge", "capabilities"])
 
     assert result.exit_code == 0
-    assert '"set_route"' in result.stdout
+    assert '"gameplay_actions": []' in result.stdout
 
 
 def test_bridge_observe_command_renders_typed_coverage(
@@ -74,16 +82,18 @@ def test_bridge_list_and_show_commands_query_observed_entities(
     assert '"display_name": "SP 101"' in shown.stdout
 
 
-def test_plain_english_do_dispatches_only_atomic_set_route(
+def test_plain_english_do_dispatches_only_ui_set_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[RailRouteIntent] = []
 
-    async def execute(intent: RailRouteIntent) -> SimpleNamespace:
+    async def execute(intent: RailRouteIntent, *, dry_run: bool) -> SimpleNamespace:
         seen.append(intent)
+        assert not dry_run
         return SimpleNamespace(message="verified route fixture")
 
-    monkeypatch.setattr("sim_pilot.cli.execute_set_route", execute)
+    monkeypatch.setattr("sim_pilot.cli.execute_set_route_ui", execute)
+    monkeypatch.setattr("sim_pilot.cli.append_ui_trace", lambda result: None)
 
     result = CliRunner().invoke(
         app,

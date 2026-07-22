@@ -23,11 +23,19 @@ FIXTURES = Path(__file__).parents[1] / "fixtures" / "game_bridge" / "v2"
 Handler = Callable[[asyncio.StreamReader, asyncio.StreamWriter], Awaitable[None]]
 
 
+def bridge_hello_value() -> dict[str, object]:
+    value = json.loads((FIXTURES / "bridge_hello.json").read_text())
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    value["payload"]["negotiated_protocol_version"] = 3
+    return value
+
+
 def configuration(port: int) -> GameBridgeConfiguration:
     return GameBridgeConfiguration(
         port=port,
         authentication_token=SecretStr("test-token-000000000000000000000"),
-        expected_adapter_version="rail-route-set-route-v1",
+        expected_adapter_version="rail-route-ui-observer-v1",
         expected_game_id="rail-route",
         expected_game_version="2.3.24",
         platform=Platform.MACOS,
@@ -52,6 +60,14 @@ async def send_fixture(
     snapshot_sequence: int | None = None,
 ) -> None:
     value = json.loads((FIXTURES / name).read_text())
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    if name == "bridge_hello.json":
+        value["payload"]["negotiated_protocol_version"] = 3
+    elif name == "capability_manifest.json":
+        value["payload"]["gameplay_actions"] = []
+    elif name == "full_snapshot_response.json":
+        value["payload"]["snapshot"]["adapter_version"] = "rail-route-ui-observer-v1"
     if correlation_id is not None:
         value["correlation_id"] = correlation_id
     if sequence is not None:
@@ -122,76 +138,24 @@ def test_authenticated_handshake_snapshot_and_clean_disconnect() -> None:
         async with server:
             client = GameBridgeClient(configuration(port))
             capabilities = await client.connect()
-            assert capabilities.gameplay_actions == ("set_route",)
+            assert capabilities.gameplay_actions == ()
             snapshot = await client.request_full_snapshot()
             assert snapshot.game_state == {"paused": True, "simulation_speed": 0}
             await client.close()
             return client, BridgeEnvelope.model_validate_json(
-                (FIXTURES / "bridge_hello.json").read_bytes(), strict=True
+                json.dumps(bridge_hello_value()).encode(),
+                strict=True,
             )
 
     client, _ = asyncio.run(scenario())
     assert client.state is ClientState.DISCONNECTED
 
 
-def test_set_route_requires_fresh_snapshot_and_returns_fresh_verification() -> None:
-    async def scenario() -> None:
-        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-            hello = await read_frame(reader)
-            await send_fixture(writer, "bridge_hello.json", correlation_id=hello.message_id)
-            await send_fixture(writer, "capability_manifest.json")
-            before_request = await read_frame(reader)
-            await send_fixture(
-                writer,
-                "full_snapshot_response.json",
-                correlation_id=before_request.message_id,
-            )
-            action_request = await read_frame(reader)
-            assert action_request.message_type is MessageType.SET_ROUTE_REQUEST
-            await send_fixture(
-                writer,
-                "set_route_response.json",
-                correlation_id=action_request.message_id,
-            )
-            after_request = await read_frame(reader)
-            assert after_request.message_type is MessageType.FULL_SNAPSHOT_REQUEST
-            await send_fixture(
-                writer,
-                "full_snapshot_response.json",
-                correlation_id=after_request.message_id,
-                sequence=5,
-                message_id="bridge:5",
-                snapshot_sequence=5,
-            )
-
-        server, port = await run_server(handler)
-        async with server:
-            client = GameBridgeClient(configuration(port))
-            await client.connect()
-            before = await client.request_full_snapshot()
-            result, after = await client.request_set_route(
-                origin_signal="SIG-W-IN",
-                destination_signal="SIG-C-W",
-                before=before,
-            )
-            assert result.outcome == "succeeded"
-            assert after.bridge_sequence == 5
-            with pytest.raises(GameBridgeSequenceError, match="latest"):
-                await client.request_set_route(
-                    origin_signal="SIG-W-IN",
-                    destination_signal="SIG-C-W",
-                    before=before,
-                )
-            await client.close()
-
-    asyncio.run(scenario())
-
-
 def test_authentication_failure_closes_connection_without_exposing_token() -> None:
     async def scenario() -> GameBridgeClient:
         async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             hello = await read_frame(reader)
-            raw = json.loads((FIXTURES / "bridge_hello.json").read_text())
+            raw = bridge_hello_value()
             raw["message_type"] = "authentication_failure"
             raw["payload"] = {"reason": "authentication_failed"}
             raw["correlation_id"] = hello.message_id
@@ -215,7 +179,7 @@ def test_incompatible_adapter_duplicate_and_sequence_gap_fail_closed() -> None:
     async def incompatible() -> None:
         async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             hello = await read_frame(reader)
-            raw = json.loads((FIXTURES / "bridge_hello.json").read_text())
+            raw = bridge_hello_value()
             raw["adapter_version"] = "wrong-adapter"
             raw["correlation_id"] = hello.message_id
             body = json.dumps(raw).encode()

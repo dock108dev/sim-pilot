@@ -6,15 +6,15 @@ namespace SimPilot.GameBridge;
 
 public static class BridgeContract
 {
-    public const int ProtocolVersion = 2;
-    public const string AdapterVersion = "rail-route-set-route-v1";
+    public const int ProtocolVersion = 3;
+    public const string AdapterVersion = "rail-route-ui-observer-v1";
     public const string GameId = "rail-route";
     public const string SupportedGameVersion = "2.3.24";
     public const int MaximumMessageBytes = 1_048_576;
     public const int DefaultPort = 18461;
 }
 
-public enum MessageType { ClientHello, BridgeHello, AuthenticationFailure, Heartbeat, CapabilityManifest, FullSnapshotRequest, FullSnapshotResponse, ResynchronizationRequest, SetRouteRequest, SetRouteResponse, ProtocolError }
+public enum MessageType { ClientHello, BridgeHello, AuthenticationFailure, Heartbeat, CapabilityManifest, FullSnapshotRequest, FullSnapshotResponse, ResynchronizationRequest, ProtocolError }
 public enum CoverageStatus { ObservedComplete, ObservedPartial, Unsupported, Unavailable, Failed }
 
 public sealed class Identity
@@ -137,7 +137,7 @@ public static class ProtocolCodec
         if (string.IsNullOrWhiteSpace(value.BridgeInstanceId) || string.IsNullOrWhiteSpace(value.GameSessionId) || string.IsNullOrWhiteSpace(value.MessageId) || value.BridgeSequence < 1) throw new FormatException("envelope identity and sequence are required");
         ValidateIdentity(value.MapIdentity); ValidateIdentity(value.SaveIdentity);
         if (value.Timestamp.Offset != TimeSpan.Zero || value.Payload.Kind != JsonKind.Object) throw new FormatException("invalid timestamp or payload");
-        if ((value.MessageType == MessageType.BridgeHello || value.MessageType == MessageType.AuthenticationFailure || value.MessageType == MessageType.FullSnapshotResponse || value.MessageType == MessageType.SetRouteResponse || value.MessageType == MessageType.ProtocolError) && value.CorrelationId == null) throw new FormatException("response requires correlation_id");
+        if ((value.MessageType == MessageType.BridgeHello || value.MessageType == MessageType.AuthenticationFailure || value.MessageType == MessageType.FullSnapshotResponse || value.MessageType == MessageType.ProtocolError) && value.CorrelationId == null) throw new FormatException("response requires correlation_id");
     }
 
     private static void ValidatePayload(MessageType type, IReadOnlyDictionary<string, JsonValue> payload)
@@ -160,8 +160,7 @@ public static class ProtocolCodec
                 if (Integer(payload, "schema_version", 1, 1) != 1 || !payload["full_snapshots"].AsBoolean() || payload["delta_snapshots"].AsBoolean() || !payload["resynchronization"].AsBoolean()) throw new FormatException("invalid capability manifest");
                 SortedStrings(payload["observation_surfaces"], "observation_surfaces");
                 SortedStrings(payload["gameplay_actions"], "gameplay_actions");
-                var actions = payload["gameplay_actions"].AsArray();
-                if (actions.Count != 1 || actions[0].AsString() != "set_route") throw new FormatException("only set_route may be advertised"); return;
+                if (payload["gameplay_actions"].AsArray().Count != 0) throw new FormatException("UI-observer bridge action catalog must be empty"); return;
             case MessageType.FullSnapshotRequest:
                 Exact(payload, new[] { "expected_bridge_instance_id", "expected_game_session_id" }, "snapshot request"); Text(payload, "expected_bridge_instance_id"); Text(payload, "expected_game_session_id"); return;
             case MessageType.FullSnapshotResponse:
@@ -169,13 +168,6 @@ public static class ProtocolCodec
             case MessageType.ResynchronizationRequest:
                 Exact(payload, new[] { "last_bridge_instance_id", "last_bridge_sequence", "last_game_session_id", "reason" }, "resynchronization request");
                 OptionalText(payload, "last_bridge_instance_id"); OptionalText(payload, "last_game_session_id"); if (payload["last_bridge_sequence"].Kind != JsonKind.Null) Integer64(payload, "last_bridge_sequence", 1, long.MaxValue); Text(payload, "reason"); return;
-            case MessageType.SetRouteRequest:
-                Exact(payload, new[] { "destination_signal", "expected_bridge_instance_id", "expected_game_session_id", "expected_snapshot_sequence", "origin_signal", "schema_version" }, "set_route request");
-                Integer(payload, "schema_version", 1, 1); Text(payload, "origin_signal"); Text(payload, "destination_signal"); Text(payload, "expected_bridge_instance_id"); Text(payload, "expected_game_session_id"); Integer64(payload, "expected_snapshot_sequence", 1, long.MaxValue); return;
-            case MessageType.SetRouteResponse:
-                Exact(payload, new[] { "destination_connection", "destination_signal", "detail", "executed", "origin_signal", "outcome", "reason_code", "schema_version" }, "set_route response");
-                Integer(payload, "schema_version", 1, 1); Text(payload, "origin_signal"); Text(payload, "destination_signal"); OptionalText(payload, "destination_connection"); payload["executed"].AsBoolean();
-                var outcome = String(payload, "outcome"); if (outcome != "succeeded" && outcome != "rejected") throw new FormatException("invalid set_route outcome"); Text(payload, "reason_code"); Text(payload, "detail"); return;
             case MessageType.ProtocolError:
                 Exact(payload, new[] { "code", "message", "retryable" }, "protocol error"); ParseErrorCode(String(payload, "code")); Text(payload, "message"); payload["retryable"].AsBoolean(); return;
             default: throw new FormatException("unknown message type");
@@ -213,19 +205,7 @@ public static class ProtocolCodec
     public static JsonValue BridgeHelloPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["authenticated"] = JsonValue.Boolean(true), ["negotiated_protocol_version"] = JsonValue.Integer(BridgeContract.ProtocolVersion), ["maximum_message_bytes"] = JsonValue.Integer(BridgeContract.MaximumMessageBytes), ["heartbeat_interval_seconds"] = JsonValue.Number(2.0) });
     public static JsonValue AuthenticationFailurePayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["reason"] = JsonValue.String("authentication_failed") });
     public static JsonValue HeartbeatPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["healthy"] = JsonValue.Boolean(true), ["detail"] = JsonValue.Null() });
-    public static JsonValue CapabilityPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["schema_version"] = JsonValue.Integer(1), ["observation_surfaces"] = JsonValue.Array(JsonValue.String("game_state"), JsonValue.String("incoming_traffic"), JsonValue.String("platforms"), JsonValue.String("routes"), JsonValue.String("signals"), JsonValue.String("stations"), JsonValue.String("switches"), JsonValue.String("track_occupancy"), JsonValue.String("trains")), ["gameplay_actions"] = JsonValue.Array(JsonValue.String("set_route")), ["full_snapshots"] = JsonValue.Boolean(true), ["delta_snapshots"] = JsonValue.Boolean(false), ["resynchronization"] = JsonValue.Boolean(true) });
-
-    public static JsonValue SetRouteResponsePayload(SetRouteActionResult result) => JsonValue.Object(new Dictionary<string, JsonValue>
-    {
-        ["schema_version"] = JsonValue.Integer(1),
-        ["origin_signal"] = JsonValue.String(result.OriginSignal),
-        ["destination_signal"] = JsonValue.String(result.DestinationSignal),
-        ["destination_connection"] = Nullable(result.DestinationConnection),
-        ["outcome"] = JsonValue.String(result.Outcome),
-        ["executed"] = JsonValue.Boolean(result.Executed),
-        ["reason_code"] = JsonValue.String(result.ReasonCode),
-        ["detail"] = JsonValue.String(result.Detail),
-    });
+    public static JsonValue CapabilityPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["schema_version"] = JsonValue.Integer(1), ["observation_surfaces"] = JsonValue.Array(JsonValue.String("game_state"), JsonValue.String("incoming_traffic"), JsonValue.String("platforms"), JsonValue.String("routes"), JsonValue.String("signals"), JsonValue.String("stations"), JsonValue.String("switches"), JsonValue.String("track_occupancy"), JsonValue.String("trains")), ["gameplay_actions"] = JsonValue.Array(), ["full_snapshots"] = JsonValue.Boolean(true), ["delta_snapshots"] = JsonValue.Boolean(false), ["resynchronization"] = JsonValue.Boolean(true) });
 
     public static JsonValue SnapshotResponsePayload(RuntimeSnapshot state, string bridgeId, long bridgeSequence, DateTimeOffset captured) => JsonValue.Object(new Dictionary<string, JsonValue>
     {
@@ -323,8 +303,8 @@ public static class ProtocolCodec
         if (fractionalTicks == 0) return prefix + "Z";
         return prefix + "." + fractionalTicks.ToString("D7", CultureInfo.InvariantCulture).TrimEnd('0') + "Z";
     }
-    public static string MessageTypeName(MessageType value) => value switch { MessageType.ClientHello => "client_hello", MessageType.BridgeHello => "bridge_hello", MessageType.AuthenticationFailure => "authentication_failure", MessageType.Heartbeat => "heartbeat", MessageType.CapabilityManifest => "capability_manifest", MessageType.FullSnapshotRequest => "full_snapshot_request", MessageType.FullSnapshotResponse => "full_snapshot_response", MessageType.ResynchronizationRequest => "resynchronization_request", MessageType.SetRouteRequest => "set_route_request", MessageType.SetRouteResponse => "set_route_response", MessageType.ProtocolError => "protocol_error", _ => throw new FormatException("unknown message type") };
-    private static MessageType ParseMessageType(string value) => value switch { "client_hello" => MessageType.ClientHello, "bridge_hello" => MessageType.BridgeHello, "authentication_failure" => MessageType.AuthenticationFailure, "heartbeat" => MessageType.Heartbeat, "capability_manifest" => MessageType.CapabilityManifest, "full_snapshot_request" => MessageType.FullSnapshotRequest, "full_snapshot_response" => MessageType.FullSnapshotResponse, "resynchronization_request" => MessageType.ResynchronizationRequest, "set_route_request" => MessageType.SetRouteRequest, "set_route_response" => MessageType.SetRouteResponse, "protocol_error" => MessageType.ProtocolError, _ => throw new FormatException("unknown message_type") };
+    public static string MessageTypeName(MessageType value) => value switch { MessageType.ClientHello => "client_hello", MessageType.BridgeHello => "bridge_hello", MessageType.AuthenticationFailure => "authentication_failure", MessageType.Heartbeat => "heartbeat", MessageType.CapabilityManifest => "capability_manifest", MessageType.FullSnapshotRequest => "full_snapshot_request", MessageType.FullSnapshotResponse => "full_snapshot_response", MessageType.ResynchronizationRequest => "resynchronization_request", MessageType.ProtocolError => "protocol_error", _ => throw new FormatException("unknown message type") };
+    private static MessageType ParseMessageType(string value) => value switch { "client_hello" => MessageType.ClientHello, "bridge_hello" => MessageType.BridgeHello, "authentication_failure" => MessageType.AuthenticationFailure, "heartbeat" => MessageType.Heartbeat, "capability_manifest" => MessageType.CapabilityManifest, "full_snapshot_request" => MessageType.FullSnapshotRequest, "full_snapshot_response" => MessageType.FullSnapshotResponse, "resynchronization_request" => MessageType.ResynchronizationRequest, "protocol_error" => MessageType.ProtocolError, _ => throw new FormatException("unknown_message_type") };
     private static string CoverageName(CoverageStatus value) => value switch { CoverageStatus.ObservedComplete => "observed_complete", CoverageStatus.ObservedPartial => "observed_partial", CoverageStatus.Unsupported => "unsupported", CoverageStatus.Unavailable => "unavailable", CoverageStatus.Failed => "failed", _ => throw new FormatException("unknown coverage") };
     private static CoverageStatus ParseCoverage(string value) => value switch { "observed_complete" => CoverageStatus.ObservedComplete, "observed_partial" => CoverageStatus.ObservedPartial, "unsupported" => CoverageStatus.Unsupported, "unavailable" => CoverageStatus.Unavailable, "failed" => CoverageStatus.Failed, _ => throw new FormatException("unknown coverage") };
     private static void ParseErrorCode(string value) { var allowed = new HashSet<string>(new[] { "malformed_envelope", "unknown_message_type", "message_too_large", "protocol_mismatch", "adapter_mismatch", "game_mismatch", "duplicate_message", "sequence_error", "stale_identity", "snapshot_failed", "internal_error" }, StringComparer.Ordinal); if (!allowed.Contains(value)) throw new FormatException("unknown protocol error code"); }

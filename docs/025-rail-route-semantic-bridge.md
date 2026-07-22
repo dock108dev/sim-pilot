@@ -2,16 +2,16 @@
 
 ## Implemented boundary
 
-The Rail Route adapter implements Sim Pilot Game Bridge Protocol v2 as a BepInEx plugin and a
+The Rail Route adapter implements Sim Pilot Game Bridge Protocol v3 as a BepInEx plugin and a
 game-neutral Python client. It is pinned to Rail Route `2.3.24`, Steam build `22547955`, Unity
 `2021.3.45f2`, the observed Mono assembly hash, BepInEx `5.4.23.5`, and adapter
-`rail-route-set-route-v1`.
+`rail-route-ui-observer-v1`.
 
 This is additive to the existing screen-control slice:
 
 - `rail-route status`, `do`, and `play` still use fresh screen observation and the Space binding;
 - `rail-route bridge ...` installs, diagnoses, or reads the semantic bridge;
-- the bridge advertises exactly one semantic gameplay action, `set_route`;
+- the bridge advertises no gameplay actions;
 - it cannot cancel routes, dispatch trains, change time, automate play, accept multi-action
   objectives, or call an arbitrary game method.
 
@@ -40,9 +40,8 @@ the current live session boundary and must change on a game/session restart. Map
 are emitted only when a stable source is demonstrated; otherwise their envelope values are null and
 their coverage is `unavailable`.
 
-The v2 capability manifest contains exactly one gameplay action, `set_route`. A request is accepted
-only after a fresh snapshot on the same authenticated connection and exact bridge/game/map/save
-identity continuity. It is then validated and executed once on the Unity main thread. Any wider
+The v3 capability manifest has an empty gameplay-action catalog. UI actions are negotiated outside
+the bridge and use snapshots only for identity, preconditions, and postconditions. Any wider bridge
 authority requires another explicit protocol and capability decision.
 
 ## Field evidence and coverage
@@ -121,8 +120,8 @@ later native launch must use its own live record rather than replacing the Roset
 
 The default Python and C# suites use fake transports and golden fixtures; they do not require Rail
 Route, Steam, a display, BepInEx, or a hosted model. Live tests require
-`SIM_PILOT_LIVE_RAIL_ROUTE_BRIDGE=1` and a disposable scenario. The read-only Prague record below is
-historical v1 evidence; it does not by itself prove the v2 mutation capability.
+`SIM_PILOT_LIVE_RAIL_ROUTE_BRIDGE=1` and a disposable scenario. The Prague record below is
+historical v1 observation evidence; it does not prove UI actuation.
 
 The initial 2026-07-21 macOS gate passed on an x86_64/Rosetta process parented by Steam. Authentication,
 loopback restriction, capabilities, full snapshots, reconnect, resynchronization, heartbeat,
@@ -168,7 +167,7 @@ save immutability evidence.
 That uninstalled state was the accepted end of the original recovery test, not the current machine
 state. The bridge was subsequently reinstalled and is answering on the pinned Steam/Rosetta launch
 path. While Rail Route remains open, `bridge doctor` correctly reports the installation as enabled
-and refuses to change bridge files. The built v2 plugin is therefore not considered deployed until
+and refuses to change bridge files. The built v3 plugin is therefore not considered deployed until
 the game is closed, the checksum-gated installer replaces the owned plugin artifact, and Rail Route
 is restarted.
 

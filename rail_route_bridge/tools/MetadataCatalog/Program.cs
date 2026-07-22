@@ -45,7 +45,17 @@ foreach (var handle in reader.TypeDefinitions)
         var method = reader.GetMethodDefinition(methodHandle);
         if ((method.Attributes & MethodAttributes.SpecialName) != 0) continue;
         var signature = method.DecodeSignature(typeNames, genericContext: null);
-        Console.WriteLine($"  METHOD {MethodVisibility(method.Attributes)} {signature.ReturnType} {reader.GetString(method.Name)}({string.Join(", ", signature.ParameterTypes)})");
+        var parameterNames = method.GetParameters()
+            .Select(reader.GetParameter)
+            .Where(parameter => parameter.SequenceNumber != 0)
+            .OrderBy(parameter => parameter.SequenceNumber)
+            .Select(parameter => reader.GetString(parameter.Name))
+            .ToArray();
+        var parameters = signature.ParameterTypes.Select((typeName, index) =>
+            index < parameterNames.Length && !string.IsNullOrEmpty(parameterNames[index])
+                ? $"{typeName} {parameterNames[index]}"
+                : typeName);
+        Console.WriteLine($"  METHOD {MethodVisibility(method.Attributes)} {signature.ReturnType} {reader.GetString(method.Name)}({string.Join(", ", parameters)})");
     }
 }
 

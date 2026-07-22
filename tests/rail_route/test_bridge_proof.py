@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ class _FakeClient:
 
     async def connect(self) -> CapabilityManifestPayload:
         return CapabilityManifestPayload(
-            observation_surfaces=("game_state", "trains"), gameplay_actions=("set_route",)
+            observation_surfaces=("game_state", "trains"), gameplay_actions=()
         )
 
     async def request_full_snapshot(self) -> GameSnapshot:
@@ -25,9 +26,13 @@ class _FakeClient:
 
 
 def _snapshot() -> GameSnapshot:
-    envelope = parse_envelope(
-        Path("tests/fixtures/game_bridge/v2/full_snapshot_response.json").read_bytes()
+    value = json.loads(
+        Path("tests/fixtures/game_bridge/v2/full_snapshot_response.json").read_text()
     )
+    value["protocol_version"] = 3
+    value["adapter_version"] = "rail-route-ui-observer-v1"
+    value["payload"]["snapshot"]["adapter_version"] = "rail-route-ui-observer-v1"
+    envelope = parse_envelope(json.dumps(value).encode())
     assert isinstance(envelope.payload, FullSnapshotResponsePayload)
     return envelope.payload.snapshot
 

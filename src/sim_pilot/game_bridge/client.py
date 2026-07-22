@@ -1,4 +1,4 @@
-"""Authenticated length-prefixed loopback client for Game Bridge Protocol v2."""
+"""Authenticated length-prefixed loopback client for read-only protocol v3."""
 
 from __future__ import annotations
 
@@ -39,8 +39,6 @@ from sim_pilot.game_bridge.models import (
     Platform,
     ProtocolErrorPayload,
     ResynchronizationRequestPayload,
-    SetRouteRequestPayload,
-    SetRouteResponsePayload,
     parse_envelope,
 )
 
@@ -191,58 +189,6 @@ class GameBridgeClient:
                 raise GameBridgeProtocolError("snapshot response payload has the wrong schema")
             self._validate_snapshot(response, response.payload.snapshot)
             return response.payload.snapshot
-
-    async def request_set_route(
-        self, *, origin_signal: str, destination_signal: str, before: GameSnapshot
-    ) -> tuple[SetRouteResponsePayload, GameSnapshot]:
-        if self.state is not ClientState.SYNCHRONIZED or self.capabilities is None:
-            raise GameBridgeProtocolError("bridge must be synchronized before set_route")
-        if self.capabilities.gameplay_actions != ("set_route",):
-            raise GameBridgeIncompatibleError("bridge does not advertise exactly set_route")
-        if (
-            self.bridge_instance_id is None
-            or self.game_session_id is None
-            or before.bridge_instance_id != self.bridge_instance_id
-            or before.game_session_id != self.game_session_id
-            or before.bridge_sequence != self.last_bridge_sequence
-            or before.map_identity != self.map_identity
-            or before.save_identity != self.save_identity
-        ):
-            raise GameBridgeSequenceError("set_route requires the latest synchronized snapshot")
-        request = await self._send(
-            MessageType.SET_ROUTE_REQUEST,
-            SetRouteRequestPayload(
-                origin_signal=origin_signal,
-                destination_signal=destination_signal,
-                expected_bridge_instance_id=self.bridge_instance_id,
-                expected_game_session_id=self.game_session_id,
-                expected_snapshot_sequence=before.bridge_sequence,
-            ),
-        )
-        while True:
-            response = await self._receive()
-            if response.message_type is MessageType.HEARTBEAT:
-                continue
-            if response.message_type is MessageType.PROTOCOL_ERROR:
-                self._raise_protocol_error(response)
-            if response.message_type is not MessageType.SET_ROUTE_RESPONSE:
-                raise GameBridgeProtocolError("unexpected message while awaiting set_route")
-            if response.correlation_id != request.message_id:
-                raise GameBridgeProtocolError("set_route correlation does not match request")
-            if not isinstance(response.payload, SetRouteResponsePayload):
-                raise GameBridgeProtocolError("set_route response payload has the wrong schema")
-            result = response.payload
-            break
-        after = await self.request_full_snapshot()
-        if (
-            after.bridge_instance_id != before.bridge_instance_id
-            or after.game_session_id != before.game_session_id
-            or after.map_identity != before.map_identity
-            or after.save_identity != before.save_identity
-            or after.bridge_sequence <= before.bridge_sequence
-        ):
-            raise GameBridgeSequenceError("identity changed before set_route verification")
-        return result, after
 
     async def resynchronize(self, *, reason: str) -> CapabilityManifestPayload:
         if self._writer is None:

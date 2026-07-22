@@ -1,4 +1,4 @@
-"""Strict protocol-v2 contracts shared by game bridge adapters."""
+"""Strict read-only protocol-v3 contracts shared by game bridge adapters."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 DEFAULT_MAXIMUM_MESSAGE_BYTES = 1_048_576
 
 type JsonScalar = str | int | float | bool | None
@@ -141,15 +141,13 @@ class MessageType(StrEnum):
     FULL_SNAPSHOT_REQUEST = "full_snapshot_request"
     FULL_SNAPSHOT_RESPONSE = "full_snapshot_response"
     RESYNCHRONIZATION_REQUEST = "resynchronization_request"
-    SET_ROUTE_REQUEST = "set_route_request"
-    SET_ROUTE_RESPONSE = "set_route_response"
     PROTOCOL_ERROR = "protocol_error"
 
 
 class ClientHelloPayload(BridgeModel):
     authentication_token: str = Field(min_length=32, max_length=512, repr=False)
     client_instance_id: str = Field(min_length=1, max_length=128)
-    requested_protocol_version: Literal[2] = 2
+    requested_protocol_version: Literal[3] = 3
     expected_adapter_version: str = Field(min_length=1, max_length=128)
     expected_game_id: str = Field(min_length=1, max_length=128)
     expected_game_version: str = Field(min_length=1, max_length=128)
@@ -157,7 +155,7 @@ class ClientHelloPayload(BridgeModel):
 
 class BridgeHelloPayload(BridgeModel):
     authenticated: Literal[True] = True
-    negotiated_protocol_version: Literal[2] = 2
+    negotiated_protocol_version: Literal[3] = 3
     maximum_message_bytes: int = Field(ge=1024, le=16_777_216)
     heartbeat_interval_seconds: float = Field(gt=0, le=300)
 
@@ -174,15 +172,15 @@ class HeartbeatPayload(BridgeModel):
 class CapabilityManifestPayload(BridgeModel):
     schema_version: Literal[1] = 1
     observation_surfaces: tuple[str, ...]
-    gameplay_actions: tuple[str, ...] = ("set_route",)
+    gameplay_actions: tuple[()] = ()
     full_snapshots: Literal[True] = True
     delta_snapshots: Literal[False] = False
     resynchronization: Literal[True] = True
 
     @model_validator(mode="after")
     def enforce_capabilities_and_ordering(self) -> Self:
-        if self.gameplay_actions != ("set_route",):
-            raise ValueError("set_route must be the only gameplay action")
+        if self.gameplay_actions:
+            raise ValueError("the UI-observer bridge gameplay action catalog must be empty")
         if tuple(sorted(set(self.observation_surfaces))) != self.observation_surfaces:
             raise ValueError("observation surfaces must be unique and sorted")
         return self
@@ -202,42 +200,6 @@ class ResynchronizationRequestPayload(BridgeModel):
     last_game_session_id: str | None = Field(default=None, min_length=1, max_length=128)
     last_bridge_sequence: int | None = Field(default=None, ge=1)
     reason: str = Field(min_length=1, max_length=128)
-
-
-class SetRouteRequestPayload(BridgeModel):
-    schema_version: Literal[1] = 1
-    origin_signal: str = Field(min_length=1, max_length=128)
-    destination_signal: str = Field(min_length=1, max_length=128)
-    expected_bridge_instance_id: str = Field(min_length=1, max_length=128)
-    expected_game_session_id: str = Field(min_length=1, max_length=128)
-    expected_snapshot_sequence: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def distinct_signals(self) -> Self:
-        if self.origin_signal == self.destination_signal:
-            raise ValueError("origin and destination signals must differ")
-        return self
-
-
-class SetRouteResponsePayload(BridgeModel):
-    schema_version: Literal[1] = 1
-    origin_signal: str = Field(min_length=1, max_length=128)
-    destination_signal: str = Field(min_length=1, max_length=128)
-    destination_connection: str | None = Field(default=None, min_length=1, max_length=512)
-    outcome: Literal["succeeded", "rejected"]
-    executed: bool
-    reason_code: str = Field(min_length=1, max_length=128)
-    detail: str = Field(min_length=1, max_length=1024)
-
-    @model_validator(mode="after")
-    def consistent_outcome(self) -> Self:
-        if self.outcome == "succeeded" and (
-            not self.executed or self.destination_connection is None or self.reason_code != "ok"
-        ):
-            raise ValueError("successful set_route result is incomplete")
-        if not self.executed and self.outcome != "rejected":
-            raise ValueError("unexecuted set_route result must be rejected")
-        return self
 
 
 class ProtocolErrorCode(StrEnum):
@@ -269,8 +231,6 @@ BridgePayload = Annotated[
     | FullSnapshotRequestPayload
     | FullSnapshotResponsePayload
     | ResynchronizationRequestPayload
-    | SetRouteRequestPayload
-    | SetRouteResponsePayload
     | ProtocolErrorPayload,
     Field(union_mode="left_to_right"),
 ]
@@ -284,14 +244,12 @@ _PAYLOAD_TYPES: dict[MessageType, type[BridgeModel]] = {
     MessageType.FULL_SNAPSHOT_REQUEST: FullSnapshotRequestPayload,
     MessageType.FULL_SNAPSHOT_RESPONSE: FullSnapshotResponsePayload,
     MessageType.RESYNCHRONIZATION_REQUEST: ResynchronizationRequestPayload,
-    MessageType.SET_ROUTE_REQUEST: SetRouteRequestPayload,
-    MessageType.SET_ROUTE_RESPONSE: SetRouteResponsePayload,
     MessageType.PROTOCOL_ERROR: ProtocolErrorPayload,
 }
 
 
 class BridgeEnvelope(BridgeModel):
-    protocol_version: Literal[2] = 2
+    protocol_version: Literal[3] = 3
     adapter_version: str = Field(min_length=1, max_length=128)
     game_id: str = Field(min_length=1, max_length=128)
     game_version: str = Field(min_length=1, max_length=128)
@@ -319,7 +277,6 @@ class BridgeEnvelope(BridgeModel):
                 MessageType.BRIDGE_HELLO,
                 MessageType.AUTHENTICATION_FAILURE,
                 MessageType.FULL_SNAPSHOT_RESPONSE,
-                MessageType.SET_ROUTE_RESPONSE,
             }
             and self.correlation_id is None
         ):

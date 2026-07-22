@@ -76,9 +76,9 @@ are evidence from specific milestones, not the current product contract.
 
 - The supported target is the Steam macOS build of Rail Route 2.3.24 in fullscreen-window mode.
   Version changes fail closed until the screen contract is revalidated.
-- Screen control verifies only `pause` and `resume`; `status` is read-only. The separately installed
-  semantic bridge adds only one atomic `set_route` request between canonical signal names. Natural
-  language is parsed deterministically and does not invoke a model.
+- Screen control verifies `pause` and `resume`; `status` is read-only. Protocol v3 keeps the
+  semantic bridge read-only. A separate UI catalog adds one `set_route_ui` objective for the
+  canonical Test Yard. Natural language is parsed deterministically and does not invoke a model.
 - Observation recognizes the selected pause, normal-speed, or accelerated-speed control from a
   fresh screenshot. A menu, loading screen, disabled tutorial control, changed layout, unavailable
   screen recording, or ambiguous recognition fails before input or fails verification without an
@@ -97,14 +97,14 @@ are evidence from specific milestones, not the current product contract.
 - BepInEx macOS ARM64 and x86_64 binaries are present, but the observed Steam process uses
   x86_64/Rosetta. Native ARM64 and Windows x64 are not claimed as live-validated.
 - Route cancellation, train dispatch, construction, time changes, ongoing automation, arbitrary
-  method calls, and multi-action objectives are unsupported. The semantic bridge catalog contains
-  exactly `set_route`, and an executed request is never retried.
+  method calls, and multi-action objectives are unsupported. The bridge action catalog is empty.
+  The UI catalog contains only `set_route_ui`, and an executed click is never retried.
 - The canonical Sim Pilot Test Yard must be used for mutation proof. Prague supplies Phase 2
   observation evidence only; ordinary gameplay is not an accepted mutation target.
 - Bridge launch must use Steam's Play button with the documented temporary `%command%` wrapper.
   Dock/Finder/Spotlight launches bypass that option and can select the unsupported ARM64 slice.
-- The direct Rail Route control slice does not yet create durable runtime tasks or append lifecycle
-  events. It is a bounded capability proof for the terminal interaction, not delegated automation.
+- UI route results are appended as owner-only JSONL evidence without screenshot pixels. This is a
+  bounded objective trace, not continuous delegated automation.
 
 ## Deferred decisions
 

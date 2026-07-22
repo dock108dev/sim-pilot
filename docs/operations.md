@@ -202,8 +202,8 @@ opened. See [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md), 
 ## Rail Route 2.3.24
 
 The existing `rail-route status`, `do`, and `play` commands remain the macOS screen-control path.
-The semantic bridge is an independent, explicitly installed path. Observation remains read-only;
-the only semantic mutation is one capability-gated route allocation:
+The semantic bridge is an independent, explicitly installed read-only path. UI mutation is a
+separate capability:
 
 ```bash
 sh rail_route_bridge/scripts/test.sh
@@ -224,12 +224,17 @@ uv run sim-pilot rail-route bridge list incoming-traffic
 uv run sim-pilot rail-route bridge list track-occupancy
 uv run sim-pilot rail-route bridge show trains <UUID-or-reporting-number>
 uv run sim-pilot rail-route bridge prove-read-only
+uv run sim-pilot rail-route ui doctor
+uv run sim-pilot rail-route ui observe
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W" --dry-run
 uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W"
 ```
 
-Run `set_route` only in a disposable scenario. It requires a fresh snapshot, validates both signals
-and the unique free path, sends one request, and verifies the allocation from another snapshot. It
-does not retry or cancel the route.
+Run `set_route_ui` only in the paused canonical Test Yard with Construction and overlays closed. It
+brackets screenshots with semantic observations, sends one click per cycle, and verifies the final
+allocation. It does not retry or cancel the route. Owner-only evidence is appended to
+`~/Library/Application Support/Sim Pilot/rail-route-ui/traces.jsonl`; screenshot pixels are not
+stored.
 
 `doctor` and installation require Rail Route to be closed. They validate the exact app, Steam build,
 Unity/Mono runtime, executable/assembly hashes, universal architectures, plugin artifact, symlinks,

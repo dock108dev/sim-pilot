@@ -33,8 +33,8 @@ Start with the root [README](../README.md), then use the guide that matches the 
   discovery and the current explicit `unsupported` boundary.
 - [Rail Route control](023-rail-route-control.md): version-pinned macOS discovery, verified
   pause/resume control, terminal usage, and semantic route-control gate.
-- [Game Bridge Protocol v2](024-game-bridge-protocol.md): game-neutral loopback transport,
-  authentication, strict identity/sequencing, snapshots, and one atomic `set_route` exchange.
+- [Game Bridge Protocol v3](024-game-bridge-protocol.md): game-neutral read-only loopback transport,
+  authentication, strict identity/sequencing, and snapshots.
 - [Rail Route semantic bridge](025-rail-route-semantic-bridge.md): pinned loader, reversible
   installation, typed coverage, observation commands, and validation status.
 - [Sim Pilot Test Yard](026-rail-route-test-yard.md): deterministic disposable scenario contract.
@@ -51,9 +51,10 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [014 — Gameplay analysis engine](014-gameplay-analysis-engine.md)
 - [018 — Answer-first product interaction](018-answer-first-product-interaction.md)
 - [023 — Rail Route terminal control](023-rail-route-control.md)
-- [024 — Game Bridge Protocol v2](024-game-bridge-protocol.md)
+- [024 — Game Bridge Protocol v3](024-game-bridge-protocol.md)
 - [025 — Rail Route semantic bridge](025-rail-route-semantic-bridge.md)
 - [026 — Rail Route test yard](026-rail-route-test-yard.md)
+- [ADR-019 — Rail Route UI actuation](adr/ADR-019%20Rail%20Route%20UI%20Actuation%20and%20Semantic%20Verification.md)
 
 The RFCs define public behavior. The implementation guides describe how to work with the current
 tree. When they disagree, update the guide or stop and resolve the contract conflict before changing

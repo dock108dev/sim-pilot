@@ -150,7 +150,6 @@ from sim_pilot.rail_route.bridge import (
     RailRouteBridgeError,
     RailRouteBridgeInstaller,
     entity_from,
-    execute_set_route,
     prove_read_only_bridge,
     rail_route_bridge_client,
     surface_from,
@@ -162,6 +161,7 @@ from sim_pilot.rail_route.bridge import (
     render_surface as render_rail_route_surface,
 )
 from sim_pilot.rail_route.errors import RailRouteError
+from sim_pilot.rail_route.ui import RailRouteUIObserver, append_ui_trace, execute_set_route_ui
 from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import RuntimeEngine
 from sim_pilot.runtime.action_attempts import RecoveryResolution
@@ -200,6 +200,7 @@ openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled
 evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation exercises.")
 rail_route_app = typer.Typer(help="Control a local Rail Route game with verified plain English.")
 rail_route_bridge_app = typer.Typer(help="Operate the read-only Rail Route semantic bridge.")
+rail_route_ui_app = typer.Typer(help="Diagnose synchronized Rail Route UI control.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
@@ -207,6 +208,7 @@ app.add_typer(analysis_app, name="analysis")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(rail_route_app, name="rail-route")
 rail_route_app.add_typer(rail_route_bridge_app, name="bridge")
+rail_route_app.add_typer(rail_route_ui_app, name="ui")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_analyze_app, name="analyze")
 openttd_app.add_typer(openttd_bridge_app, name="bridge")
@@ -611,6 +613,25 @@ def rail_route_bridge_prove_read_only() -> None:
         _fail(error, RAIL_ROUTE_FAILURE)
 
 
+@rail_route_ui_app.command("doctor")
+def rail_route_ui_doctor() -> None:
+    """Verify the synchronized screenshot, semantic state, and UI action gate."""
+    try:
+        _emit(asyncio.run(RailRouteUIObserver().capabilities()))
+    except (GameBridgeError, RailRouteError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_ui_app.command("observe")
+def rail_route_ui_observe() -> None:
+    """Capture one synchronized read-only Rail Route UI observation."""
+    try:
+        observed = asyncio.run(RailRouteUIObserver().observe())
+        _emit(observed.observation)
+    except (GameBridgeError, RailRouteError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
 @rail_route_app.command("doctor")
 def rail_route_doctor() -> None:
     """Inspect the installed game, running process, version, and permissions."""
@@ -642,15 +663,20 @@ def rail_route_do(
     json_output: Annotated[
         bool, typer.Option("--json", help="Emit the typed control result.")
     ] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Validate the next UI objective without input.")
+    ] = False,
 ) -> None:
     """Validate, execute at most one input, then verify the effect."""
     try:
         intent = parse_control_intent(instruction)
-        result = (
-            asyncio.run(execute_set_route(intent))
-            if intent.action is RailRouteAction.SET_ROUTE
-            else _rail_route_controller().execute(intent)
-        )
+        if dry_run and intent.action is not RailRouteAction.SET_ROUTE:
+            raise RailRouteError("--dry-run is available only for UI route setting")
+        if intent.action is RailRouteAction.SET_ROUTE:
+            result = asyncio.run(execute_set_route_ui(intent, dry_run=dry_run))
+            append_ui_trace(result)
+        else:
+            result = _rail_route_controller().execute(intent)
         _emit(result) if json_output else typer.echo(result.message)
     except RailRouteError as error:
         _fail(error, RAIL_ROUTE_FAILURE)
@@ -660,7 +686,7 @@ def rail_route_do(
 def rail_route_play() -> None:
     """Run an interactive, capability-gated Rail Route control session."""
     controller = _rail_route_controller()
-    typer.echo("Sim Pilot Rail Route — verified actions: status, pause, resume, set_route")
+    typer.echo("Sim Pilot Rail Route — verified actions: status, pause, resume, set_route_ui")
     typer.echo("Type quit to leave the session.")
     while True:
         try:
@@ -673,7 +699,7 @@ def rail_route_play() -> None:
         try:
             intent = parse_control_intent(instruction)
             result = (
-                asyncio.run(execute_set_route(intent))
+                asyncio.run(execute_set_route_ui(intent))
                 if intent.action is RailRouteAction.SET_ROUTE
                 else controller.execute(intent)
             )

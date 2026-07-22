@@ -120,17 +120,18 @@ uv run sim-pilot rail-route doctor
 uv run sim-pilot rail-route status
 uv run sim-pilot rail-route do "pause the game"
 uv run sim-pilot rail-route do "resume the game"
+uv run sim-pilot rail-route ui doctor
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W" --dry-run
 uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W"
 uv run sim-pilot rail-route play
 ```
 
-The interactive prompt accepts plain-English status, pause, resume, and the exact atomic route
-syntax above. Route-setting requires the separately installed semantic bridge and a disposable
-scenario with canonical signal names. See the
+The interactive prompt accepts plain-English status, pause, resume, and the exact UI route syntax
+above. Route-setting requires the read-only bridge and the paused canonical Test Yard. See the
 [Rail Route control guide](docs/023-rail-route-control.md).
 
-An independently versioned, opt-in semantic bridge adds authenticated snapshots and exactly one
-gameplay action, `set_route`, without changing the default Steam launch:
+An independently versioned, opt-in semantic bridge adds authenticated read-only snapshots. UI
+capabilities are negotiated separately and the bridge action catalog remains empty:
 
 ```bash
 uv run sim-pilot rail-route bridge doctor

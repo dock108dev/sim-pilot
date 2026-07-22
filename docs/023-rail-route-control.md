@@ -67,9 +67,22 @@ result. Route-setting may be added only after a disposable live probe proves:
 4. one bounded execution mechanism; and
 5. an independent postcondition proving the intended route—not merely a click—was established.
 
-The read-only portion of the preferred small, versioned local bridge is now implemented. Gameplay
-route-setting remains behind this gate. Screen-coordinate automation remains a discovery fallback,
-not production authority.
+Protocol v3 restores the bridge to a read-only observer. The first production route action uses two
+normal UI clicks against a fresh synchronized screenshot, with semantic identity and route
+verification after each cycle. It is restricted to the canonical paused Test Yard until live proof
+promotes a wider target model.
+
+Additional commands are:
+
+```shell
+uv run sim-pilot rail-route ui doctor
+uv run sim-pilot rail-route ui observe
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W" --dry-run
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W"
+```
+
+The bridge action catalog remains empty. UI capabilities are computed separately and screenshot
+pixels are not retained by default.
 
 ## Live evidence
 
