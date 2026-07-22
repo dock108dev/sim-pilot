@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>SimPilot.RailRoute.Bridge</AssemblyName>
+    <RootNamespace>SimPilot.RailRoute.Bridge</RootNamespace>
+    <Version>2.0.0</Version>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <BepInExVersion>5.4.23.5</BepInExVersion>
+    <BepInExRoot Condition="'$(BepInExRoot)' == ''">__BEPINEX_ROOT_REQUIRED__</BepInExRoot>
+    <RailRouteManagedPath Condition="'$(RailRouteManagedPath)' == ''">__RAIL_ROUTE_MANAGED_PATH_REQUIRED__</RailRouteManagedPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SimPilot.GameBridge.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExRoot)/core/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(RailRouteManagedPath)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(RailRouteManagedPath)/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RailRoute">
+      <HintPath>$(RailRouteManagedPath)/RailRoute.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="ValidatePinnedRuntime" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(BepInExRoot)/core/BepInEx.dll')" Text="BepInEx $(BepInExVersion) is required; set BepInExRoot to its installation root." />
+    <Error Condition="!Exists('$(RailRouteManagedPath)/RailRoute.dll')" Text="Set RailRouteManagedPath to Rail Route Contents/Resources/Data/Managed." />
+  </Target>
+</Project>

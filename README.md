@@ -120,13 +120,35 @@ uv run sim-pilot rail-route doctor
 uv run sim-pilot rail-route status
 uv run sim-pilot rail-route do "pause the game"
 uv run sim-pilot rail-route do "resume the game"
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W"
 uv run sim-pilot rail-route play
 ```
 
-The interactive prompt accepts plain-English status, pause, and resume instructions. Named trains,
-signals, platforms, and route-setting remain unsupported until the game exposes a semantic identity
-and independently verifiable postcondition. See the
+The interactive prompt accepts plain-English status, pause, resume, and the exact atomic route
+syntax above. Route-setting requires the separately installed semantic bridge and a disposable
+scenario with canonical signal names. See the
 [Rail Route control guide](docs/023-rail-route-control.md).
+
+An independently versioned, opt-in semantic bridge adds authenticated snapshots and exactly one
+gameplay action, `set_route`, without changing the default Steam launch:
+
+```bash
+uv run sim-pilot rail-route bridge doctor
+uv run sim-pilot rail-route bridge install
+uv run sim-pilot rail-route bridge verify
+uv run sim-pilot rail-route bridge capabilities
+uv run sim-pilot rail-route bridge observe --json
+uv run sim-pilot rail-route bridge list trains
+uv run sim-pilot rail-route bridge list incoming-traffic
+uv run sim-pilot rail-route bridge list track-occupancy
+uv run sim-pilot rail-route bridge show trains <UUID-or-reporting-number>
+uv run sim-pilot rail-route bridge prove-read-only
+uv run sim-pilot rail-route bridge disable
+uv run sim-pilot rail-route bridge uninstall
+```
+
+Installation is pinned and manifest-owned; it refuses a running game, unexpected version/hash,
+symlink, or collision. See the [semantic bridge guide](docs/025-rail-route-semantic-bridge.md).
 
 ## Architecture at a glance
 
@@ -141,6 +163,7 @@ CLI -> Runtime -> Domain <- Adapters
 - `sim_pilot.runtime` owns the one-action lifecycle, validation, verification, and recovery.
 - `sim_pilot.reference_simulation` is a standalone deterministic engine.
 - `sim_pilot.adapters` translates simulation-specific behavior into domain contracts.
+- `sim_pilot.game_bridge` owns the game-neutral authenticated snapshot and atomic-action client.
 - `sim_pilot.persistence` defines repository interfaces; SQLite remains below them.
 - Provider-specific code stays behind compiler and decision-provider interfaces.
 

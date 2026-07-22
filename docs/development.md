@@ -35,6 +35,11 @@ uv build
 Generated `dist/`, `build/`, and `*.egg-info` paths are ignored. Sim Pilot is currently operated
 from a source checkout; there is no published package or deployment artifact.
 
+The C# Rail Route bridge is separately buildable and testable without the game. Use the commands in
+`rail_route_bridge/README.md`; its default tests consume the same protocol goldens as Python.
+Preparing BepInEx compile references is pinned and checksummed but never launches or edits Rail
+Route.
+
 Live tests are explicitly gated:
 
 ```bash
@@ -66,6 +71,8 @@ Only run live tests after authorizing the corresponding hosted usage or disposab
 | `sim_pilot.persistence` | Repository and unit-of-work contracts plus in-memory storage. |
 | `sim_pilot.persistence.sqlite` | SQLAlchemy repositories, schema, transactions, and Alembic helpers. |
 | `sim_pilot.openttd` | Admin Network and GameScript protocol clients below the adapter boundary. |
+| `sim_pilot.game_bridge` | Game-neutral strict envelopes, snapshots, and authenticated atomic-action client. |
+| `sim_pilot.rail_route.bridge` | Rail Route translation, configuration, and reversible loader lifecycle. |
 | `sim_pilot.reconciliation` | Adapter-specific crash-window classification and application composition. |
 
 Dependency direction is enforced by `tests/architecture/test_dependency_direction.py`:

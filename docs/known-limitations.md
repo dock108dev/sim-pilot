@@ -76,17 +76,33 @@ are evidence from specific milestones, not the current product contract.
 
 - The supported target is the Steam macOS build of Rail Route 2.3.24 in fullscreen-window mode.
   Version changes fail closed until the screen contract is revalidated.
-- The verified action catalog contains only `pause` and `resume`; `status` is read-only. Natural
+- Screen control verifies only `pause` and `resume`; `status` is read-only. The separately installed
+  semantic bridge adds only one atomic `set_route` request between canonical signal names. Natural
   language is parsed deterministically and does not invoke a model.
 - Observation recognizes the selected pause, normal-speed, or accelerated-speed control from a
   fresh screenshot. A menu, loading screen, disabled tutorial control, changed layout, unavailable
   screen recording, or ambiguous recognition fails before input or fails verification without an
   automatic retry.
-- Sim Pilot activates Rail Route and sends its Space binding through macOS Accessibility. It does
-  not inject code, modify the game installation, read process memory, or use an official game API.
-- Trains, signals, platforms, routes, schedules, construction, and contracts are not semantically
-  observable through the current boundary. Route-setting and all other gameplay actions are
-  explicitly unsupported.
+- The screen-control adapter activates Rail Route and sends its Space binding through macOS
+  Accessibility; it does not inject code or modify the game. The separately installed BepInEx
+  semantic bridge is opt-in, version/hash pinned, loopback-only, authenticated, and capability
+  gated.
+- The semantic bridge and loader are live-validated on the pinned macOS x86_64/Rosetta path.
+  Pause/speed, play mode, map/save identity, trains, stations, platforms, signals, and switches are
+  promoted from populated Prague evidence. Active signal routes had a complete but empty
+  collection. Upcoming timetable traffic and `track_occupancy` are live-proven against the Prague
+  UI, including exact Com1011/Com1012 times and platform plus allocated/occupied track state. The
+  bridge exposes model allocation and train segments, not presentation colors or an inferred
+  navigable path. No failed or unavailable collection is treated as complete observation.
+- BepInEx macOS ARM64 and x86_64 binaries are present, but the observed Steam process uses
+  x86_64/Rosetta. Native ARM64 and Windows x64 are not claimed as live-validated.
+- Route cancellation, train dispatch, construction, time changes, ongoing automation, arbitrary
+  method calls, and multi-action objectives are unsupported. The semantic bridge catalog contains
+  exactly `set_route`, and an executed request is never retried.
+- The canonical Sim Pilot Test Yard must be used for mutation proof. Prague supplies Phase 2
+  observation evidence only; ordinary gameplay is not an accepted mutation target.
+- Bridge launch must use Steam's Play button with the documented temporary `%command%` wrapper.
+  Dock/Finder/Spotlight launches bypass that option and can select the unsupported ARM64 slice.
 - The direct Rail Route control slice does not yet create durable runtime tasks or append lifecycle
   events. It is a bounded capability proof for the terminal interaction, not delegated automation.
 
@@ -99,5 +115,6 @@ The following require product or operational direction rather than a documentati
 - security-scanner ownership and CI failure thresholds;
 - remote-service authentication, authorization, encryption, and tenant isolation;
 - further OpenTTD observation surfaces or actions beyond the two verified writes;
-- a stable semantic Rail Route observation/control bridge for named gameplay actions;
+- field-by-field live promotion of Rail Route semantic observation and any later separately governed
+  named gameplay action;
 - a managed retention policy for provider and evaluation recordings.

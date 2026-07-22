@@ -95,6 +95,7 @@ from sim_pilot.domain import (
     WorldSnapshot,
 )
 from sim_pilot.domain.models import JsonValue
+from sim_pilot.game_bridge import GameBridgeError, GameSnapshot
 from sim_pilot.intent_compiler import (
     CompilerError,
     CompilerProvider,
@@ -139,7 +140,27 @@ from sim_pilot.product_evaluation import (
 )
 from sim_pilot.provider_metadata import ProviderMetadata
 from sim_pilot.provider_support.codex_cli.errors import CodexCLIError
-from sim_pilot.rail_route import RailRouteController, RailRouteDiscovery, parse_control_intent
+from sim_pilot.rail_route import (
+    RailRouteAction,
+    RailRouteController,
+    RailRouteDiscovery,
+    parse_control_intent,
+)
+from sim_pilot.rail_route.bridge import (
+    RailRouteBridgeError,
+    RailRouteBridgeInstaller,
+    entity_from,
+    execute_set_route,
+    prove_read_only_bridge,
+    rail_route_bridge_client,
+    surface_from,
+)
+from sim_pilot.rail_route.bridge import (
+    render_entity as render_rail_route_entity,
+)
+from sim_pilot.rail_route.bridge import (
+    render_surface as render_rail_route_surface,
+)
 from sim_pilot.rail_route.errors import RailRouteError
 from sim_pilot.reconciliation import default_reconciliation_dispatcher
 from sim_pilot.runtime import RuntimeEngine
@@ -178,12 +199,14 @@ openttd_bridge_app = typer.Typer(help="Operate the versioned OpenTTD GameScript 
 openttd_bridge_action_app = typer.Typer(help="Run a verified, explicitly enabled bridge action.")
 evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation exercises.")
 rail_route_app = typer.Typer(help="Control a local Rail Route game with verified plain English.")
+rail_route_bridge_app = typer.Typer(help="Operate the read-only Rail Route semantic bridge.")
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
 app.add_typer(analysis_app, name="analysis")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(rail_route_app, name="rail-route")
+rail_route_app.add_typer(rail_route_bridge_app, name="bridge")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_analyze_app, name="analyze")
 openttd_app.add_typer(openttd_bridge_app, name="bridge")
@@ -445,6 +468,149 @@ def _rail_route_controller() -> RailRouteController:
     return RailRouteController()
 
 
+def _rail_route_bridge_installer() -> RailRouteBridgeInstaller:
+    return RailRouteBridgeInstaller()
+
+
+@rail_route_bridge_app.command("doctor")
+def rail_route_bridge_doctor() -> None:
+    """Diagnose the exact game, loader, architecture, and plugin build prerequisites."""
+    try:
+        _emit(_rail_route_bridge_installer().diagnose())
+    except RailRouteBridgeError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("install")
+def rail_route_bridge_install() -> None:
+    """Install only pinned, checksummed bridge files and record their ownership."""
+    try:
+        _emit(_rail_route_bridge_installer().install())
+    except RailRouteBridgeError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("verify")
+def rail_route_bridge_verify() -> None:
+    """Verify installed bridge files and compatibility without launching the game."""
+    try:
+        _emit(_rail_route_bridge_installer().verify())
+    except RailRouteBridgeError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("disable")
+def rail_route_bridge_disable() -> None:
+    """Disable only the manifest-owned bridge plugin."""
+    try:
+        _emit(_rail_route_bridge_installer().disable())
+    except RailRouteBridgeError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("uninstall")
+def rail_route_bridge_uninstall() -> None:
+    """Remove unchanged manifest-owned files and preserve everything unrecognized."""
+    try:
+        _emit(_rail_route_bridge_installer().uninstall())
+    except RailRouteBridgeError as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+async def _rail_route_bridge_capabilities_async() -> BaseModel:
+    client = rail_route_bridge_client()
+    try:
+        return await client.connect()
+    finally:
+        await client.close()
+
+
+async def _rail_route_bridge_observe_async() -> GameSnapshot:
+    client = rail_route_bridge_client()
+    try:
+        await client.connect()
+        return await client.request_full_snapshot()
+    finally:
+        await client.close()
+
+
+@rail_route_bridge_app.command("capabilities")
+def rail_route_bridge_capabilities() -> None:
+    """Authenticate and print the running bridge's read-only capability manifest."""
+    try:
+        _emit(asyncio.run(_rail_route_bridge_capabilities_async()))
+    except (GameBridgeError, RailRouteBridgeError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("observe")
+def rail_route_bridge_observe(
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit the complete typed snapshot.")
+    ] = False,
+) -> None:
+    """Request one authenticated full read-only semantic snapshot."""
+    try:
+        snapshot = asyncio.run(_rail_route_bridge_observe_async())
+        if json_output:
+            _emit(snapshot)
+        else:
+            coverage = ", ".join(
+                f"{surface.coverage.surface}={surface.coverage.status.value}"
+                for surface in snapshot.surfaces
+            )
+            typer.echo(
+                f"Rail Route {snapshot.game_version} bridge snapshot "
+                f"{snapshot.bridge_sequence}: {coverage}"
+            )
+    except (GameBridgeError, RailRouteBridgeError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("list")
+def rail_route_bridge_list(
+    surface: str,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List one observed semantic collection, such as trains or stations."""
+    try:
+        snapshot = asyncio.run(_rail_route_bridge_observe_async())
+        observed = surface_from(snapshot, surface)
+        if json_output:
+            _emit([entity.model_dump(mode="json") for entity in observed.entities])
+        else:
+            typer.echo(render_rail_route_surface(observed))
+    except (GameBridgeError, RailRouteBridgeError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("show")
+def rail_route_bridge_show(
+    surface: str,
+    reference: str,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show one semantic entity by stable ID or exact public name."""
+    try:
+        snapshot = asyncio.run(_rail_route_bridge_observe_async())
+        entity = entity_from(snapshot, surface, reference)
+        _emit(entity) if json_output else typer.echo(render_rail_route_entity(entity))
+    except (GameBridgeError, RailRouteBridgeError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
+@rail_route_bridge_app.command("prove-read-only")
+def rail_route_bridge_prove_read_only() -> None:
+    """Prove paused semantic and save bytes remain unchanged across observations."""
+    try:
+        proof = asyncio.run(prove_read_only_bridge())
+        _emit(proof)
+        if not proof.passed:
+            raise typer.Exit(RAIL_ROUTE_FAILURE)
+    except (GameBridgeError, RailRouteBridgeError, OSError) as error:
+        _fail(error, RAIL_ROUTE_FAILURE)
+
+
 @rail_route_app.command("doctor")
 def rail_route_doctor() -> None:
     """Inspect the installed game, running process, version, and permissions."""
@@ -479,7 +645,12 @@ def rail_route_do(
 ) -> None:
     """Validate, execute at most one input, then verify the effect."""
     try:
-        result = _rail_route_controller().execute(parse_control_intent(instruction))
+        intent = parse_control_intent(instruction)
+        result = (
+            asyncio.run(execute_set_route(intent))
+            if intent.action is RailRouteAction.SET_ROUTE
+            else _rail_route_controller().execute(intent)
+        )
         _emit(result) if json_output else typer.echo(result.message)
     except RailRouteError as error:
         _fail(error, RAIL_ROUTE_FAILURE)
@@ -489,7 +660,7 @@ def rail_route_do(
 def rail_route_play() -> None:
     """Run an interactive, capability-gated Rail Route control session."""
     controller = _rail_route_controller()
-    typer.echo("Sim Pilot Rail Route — verified actions: status, pause, resume")
+    typer.echo("Sim Pilot Rail Route — verified actions: status, pause, resume, set_route")
     typer.echo("Type quit to leave the session.")
     while True:
         try:
@@ -500,7 +671,12 @@ def rail_route_play() -> None:
         if instruction.strip().lower() in {"exit", "quit"}:
             return
         try:
-            result = controller.execute(parse_control_intent(instruction))
+            intent = parse_control_intent(instruction)
+            result = (
+                asyncio.run(execute_set_route(intent))
+                if intent.action is RailRouteAction.SET_ROUTE
+                else controller.execute(intent)
+            )
             typer.echo(result.message)
         except RailRouteError as error:
             typer.echo(f"error[{type(error).__name__}]: {error}", err=True)

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "scenario_id": "sim-pilot-test-yard-v1",
+  "display_name": "Sim Pilot Test Yard",
+  "map_uuid": "52da8212-cb1b-44b6-b067-7e7367d02c6c",
+  "rail_route_version": "2.3.24",
+  "steam_build_id": "22547955",
+  "initial_time": "08:00:00",
+  "initial_paused": true,
+  "layout": {
+    "kind": "single_straight_route",
+    "signals_left_to_right": ["SIG-C-W", "SIG-W-IN", "SIG-C-E", "SIG-E-IN"],
+    "stations": [],
+    "platforms": [],
+    "switches": [],
+    "trains": [],
+    "incoming_traffic": []
+  },
+  "set_route": {
+    "origin_signal": "SIG-W-IN",
+    "destination_signal": "SIG-C-W",
+    "expected_unique_path": true,
+    "initially_free": true
+  },
+  "negative_assertions": [
+    {"kind": "same_signal", "from": "SIG-W-IN", "to": "SIG-W-IN"},
+    {"kind": "missing_destination", "from": "SIG-W-IN", "to": "MISSING-SIGNAL"},
+    {"kind": "already_allocated", "from": "SIG-W-IN", "to": "SIG-C-W"}
+  ],
+  "artifact": {
+    "status": "created",
+    "relative_path": "artifact",
+    "files": [
+      {
+        "name": "level.txt",
+        "sha256": "eec885feac543363bdef68bb04eb366a077196df6df263e1d06f09f442e2d536"
+      },
+      {
+        "name": "savedMap.bytes",
+        "sha256": "6839a1bce78cfd0850cf20c5727ca538d8f754d7c713117e509c7c120c54dae4"
+      }
+    ],
+    "windows_verified": false
+  }
+}

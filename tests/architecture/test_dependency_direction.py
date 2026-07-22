@@ -240,6 +240,27 @@ def test_runtime_does_not_import_openttd_client() -> None:
     assert not {path: modules for path, modules in violations.items() if modules}
 
 
+def test_game_bridge_is_below_game_and_action_boundaries() -> None:
+    files = (PACKAGE_ROOT / "game_bridge").rglob("*.py")
+    forbidden = (
+        "sim_pilot.adapters",
+        "sim_pilot.rail_route",
+        "sim_pilot.openttd",
+        "sim_pilot.runtime",
+        "sim_pilot.persistence",
+        "sim_pilot.intent_compiler",
+        "sim_pilot.decision_provider",
+        "openai",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
 def test_runtime_orchestration_modules_stay_reviewable() -> None:
     """Keep the facade and extracted execution responsibilities below the review threshold."""
     limits = {

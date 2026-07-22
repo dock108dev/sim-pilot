@@ -35,3 +35,6 @@ jobs:
 
       - name: pytest
         run: uv run pytest
+
+      - name: C# bridge tests
+        run: sh rail_route_bridge/scripts/test.sh

@@ -5,13 +5,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RailRouteAction(StrEnum):
     STATUS = "status"
     PAUSE = "pause"
     RESUME = "resume"
+    SET_ROUTE = "set_route"
 
 
 class RailRouteScreenState(StrEnum):
@@ -58,6 +59,20 @@ class RailRouteIntent(BaseModel):
     schema_version: Literal[1] = 1
     instruction: str = Field(min_length=1)
     action: RailRouteAction
+    origin_signal: str | None = Field(default=None, min_length=1, max_length=128)
+    destination_signal: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_route_arguments(self) -> "RailRouteIntent":
+        route_fields = self.origin_signal is not None or self.destination_signal is not None
+        if self.action is RailRouteAction.SET_ROUTE:
+            if self.origin_signal is None or self.destination_signal is None:
+                raise ValueError("set_route requires origin and destination signals")
+            if self.origin_signal == self.destination_signal:
+                raise ValueError("origin and destination signals must differ")
+        elif route_fields:
+            raise ValueError("route arguments are valid only for set_route")
+        return self
 
 
 class RailRouteControlResult(BaseModel):

@@ -199,6 +199,62 @@ opened. See [014-gameplay-analysis-engine.md](014-gameplay-analysis-engine.md), 
 [intelligence guide](016-openttd-intelligence-guide.md), and the
 [Phase 10A capability decision](022-phase10a-named-entity-inspection.md).
 
+## Rail Route 2.3.24
+
+The existing `rail-route status`, `do`, and `play` commands remain the macOS screen-control path.
+The semantic bridge is an independent, explicitly installed path. Observation remains read-only;
+the only semantic mutation is one capability-gated route allocation:
+
+```bash
+sh rail_route_bridge/scripts/test.sh
+
+# Requires a checksum-verified BepInEx 5.4.23.5 extraction and the exact local game assemblies.
+BEPINEX_ROOT=/path/to/BepInEx \
+RAIL_ROUTE_MANAGED_PATH="/path/to/Rail Route_Data/Managed" \
+  sh rail_route_bridge/scripts/build-plugin.sh
+
+uv run sim-pilot rail-route bridge doctor
+uv run sim-pilot rail-route bridge install
+uv run sim-pilot rail-route bridge verify
+uv run sim-pilot rail-route bridge capabilities
+uv run sim-pilot rail-route bridge observe --json
+uv run sim-pilot rail-route bridge list trains
+uv run sim-pilot rail-route bridge list stations
+uv run sim-pilot rail-route bridge list incoming-traffic
+uv run sim-pilot rail-route bridge list track-occupancy
+uv run sim-pilot rail-route bridge show trains <UUID-or-reporting-number>
+uv run sim-pilot rail-route bridge prove-read-only
+uv run sim-pilot rail-route do "set a route from SIG-W-IN to SIG-C-W"
+```
+
+Run `set_route` only in a disposable scenario. It requires a fresh snapshot, validates both signals
+and the unique free path, sends one request, and verifies the allocation from another snapshot. It
+does not retry or cancel the route.
+
+`doctor` and installation require Rail Route to be closed. They validate the exact app, Steam build,
+Unity/Mono runtime, executable/assembly hashes, universal architectures, plugin artifact, symlinks,
+and target collisions. Installation fetches only the pinned BepInEx archive, verifies its SHA-256,
+and records every owned file. It does not change the app bundle or Steam launch configuration.
+
+Launch through the temporary, explicit Steam `%command%` wrapper documented in
+[025-rail-route-semantic-bridge.md](025-rail-route-semantic-bridge.md). The installer never changes
+Steam configuration; the operator must add and later remove that option visibly. The first live
+proof must use x86_64/Rosetta because that is the observed baseline. Start bridge runs from Steam's
+Library Play button; Dock, Finder, and Spotlight launches bypass the Steam launch option.
+
+Recovery is deliberately conservative:
+
+```bash
+uv run sim-pilot rail-route bridge disable
+uv run sim-pilot rail-route bridge uninstall
+```
+
+Disable moves only the owned plugin. Uninstall refuses a changed owned file and preserves generated
+or unknown files for review. It removes the owner-only authentication token. The 2026-07-21 live
+recovery removed all 23 unchanged manifest-owned files, preserved generated logs/config/cache, and
+returned to an ordinary Steam launch with no bridge listener. The installer never edits Steam
+configuration, so the operator must clear the temporary launch option explicitly.
+
 ## Approval and recovery
 
 Approval commands take an approval ID. Inspect the task and events before changing recovery state:

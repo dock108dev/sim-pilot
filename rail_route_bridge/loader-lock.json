@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "loader": "BepInEx",
+  "version": "5.4.23.5",
+  "release": "https://github.com/BepInEx/BepInEx/releases/tag/v5.4.23.5",
+  "license": "MIT",
+  "license_url": "https://github.com/BepInEx/BepInEx/blob/v5-lts/LICENSE",
+  "macos": {
+    "asset": "BepInEx_macos_universal_5.4.23.5.zip",
+    "architectures": ["arm64", "x86_64"],
+    "size_bytes": 658168,
+    "sha256": "01c2ae782eb016dfd6c345a18dbd2dcafffb3d9d318449d6486689f426b4a323",
+    "live_validated": false
+  },
+  "windows": {
+    "asset": "BepInEx_win_x64_5.4.23.5.zip",
+    "architectures": ["x86_64"],
+    "size_bytes": 639118,
+    "sha256": "82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4",
+    "live_validated": false
+  }
+}

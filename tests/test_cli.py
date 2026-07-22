@@ -112,7 +112,7 @@ def test_rail_route_route_instruction_fails_closed() -> None:
     )
 
     assert result.exit_code == 24
-    assert "route-setting is not enabled" in result.output
+    assert "use exactly 'set a route from SIGNAL to SIGNAL'" in result.output
 
 
 def test_compile_and_create_from_instruction(

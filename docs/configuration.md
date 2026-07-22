@@ -67,6 +67,23 @@ subprocess may use the network according to the Codex CLI account and installati
 Boolean OpenTTD settings accept only `0` or `1`. The Admin and GameScript write switches are
 independent and should be enabled only for a disposable local server.
 
+## Rail Route semantic bridge
+
+The bridge host is fixed to `127.0.0.1`; no environment variable can broaden its bind or client
+target. The token is generated during explicit installation and is not supplied on the command line.
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_PORT` | `18461` | Loopback TCP port, from 1 through 65535. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_ARCHITECTURE` | `x86_64` | Exact expected game process architecture; use `arm64` only for a deliberate native launch. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_TOKEN_FILE` | platform owner-data directory | Owner-only random authentication token shared by client and plugin. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_CONNECTION_TIMEOUT_SECONDS` | `5` | Positive connect and handshake timeout. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_READ_TIMEOUT_SECONDS` | `5` | Positive framed-message read timeout. |
+| `SIM_PILOT_RAIL_ROUTE_BRIDGE_MAXIMUM_MESSAGE_BYTES` | `1048576` | Positive limit no greater than the protocol-v2 ceiling. |
+
+There is no general Rail Route bridge write flag. Game Bridge Protocol v2 advertises exactly
+`set_route`; configuration cannot widen the catalog, enable retries, or expose arbitrary methods.
+
 ## Opt-in live-test gates
 
 The default test suite skips live access. These variables are read only by live tests:
@@ -85,6 +102,8 @@ The default test suite skips live access. These variables are read only by live 
 | `SIM_PILOT_LIVE_CODEX_INTERACTION=1` plus the Phase 9 OpenTTD gate | Phase 9 Codex regression, capped by the test plan at two invocations. |
 | `SIM_PILOT_LIVE_OPENTTD_LATENCY=1` | Phase 9.2 read-only cold and compatible-cache latency checks. |
 | `SIM_PILOT_LIVE_OPENTTD_INSPECTION=1` | Phase 10A read-only inspection-capability verification; no UI or economic action is sent. |
+| `SIM_PILOT_LIVE_RAIL_ROUTE=1` | Existing screen-control pause/resume test; requires a disposable visible game. |
+| `SIM_PILOT_LIVE_RAIL_ROUTE_BRIDGE=1` | Read-only bridge handshake, identity, snapshot, reconnect, and non-mutation suite on a disposable game. |
 
 These gates authorize a test to attempt external access; they do not configure credentials or the
 OpenTTD connection themselves.

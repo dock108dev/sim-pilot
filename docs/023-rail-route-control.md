@@ -45,9 +45,12 @@ and `what is the game doing?`. Conflicting or unknown instructions fail closed.
 
 ## Safety and trust boundary
 
-The adapter does not modify the Rail Route application, inject a plugin, scrape process memory, or
-claim an external API. It uses only macOS process discovery, screen capture, application activation,
-and the game's own Space binding. Recognition is limited to the version-pinned time controls.
+This screen-control adapter does not modify the Rail Route application, inject a plugin, scrape
+process memory, or claim an external API. It uses only macOS process discovery, screen capture,
+application activation, and the game's own Space binding. Recognition is limited to the
+version-pinned time controls. The separately installed read-only semantic bridge is documented in
+[025-rail-route-semantic-bridge.md](025-rail-route-semantic-bridge.md) and does not change this
+adapter's behavior or authority.
 
 Rail Route does not expose its Unity controls as semantic macOS Accessibility elements. The current
 screen boundary therefore cannot resolve a train, signal, platform, or route identity. Those actions
@@ -64,8 +67,9 @@ result. Route-setting may be added only after a disposable live probe proves:
 4. one bounded execution mechanism; and
 5. an independent postcondition proving the intended route—not merely a click—was established.
 
-The preferred future boundary is a small, versioned, local Rail Route bridge. Screen-coordinate
-automation remains a discovery fallback, not production authority.
+The read-only portion of the preferred small, versioned local bridge is now implemented. Gameplay
+route-setting remains behind this gate. Screen-coordinate automation remains a discovery fallback,
+not production authority.
 
 ## Live evidence
 

@@ -68,8 +68,13 @@ def test_parse_supported_plain_english(instruction: str, action: RailRouteAction
     assert parse_control_intent(instruction).action is action
 
 
-def test_parser_rejects_route_control_until_semantic_verification_exists() -> None:
-    with pytest.raises(RailRouteIntentError, match="route-setting is not enabled"):
+def test_parser_accepts_only_atomic_signal_route_syntax() -> None:
+    intent = parse_control_intent("set a route from SIG-W-IN to SIG-C-W")
+    assert intent.action is RailRouteAction.SET_ROUTE
+    assert intent.origin_signal == "SIG-W-IN"
+    assert intent.destination_signal == "SIG-C-W"
+
+    with pytest.raises(RailRouteIntentError, match="use exactly"):
         parse_control_intent("Route train 12 to platform 2")
 
 
