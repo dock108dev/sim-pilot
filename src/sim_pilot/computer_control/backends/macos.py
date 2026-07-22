@@ -33,6 +33,7 @@ _CORE_FOUNDATION = Path("/System/Library/Frameworks/CoreFoundation.framework/Cor
 _HID_EVENT_TAP = 0
 _LEFT_MOUSE_DOWN = 1
 _LEFT_MOUSE_UP = 2
+_MOUSE_MOVED = 5
 _LEFT_BUTTON = 0
 _MAXIMUM_FRAME_AGE_SECONDS = 2.0
 
@@ -172,24 +173,35 @@ def _post_click(x: int, y: int) -> None:
     create = core_graphics.CGEventCreateMouseEvent
     create.argtypes = [ctypes.c_void_p, ctypes.c_uint32, _CGPoint, ctypes.c_uint32]
     create.restype = ctypes.c_void_p
+    warp = core_graphics.CGWarpMouseCursorPosition
+    warp.argtypes = [_CGPoint]
+    warp.restype = ctypes.c_int32
     post = core_graphics.CGEventPost
     post.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
     release = core_foundation.CFRelease
     release.argtypes = [ctypes.c_void_p]
     point = _CGPoint(float(x), float(y))
+    moved = create(None, _MOUSE_MOVED, point, _LEFT_BUTTON)
     down = create(None, _LEFT_MOUSE_DOWN, point, _LEFT_BUTTON)
     up = create(None, _LEFT_MOUSE_UP, point, _LEFT_BUTTON)
-    if not down or not up:
+    if not moved or not down or not up:
+        if moved:
+            release(moved)
         if down:
             release(down)
         if up:
             release(up)
         raise ComputerControlError("CoreGraphics could not create mouse events")
     try:
+        if warp(point) != 0:
+            raise ComputerControlError("CoreGraphics could not move the pointer")
+        post(_HID_EVENT_TAP, moved)
+        time.sleep(0.03)
         post(_HID_EVENT_TAP, down)
         time.sleep(0.03)
         post(_HID_EVENT_TAP, up)
     finally:
+        release(moved)
         release(down)
         release(up)
 
