@@ -2,8 +2,10 @@
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 from time import perf_counter
@@ -14,6 +16,7 @@ import typer
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import Engine
 
+from sim_pilot.adapter_registry import adapter_registration
 from sim_pilot.adapters.base import AdapterSnapshot, SimulationAdapter
 from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.adapters.reference import ReferenceSimulationAdapter
@@ -61,6 +64,7 @@ from sim_pilot.analysis_provider import (
     OpenAIAnalysisCompiler,
     OpenAIExplanationProvider,
 )
+from sim_pilot.computer_control.errors import ComputerControlError
 from sim_pilot.config import (
     analysis_session_directory,
     codex_capability_cache_seconds,
@@ -83,6 +87,7 @@ from sim_pilot.decision_provider import (
 )
 from sim_pilot.domain import (
     Action,
+    AdapterId,
     AuthorityPolicy,
     Decision,
     DecisionType,
@@ -96,6 +101,12 @@ from sim_pilot.domain import (
 )
 from sim_pilot.domain.models import JsonValue
 from sim_pilot.game_bridge import GameBridgeError, GameSnapshot
+from sim_pilot.guidance import (
+    DelegationResult,
+    GuidanceStatus,
+    InteractionKind,
+    RecommendationResponse,
+)
 from sim_pilot.intent_compiler import (
     CompilerError,
     CompilerProvider,
@@ -174,6 +185,106 @@ from sim_pilot.runtime.errors import DurablePersistenceError, ReconstructionCons
 from sim_pilot.runtime.interfaces import DecisionProvider
 from sim_pilot.runtime.reconstruction import ReconstructedRuntimeContext
 from sim_pilot.runtime.verification import ActionVerifier
+from sim_pilot.software_inc import (
+    SoftwareIncBridgeInstaller,
+    SoftwareIncDiscovery,
+    SoftwareIncError,
+    SoftwareIncProbeInstaller,
+)
+from sim_pilot.software_inc.bridge import (
+    entity_from as software_inc_entity_from,
+)
+from sim_pilot.software_inc.bridge import (
+    prove_read_only_bridge as prove_software_inc_read_only_bridge,
+)
+from sim_pilot.software_inc.bridge import (
+    render_entity as render_software_inc_entity,
+)
+from sim_pilot.software_inc.bridge import (
+    render_surface as render_software_inc_surface,
+)
+from sim_pilot.software_inc.bridge import (
+    software_inc_bridge_client,
+)
+from sim_pilot.software_inc.bridge import (
+    surface_from as software_inc_surface_from,
+)
+from sim_pilot.software_inc.contracts.intent import ContractIntentAction, parse_contract_intent
+from sim_pilot.software_inc.contracts.models import ContractApproval, ContractRecommendation
+from sim_pilot.software_inc.contracts.operator import (
+    accept_recommended_contract,
+    advance_contract,
+    browse_contracts,
+    promote_contract,
+    release_contract,
+    review_contract,
+)
+from sim_pilot.software_inc.contracts.policy import recommend_contracts
+from sim_pilot.software_inc.contracts.projection import active_contract_work, available_contracts
+from sim_pilot.software_inc.contracts.store import ContractWorkflowStore
+from sim_pilot.software_inc.errors import SoftwareIncUIValidationError
+from sim_pilot.software_inc.guidance import (
+    SoftwareIncGuidanceService,
+    classify_interaction,
+    render_guidance,
+)
+from sim_pilot.software_inc.products import (
+    ProductApproval,
+    ProductIntentAction,
+    ProductOperationResult,
+    ProductRecommendation,
+    ProductWorkflow,
+    ProductWorkflowStore,
+    advance_product,
+    close_product_configuration,
+    iterate_product,
+    operating_system_options,
+    parse_product_intent,
+    product_features,
+    product_type,
+    promote_product,
+    recommend_atlas,
+    review_product,
+    set_product_hold,
+    start_atlas,
+)
+from sim_pilot.software_inc.products.contract import ATLAS_PRODUCT_TYPE
+from sim_pilot.software_inc.products.projection import product_ui_state, product_work
+from sim_pilot.software_inc.training import (
+    TrainingApproval,
+    TrainingIntentAction,
+    TrainingRecommendation,
+    TrainingWorkflow,
+    advance_training,
+    exact_employee_training,
+    parse_training_intent,
+    recommend_training,
+    start_training,
+)
+from sim_pilot.software_inc.training.store import TrainingWorkflowStore
+from sim_pilot.software_inc.ui import (
+    SoftwareIncUIObserver,
+    StaffingApproval,
+    StaffingPlan,
+    WorkstationOperationResult,
+    WorkstationPlan,
+    execute_office_intent,
+    execute_staffing_intent,
+    execute_workstation_intent,
+    parse_office_intent,
+    parse_staffing_intent,
+    parse_workstation_intent,
+    project_team_readiness,
+)
+from sim_pilot.software_inc.ui import (
+    diagnose_ui as diagnose_software_inc_ui,
+)
+from sim_pilot.software_inc.ui import (
+    execute_ui_action as execute_software_inc_ui_action,
+)
+from sim_pilot.software_inc.ui import (
+    parse_ui_action as parse_software_inc_ui_action,
+)
 
 SUCCESS = 0
 WAITING_APPROVAL = 10
@@ -186,6 +297,7 @@ PERSISTENCE_FAILURE = 21
 MIGRATION_FAILURE = 22
 OPENTTD_FAILURE = 23
 RAIL_ROUTE_FAILURE = 24
+SOFTWARE_INC_FAILURE = 25
 
 app = typer.Typer(help="Durable local runtime for the deterministic reference simulation.")
 db_app = typer.Typer(help="Manage durable schema state.")
@@ -201,14 +313,36 @@ evaluate_app = typer.Typer(help="Run explicitly authorized product evaluation ex
 rail_route_app = typer.Typer(help="Control a local Rail Route game with verified plain English.")
 rail_route_bridge_app = typer.Typer(help="Operate the read-only Rail Route semantic bridge.")
 rail_route_ui_app = typer.Typer(help="Diagnose synchronized Rail Route UI control.")
+software_inc_app = typer.Typer(help="Inspect the frozen Software Inc. reference integration.")
+software_inc_probe_app = typer.Typer(help="Manage the reversible official code-mod probe.")
+software_inc_bridge_app = typer.Typer(help="Operate the read-only Software Inc. semantic bridge.")
+software_inc_ui_app = typer.Typer(help="Operate verified Software Inc. visible-UI control.")
+software_inc_office_app = typer.Typer(help="Inspect and configure Software Inc. office readiness.")
+software_inc_contracts_app = typer.Typer(
+    help="Recommend and operate one verified Software Inc. contract."
+)
+software_inc_training_app = typer.Typer(
+    help="Recommend and operate one verified Software Inc. education assignment."
+)
+software_inc_products_app = typer.Typer(
+    help="Recommend and operate the controlled Prompt 7 Atlas product lifecycle."
+)
 app.add_typer(db_app, name="db")
 app.add_typer(task_app, name="task")
 app.add_typer(openttd_app, name="openttd")
 app.add_typer(analysis_app, name="analysis")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(rail_route_app, name="rail-route")
+app.add_typer(software_inc_app, name="software-inc")
 rail_route_app.add_typer(rail_route_bridge_app, name="bridge")
 rail_route_app.add_typer(rail_route_ui_app, name="ui")
+software_inc_app.add_typer(software_inc_probe_app, name="probe")
+software_inc_app.add_typer(software_inc_bridge_app, name="bridge")
+software_inc_app.add_typer(software_inc_ui_app, name="ui")
+software_inc_app.add_typer(software_inc_office_app, name="office")
+software_inc_app.add_typer(software_inc_contracts_app, name="contracts")
+software_inc_app.add_typer(software_inc_training_app, name="training")
+software_inc_app.add_typer(software_inc_products_app, name="products")
 openttd_app.add_typer(openttd_action_app, name="action")
 openttd_app.add_typer(openttd_analyze_app, name="analyze")
 openttd_app.add_typer(openttd_bridge_app, name="bridge")
@@ -292,11 +426,6 @@ class AnalysisProviderName(StrEnum):
     CODEX = "codex"
 
 
-class AdapterName(StrEnum):
-    REFERENCE = "reference"
-    OPENTTD = "openttd"
-
-
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -323,9 +452,15 @@ def _runtime(ctx: typer.Context) -> tuple[Engine, RuntimeEngine]:
 def _intent_compiler(
     provider_name: CompilerProviderName,
     recording_directory: Path | None,
-    adapter_name: AdapterName = AdapterName.REFERENCE,
+    adapter_name: AdapterId = AdapterId.REFERENCE,
     model_name: str | None = None,
 ) -> IntentCompiler:
+    registration = adapter_registration(adapter_name)
+    if not registration.compiler_available:
+        raise ValueError(
+            registration.unavailable_reason
+            or f"intent compilation is unavailable for {adapter_name.value!r}"
+        )
     catalog = capability_catalog(adapter_name.value)
     prompt = compiler_prompt(catalog)
     provider: CompilerProvider
@@ -354,7 +489,13 @@ def _intent_compiler(
 
 def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
     adapter_type = context.task.specification.adapter_type
-    if adapter_type == "openttd":
+    registration = adapter_registration(adapter_type)
+    if not registration.runtime_factory_available:
+        raise ReconstructionConsistencyError(
+            registration.unavailable_reason
+            or f"runtime factory is unavailable for {registration.adapter_id.value!r}"
+        )
+    if adapter_type is AdapterId.OPENTTD:
         prior_health: BridgeHealth | None = None
         if context.checkpoint is not None:
             raw = context.checkpoint.state.get("bridge")
@@ -364,11 +505,11 @@ def _restore(context: ReconstructedRuntimeContext) -> SimulationAdapter:
             prior_bridge_health=prior_health,
             reject_bridge_identity_change=prior_health is not None,
         )
-    if adapter_type == "reference":
+    if adapter_type is AdapterId.REFERENCE:
         if context.checkpoint is None:
             return ReferenceSimulationAdapter()
         return ReferenceSimulationAdapter.from_snapshot(context.adapter_snapshot())
-    raise ReconstructionConsistencyError(f"unsupported adapter type: {adapter_type!r}")
+    raise ReconstructionConsistencyError(f"unsupported adapter type: {adapter_type.value!r}")
 
 
 class ReferenceDemoDecisionProvider:
@@ -468,6 +609,1935 @@ def _fail(error: Exception, code: int = PERSISTENCE_FAILURE) -> NoReturn:
 
 def _rail_route_controller() -> RailRouteController:
     return RailRouteController()
+
+
+def _software_inc_discovery() -> SoftwareIncDiscovery:
+    return SoftwareIncDiscovery()
+
+
+def _software_inc_probe_installer() -> SoftwareIncProbeInstaller:
+    return SoftwareIncProbeInstaller(discovery=_software_inc_discovery())
+
+
+def _software_inc_bridge_installer() -> SoftwareIncBridgeInstaller:
+    return SoftwareIncBridgeInstaller(discovery=_software_inc_discovery())
+
+
+def _software_inc_guidance_service() -> SoftwareIncGuidanceService:
+    return SoftwareIncGuidanceService()
+
+
+@software_inc_app.command("doctor")
+def software_inc_doctor(
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit the complete strict discovery result.")
+    ] = False,
+) -> None:
+    """Inspect Software Inc. without changing its installation or saves."""
+    try:
+        result = _software_inc_discovery().inspect()
+        if json_output:
+            _emit(result)
+        elif not result.installed:
+            typer.echo("Software Inc. is not installed.")
+            typer.echo(result.reasons[0])
+        else:
+            version = result.product_version or "unknown version"
+            state = "running" if result.running else "not running"
+            support = "live-proven" if result.live_supported else "not live-proven"
+            typer.echo(f"Software Inc. {version} detected; {state}; {support}.")
+            if result.reasons:
+                typer.echo("Blocking reasons: " + "; ".join(result.reasons))
+            if result.warnings:
+                typer.echo("Warnings: " + "; ".join(result.warnings))
+        if not result.installed:
+            raise typer.Exit(SOFTWARE_INC_FAILURE)
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_app.command("capabilities")
+def software_inc_capabilities(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Print unified semantic, direct-UI, knowledge, and runtime evidence."""
+    try:
+        result = asyncio.run(_software_inc_guidance_service().capabilities())
+        _emit(result) if json_output else typer.echo(render_guidance(result))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_app.command("ask")
+def software_inc_ask(
+    question: Annotated[str, typer.Argument(help="Read-only Software Inc. question.")],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Answer from observed state and versioned repository knowledge without UI input."""
+    try:
+        result = asyncio.run(_software_inc_guidance_service().ask(question))
+        _emit(result) if json_output else typer.echo(render_guidance(result))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_app.command("crash-course")
+def software_inc_crash_course(
+    topic: Annotated[
+        str | None,
+        typer.Argument(
+            help=(
+                "Optional topic: company, teams, hiring, office, schedules, roles, servers, "
+                "contracts, products, development, "
+                "or capabilities."
+            )
+        ),
+    ] = None,
+    testing: Annotated[
+        bool,
+        typer.Option("--testing", help="Show exact live/offline development evidence."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Teach the verified basics, personalized when compatible state is available."""
+    try:
+        result = asyncio.run(
+            _software_inc_guidance_service().crash_course(
+                topic or "company",
+                testing=testing,
+            )
+        )
+        _emit(result) if json_output else typer.echo(render_guidance(result))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_app.command("recommend")
+def software_inc_recommend(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Recommend one evidence-grounded objective without executing it."""
+    try:
+        result = asyncio.run(_software_inc_guidance_service().recommend())
+        _emit(result) if json_output else typer.echo(render_guidance(result))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+_SOFTWARE_INC_PLAY_HELP = """Commands:
+  /crash_course [company|teams|hiring|office|schedules|roles|servers|contracts]
+                [training|products|development|capabilities|testing]
+  /status
+  /recommend
+  /why
+  /capabilities
+  /operate <objective>
+  /help
+  /quit
+Plain-English questions are always read-only. Only /operate or an unambiguous
+imperative can delegate a currently live-proven action."""
+
+
+@software_inc_app.command("play")
+def software_inc_play(
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Preauthorize each exact freshly rebound Atlas commitment (sandbox only).",
+        ),
+    ] = False,
+) -> None:
+    """Run the Software Inc. teacher, advisor, and bounded operator session."""
+    service = _software_inc_guidance_service()
+    current_recommendation: RecommendationResponse | None = None
+    typer.echo("Sim Pilot Software Inc. — teacher, advisor, and bounded operator")
+    typer.echo("Try /crash_course, ask a question, or type /help.")
+    while True:
+        try:
+            instruction = typer.prompt("software-inc")
+        except (EOFError, KeyboardInterrupt):
+            typer.echo("")
+            return
+        route = classify_interaction(instruction)
+        if route.kind is InteractionKind.QUIT:
+            return
+        if route.kind is InteractionKind.HELP:
+            typer.echo(_SOFTWARE_INC_PLAY_HELP)
+            continue
+        try:
+            result: BaseModel
+            if route.kind is InteractionKind.QUESTION:
+                result = asyncio.run(service.ask(instruction))
+            elif route.kind is InteractionKind.CRASH_COURSE:
+                result = asyncio.run(
+                    service.crash_course(
+                        route.topic or "company",
+                        testing=route.topic == "testing",
+                    )
+                )
+            elif route.kind is InteractionKind.STATUS:
+                result = asyncio.run(service.status())
+            elif route.kind is InteractionKind.RECOMMENDATION:
+                current_recommendation = asyncio.run(service.recommend())
+                result = current_recommendation
+            elif route.kind is InteractionKind.EXPLANATION:
+                result = asyncio.run(service.explain(current_recommendation))
+            elif route.kind is InteractionKind.CAPABILITIES:
+                result = asyncio.run(service.capabilities())
+            elif route.kind is InteractionKind.DELEGATION and not route.clarification_required:
+                assert route.objective is not None
+                if "atlas" in route.objective.casefold():
+                    product_intent = parse_product_intent(route.objective)
+                    if product_intent.mapping_note:
+                        typer.echo("Version mapping: " + product_intent.mapping_note)
+                    if product_intent.action is ProductIntentAction.CREATE:
+                        product_result = asyncio.run(
+                            start_atlas(
+                                minimum_cash_reserve=product_intent.minimum_cash_reserve,
+                                approval_provider=_product_approval_provider(yes),
+                            )
+                        )
+                    else:
+                        product_snapshot = asyncio.run(_software_inc_bridge_observe_async())
+                        if product_intent.action is ProductIntentAction.STATUS:
+                            product_workflow = _current_product_workflow(
+                                product_snapshot, include_completed=True
+                            )
+                            typer.echo(
+                                f"Atlas is {product_workflow.stage.value}; progress "
+                                f"{product_workflow.progress:g}; "
+                                f"held={product_workflow.held}."
+                            )
+                            continue
+                        product_result = _run_product_action(
+                            product_intent.action,
+                            product_snapshot,
+                            seconds=10.0,
+                            dry_run=False,
+                            auto_approve=yes,
+                        )
+                    result = DelegationResult(
+                        status=(
+                            GuidanceStatus.COMPLETED
+                            if product_result.verified
+                            else GuidanceStatus.BLOCKED
+                        ),
+                        objective=route.objective,
+                        action=product_intent.action.value,
+                        gestures_sent=product_result.gestures_sent,
+                        verified=product_result.verified,
+                        message=product_result.message,
+                    )
+                elif (
+                    "system design" in route.objective.casefold()
+                    or "education" in route.objective.casefold()
+                ):
+                    training_intent = parse_training_intent(route.objective)
+                    if (
+                        training_intent.action is not TrainingIntentAction.START
+                        or training_intent.team_name is None
+                        or training_intent.minimum_cash_reserve is None
+                    ):
+                        raise SoftwareIncUIValidationError(
+                            "interactive education delegation must name the team, System design, "
+                            "three months, and a cash reserve"
+                        )
+                    training_snapshot = asyncio.run(_software_inc_bridge_observe_async())
+                    training_save_identity = json.dumps(
+                        training_snapshot.save_identity.model_dump(mode="json"), sort_keys=True
+                    )
+                    training_existing = TrainingWorkflowStore().current(
+                        game_session_id=training_snapshot.game_session_id,
+                        save_identity=training_save_identity,
+                    )
+                    training_recommendation = (
+                        None
+                        if training_existing is not None
+                        else recommend_training(
+                            training_snapshot,
+                            team_name=training_intent.team_name,
+                            minimum_cash_reserve=training_intent.minimum_cash_reserve,
+                        )
+                    )
+                    training_result = asyncio.run(
+                        start_training(
+                            training_recommendation,
+                            approval_provider=_training_approval,
+                            existing_workflow=training_existing,
+                        )
+                    )
+                    result = DelegationResult(
+                        status=(
+                            GuidanceStatus.COMPLETED
+                            if training_result.verified
+                            else GuidanceStatus.BLOCKED
+                        ),
+                        objective=route.objective,
+                        action="start_education",
+                        gestures_sent=training_result.gestures_sent,
+                        verified=training_result.verified,
+                        message=training_result.message,
+                    )
+                elif "workstation" in route.objective.casefold():
+                    workstation = asyncio.run(
+                        _execute_software_inc_workstation(route.objective, dry_run=False)
+                    )
+                    result = DelegationResult(
+                        status=(
+                            GuidanceStatus.COMPLETED
+                            if workstation.verified
+                            else GuidanceStatus.BLOCKED
+                        ),
+                        objective=route.objective,
+                        action=workstation.intent.action.value,
+                        gestures_sent=workstation.gestures_sent,
+                        verified=workstation.verified,
+                        message=workstation.message,
+                    )
+                else:
+                    result = asyncio.run(
+                        service.operate(
+                            route.objective,
+                            recommendation=current_recommendation,
+                        )
+                    )
+            else:
+                typer.echo(
+                    "I could not safely distinguish a question from an action. Rephrase as a "
+                    "question, or use `/operate <objective>` to delegate explicitly."
+                )
+                continue
+            typer.echo(render_guidance(result))
+        except (
+            ComputerControlError,
+            GameBridgeError,
+            SoftwareIncError,
+            OSError,
+            ValidationError,
+        ) as error:
+            typer.echo(f"error[{type(error).__name__}]: {error}", err=True)
+
+
+@software_inc_probe_app.command("doctor")
+def software_inc_probe_doctor() -> None:
+    """Report official probe source, ownership, enablement, and load evidence."""
+    try:
+        report = _software_inc_probe_installer().diagnose()
+        _emit(report)
+        if not report.discovery.installed:
+            raise typer.Exit(SOFTWARE_INC_FAILURE)
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_probe_app.command("install")
+def software_inc_probe_install() -> None:
+    """Install only the checksum-recorded official source probe."""
+    try:
+        _emit(_software_inc_probe_installer().install())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_probe_app.command("verify")
+def software_inc_probe_verify() -> None:
+    """Verify the installed probe and its least-authority source contract."""
+    try:
+        _emit(_software_inc_probe_installer().verify())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_probe_app.command("disable")
+def software_inc_probe_disable() -> None:
+    """Disable only the unchanged manifest-owned probe source."""
+    try:
+        _emit(_software_inc_probe_installer().disable())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_probe_app.command("uninstall")
+def software_inc_probe_uninstall() -> None:
+    """Remove only unchanged owned probe files and preserve unknown files."""
+    try:
+        _emit(_software_inc_probe_installer().uninstall())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("doctor")
+def software_inc_bridge_doctor() -> None:
+    """Report artifact, ownership, broad-access scope, and live-load evidence."""
+    try:
+        _emit(_software_inc_bridge_installer().diagnose())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("install")
+def software_inc_bridge_install(
+    approve_broad_access: Annotated[
+        bool,
+        typer.Option(
+            "--approve-broad-access",
+            help=(
+                "Approve Software Inc. GiveMeFreedom solely for token read and loopback networking."
+            ),
+        ),
+    ] = False,
+) -> None:
+    """Install the checksum-recorded compiled bridge after explicit authority approval."""
+    try:
+        _emit(_software_inc_bridge_installer().install(approve_broad_access=approve_broad_access))
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("verify")
+def software_inc_bridge_verify() -> None:
+    """Verify exact owned bridge bytes, game identity, and private token."""
+    try:
+        _emit(_software_inc_bridge_installer().verify())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("disable")
+def software_inc_bridge_disable() -> None:
+    """Disable only the unchanged manifest-owned bridge DLL."""
+    try:
+        _emit(_software_inc_bridge_installer().disable())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("uninstall")
+def software_inc_bridge_uninstall() -> None:
+    """Remove only unchanged owned bridge state and preserve unknown files."""
+    try:
+        _emit(_software_inc_bridge_installer().uninstall())
+    except SoftwareIncError as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+async def _software_inc_bridge_capabilities_async() -> BaseModel:
+    client = software_inc_bridge_client()
+    try:
+        return await client.connect()
+    finally:
+        await client.close()
+
+
+async def _software_inc_bridge_observe_async() -> GameSnapshot:
+    client = software_inc_bridge_client()
+    try:
+        await client.connect()
+        return await client.request_full_snapshot()
+    finally:
+        await client.close()
+
+
+@software_inc_bridge_app.command("capabilities")
+def software_inc_bridge_capabilities() -> None:
+    """Authenticate and print the running bridge's empty action catalog."""
+    try:
+        _emit(asyncio.run(_software_inc_bridge_capabilities_async()))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("observe")
+def software_inc_bridge_observe(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Request one main-thread, authenticated semantic snapshot."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        if json_output:
+            _emit(snapshot)
+        else:
+            coverage = ", ".join(
+                f"{item.coverage.surface}={item.coverage.status.value}"
+                for item in snapshot.surfaces
+            )
+            typer.echo(
+                f"Software Inc. {snapshot.game_version} bridge snapshot "
+                f"{snapshot.bridge_sequence}: {coverage}"
+            )
+    except (ComputerControlError, GameBridgeError, SoftwareIncError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("list")
+def software_inc_bridge_list(
+    surface: str,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List teams, employees, work-items, products, or another observed surface."""
+    try:
+        observed = software_inc_surface_from(
+            asyncio.run(_software_inc_bridge_observe_async()), surface
+        )
+        if json_output:
+            _emit([entity.model_dump(mode="json") for entity in observed.entities])
+        else:
+            typer.echo(render_software_inc_surface(observed))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("show")
+def software_inc_bridge_show(
+    surface: str,
+    reference: str,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show one entity by stable ID or an exact observed string value."""
+    try:
+        entity = software_inc_entity_from(
+            asyncio.run(_software_inc_bridge_observe_async()), surface, reference
+        )
+        _emit(entity) if json_output else typer.echo(render_software_inc_entity(entity))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_bridge_app.command("prove-read-only")
+def software_inc_bridge_prove_read_only() -> None:
+    """Prove paused semantics and all discovered save bytes survive reconnect unchanged."""
+    try:
+        proof = asyncio.run(prove_software_inc_read_only_bridge())
+        _emit(proof)
+        if not proof.passed:
+            raise typer.Exit(SOFTWARE_INC_FAILURE)
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_ui_app.command("doctor")
+def software_inc_ui_doctor() -> None:
+    """Verify the exact-window, permission, bridge, and current-scene UI gate."""
+    try:
+        report = asyncio.run(diagnose_software_inc_ui())
+        _emit(report)
+        if not report.safe:
+            raise typer.Exit(SOFTWARE_INC_FAILURE)
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+async def _software_inc_ui_observe_async():
+    return (await SoftwareIncUIObserver().observe()).observation
+
+
+def _approve_software_inc_workstation(plan: WorkstationPlan) -> bool:
+    if plan.assign_room_to_team:
+        typer.echo(
+            f"Approval required: assign room {plan.room_id} to "
+            f"{plan.team_name} and commit this exact workstation setup:"
+        )
+    else:
+        typer.echo(
+            f"Approval required: room {plan.room_id} is already assigned to "
+            f"{plan.team_name}; commit this exact workstation setup:"
+        )
+    for component in plan.reused_components:
+        typer.echo(
+            f"  Reuse existing {component.display_name} "
+            f"[{component.prefab_name}] ({component.equipment_id})"
+        )
+    for line in plan.line_items:
+        inventory = " (use observed inventory; $0 cash)" if line.expected_cash_charge == 0 else ""
+        typer.echo(
+            f"  {line.sequence}. 1x {line.catalog_item.display_name} "
+            f"[{line.catalog_item.prefab_name}] at ${line.total_price:,.2f}{inventory}"
+        )
+    typer.echo(
+        f"Exact cash charge: ${plan.total_one_time_cost:,.2f}; "
+        f"projected cash: ${plan.projected_cash_after:,.2f}; "
+        f"minimum reserve: ${plan.minimum_cash_reserve:,.2f}."
+    )
+    typer.echo(
+        "Fixed recurring monthly cost: $0.00. Observed equipment wattage: "
+        f"{plan.observed_variable_wattage}; usage-based electricity is not "
+        "deterministically projected."
+    )
+    question = (
+        "Approve this exact room assignment and itemized commitment?"
+        if plan.assign_room_to_team
+        else "Approve this exact itemized commitment in the already-assigned room?"
+    )
+    return typer.confirm(question, default=False)
+
+
+async def _execute_software_inc_workstation(
+    instruction: str, *, dry_run: bool
+) -> WorkstationOperationResult:
+    return await execute_workstation_intent(
+        parse_workstation_intent(instruction),
+        dry_run=dry_run,
+        approval_provider=None if dry_run else _approve_software_inc_workstation,
+    )
+
+
+@software_inc_ui_app.command("observe")
+def software_inc_ui_observe(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Synchronize read-only semantics with one exact-window screenshot."""
+    try:
+        observation = asyncio.run(_software_inc_ui_observe_async())
+        if json_output:
+            _emit(observation)
+        else:
+            targets = ", ".join(target.target_id for target in observation.targets) or "none"
+            typer.echo(
+                f"Software Inc. scene={observation.scene.value}; "
+                f"paused={str(observation.paused).lower()}; "
+                f"modal={observation.modal_state.value}; targets={targets}; "
+                f"frame={observation.frame.frame_id[:12]}; "
+                f"bridge_sequence={observation.semantic_after.bridge_sequence}"
+            )
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_ui_app.command("capabilities")
+def software_inc_ui_capabilities() -> None:
+    """Print the separate visible-UI catalog while semantic actions remain empty."""
+    try:
+        catalog = asyncio.run(SoftwareIncUIObserver().capabilities())
+        _emit(catalog)
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_ui_app.command("do")
+def software_inc_ui_do(
+    instruction: str,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Execute one bounded plain-English UI objective and verify every gesture."""
+    try:
+        try:
+            action = parse_software_inc_ui_action(instruction)
+        except SoftwareIncUIValidationError:
+            if "workstation" in instruction.strip().casefold():
+                workstation_result = asyncio.run(
+                    _execute_software_inc_workstation(instruction, dry_run=dry_run)
+                )
+                if json_output:
+                    _emit(workstation_result)
+                else:
+                    typer.echo(workstation_result.message)
+                    typer.echo(
+                        f"cycles={workstation_result.cycles}; "
+                        f"gestures={workstation_result.gestures_sent}; "
+                        f"verified={str(workstation_result.verified).lower()}"
+                    )
+                return
+            office_prefix = (
+                instruction.strip().casefold().startswith(("assign ", "configure ", "set "))
+            )
+            if office_prefix:
+                office_intent = parse_office_intent(instruction)
+                office_result = asyncio.run(execute_office_intent(office_intent, dry_run=dry_run))
+                if json_output:
+                    _emit(office_result)
+                else:
+                    typer.echo(office_result.message)
+                    typer.echo(
+                        f"cycles={office_result.cycles}; "
+                        f"gestures={office_result.gestures_sent}; "
+                        f"verified={str(office_result.verified).lower()}"
+                    )
+                return
+            staffing_intent = parse_staffing_intent(instruction)
+
+            def approve_staffing(plan: StaffingPlan, _: StaffingApproval) -> bool:
+                if plan.action.value == "observe_applicants":
+                    typer.echo(
+                        f"Approval required: spend ${plan.expected_one_time_cost:,.2f} once "
+                        f"to search for Programmer applicants for {plan.team_name}."
+                    )
+                elif plan.action.value == "hire_employee":
+                    assert plan.applicant is not None
+                    typer.echo(
+                        f"Approval required: hire {plan.applicant.name} "
+                        f"({plan.applicant.applicant_id}) into {plan.team_name} for "
+                        f"${plan.expected_monthly_cost:,.2f}/month; "
+                        f"cap=${plan.maximum_monthly_salary:,.2f}."
+                    )
+                else:
+                    typer.echo(f"Approval required: create team {plan.team_name!r}.")
+                return typer.confirm("Approve this exact in-game commitment?", default=False)
+
+            staffing_result = asyncio.run(
+                execute_staffing_intent(
+                    staffing_intent,
+                    dry_run=dry_run,
+                    approval_provider=None if dry_run else approve_staffing,
+                )
+            )
+            if json_output:
+                _emit(staffing_result)
+            else:
+                typer.echo(staffing_result.message)
+                typer.echo(
+                    f"cycles={staffing_result.cycles}; "
+                    f"gestures={staffing_result.gestures_sent}; "
+                    f"verified={str(staffing_result.verified).lower()}"
+                )
+            return
+        result = asyncio.run(execute_software_inc_ui_action(action, dry_run=dry_run))
+        if json_output:
+            _emit(result)
+        else:
+            typer.echo(result.message)
+            typer.echo(
+                f"cycles={result.cycles}; gestures={result.gestures_sent}; "
+                f"verified={str(result.verified).lower()}"
+            )
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_office_app.command("readiness")
+def software_inc_office_readiness(
+    team: Annotated[str, typer.Argument(help="Exact observed team name.")],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Explain observed workspace, room, cost, and server readiness without input."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        readiness = project_team_readiness(snapshot, team)
+        if json_output:
+            _emit(readiness)
+            return
+        typer.echo(
+            f"{readiness.team_name}: capacity {readiness.current_capacity}/"
+            f"{readiness.required_capacity}; working hours "
+            f"{readiness.work_start}-{readiness.work_end}."
+        )
+        if readiness.exact_missing_resource is None:
+            typer.echo("Workspace: sufficient observed valid workstation capacity.")
+        else:
+            typer.echo(f"Missing: {readiness.exact_missing_resource}.")
+        if readiness.cheaper_existing_capacity:
+            typer.echo(
+                "Cheaper existing assignment candidates: "
+                + ", ".join(readiness.cheaper_existing_capacity)
+            )
+        if readiness.one_time_cost is not None:
+            typer.echo(
+                f"Exact one-time cash requirement: ${readiness.one_time_cost:,.2f}; "
+                f"projected cash: ${readiness.cash_reserve_after_purchase:,.2f}."
+                if readiness.cash_reserve_after_purchase is not None
+                else f"Exact one-time cash requirement: ${readiness.one_time_cost:,.2f}."
+            )
+        if readiness.recurring_cost is not None:
+            typer.echo(f"Fixed recurring monthly cost: ${readiness.recurring_cost:,.2f}.")
+        typer.echo(
+            "Servers: observed="
+            f"{len(readiness.servers)}; universal source-control prerequisite=false."
+        )
+        if readiness.material_unknowns:
+            typer.echo("Unknowns: " + " ".join(readiness.material_unknowns))
+    except (ComputerControlError, GameBridgeError, SoftwareIncError, OSError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+async def _software_inc_contract_snapshot(*, dry_run: bool = False) -> GameSnapshot:
+    result = await browse_contracts(dry_run=dry_run)
+    if dry_run and not result.verified:
+        raise SoftwareIncUIValidationError(result.message)
+    return await _software_inc_bridge_observe_async()
+
+
+def _contract_approval(approval: ContractApproval) -> bool:
+    typer.echo("Approval required: " + approval.action_summary)
+    return typer.confirm("Approve this exact in-game commitment?", default=False)
+
+
+def _render_contract_recommendation(recommendation: ContractRecommendation) -> None:
+    candidate = recommendation.recommended
+    if candidate is None:
+        typer.echo(
+            f"No eligible contract; {recommendation.rejected_count} observed candidates "
+            "were rejected."
+        )
+        for reason in recommendation.rejection_reasons:
+            typer.echo("Rejected because: " + reason)
+        for unknown in recommendation.material_unknowns:
+            typer.echo("Unknown: " + unknown)
+        return
+    contract = candidate.contract
+    team = candidate.team
+    typer.echo(
+        f"Recommend: {contract.name} from {contract.client} — ${contract.reward:,.2f} reward, "
+        f"${contract.penalty:,.2f} maximum penalty, deadline {contract.deadline}."
+    )
+    typer.echo(
+        f"Team {team.team_name}: roles {', '.join(team.observed_roles) or 'none'}; "
+        f"workspace {team.current_workspace_capacity}/{team.required_workspace_capacity}; "
+        f"conservative deadline buffer {team.deadline_buffer_days} days."
+    )
+    typer.echo(
+        f"Worst-case cash after full penalty: ${candidate.worst_case_cash_after_penalty:,.2f}."
+    )
+    for alternative in recommendation.alternatives:
+        typer.echo(
+            f"Alternative: {alternative.contract.name} from {alternative.contract.client} — "
+            f"${alternative.contract.reward:,.2f}."
+        )
+
+
+def _render_contract_operation(result: object, *, json_output: bool) -> None:
+    if json_output:
+        _emit(result)
+        return
+    message = getattr(result, "message", None)
+    if not isinstance(message, str):
+        raise SoftwareIncUIValidationError("contract operation returned no status message")
+    typer.echo(message)
+
+
+@software_inc_contracts_app.command("browse")
+def software_inc_contracts_browse(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Open the visible Contracts window and prove complete market observation."""
+    try:
+        result = asyncio.run(browse_contracts(dry_run=dry_run))
+        if json_output:
+            _emit(result)
+        else:
+            typer.echo(result.message)
+            typer.echo(f"gestures={result.gestures_sent}; verified={str(result.verified).lower()}")
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("list")
+def software_inc_contracts_list(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List exact available contracts after visible browsing."""
+    try:
+        snapshot = asyncio.run(_software_inc_contract_snapshot())
+        contracts = available_contracts(snapshot)
+        if json_output:
+            _emit(contracts)
+            return
+        if not contracts:
+            typer.echo("No available contracts are currently visible.")
+            return
+        for contract in contracts:
+            typer.echo(
+                f"[{contract.display_index}] {contract.name} — {contract.client}; "
+                f"reward=${contract.reward:,.2f}; penalty=${contract.penalty:,.2f}; "
+                f"completion_window={contract.deadline}"
+            )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("recommend")
+def software_inc_contracts_recommend(
+    team: Annotated[str, typer.Option("--team", help="Exact observed team name.")],
+    minimum_reward: Annotated[
+        float, typer.Option("--minimum-reward", min=0, help="Minimum acceptable USD reward.")
+    ],
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 0.0,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Recommend at most one contract plus two observed alternatives."""
+    try:
+        snapshot = asyncio.run(_software_inc_contract_snapshot())
+        recommendation = recommend_contracts(
+            snapshot,
+            team_name=team,
+            minimum_reward=Decimal(str(minimum_reward)),
+            minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+        )
+        _emit(recommendation) if json_output else _render_contract_recommendation(recommendation)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("accept")
+def software_inc_contracts_accept(
+    team: Annotated[str, typer.Option("--team", help="Exact observed team name.")],
+    minimum_reward: Annotated[float, typer.Option("--minimum-reward", min=0)],
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 0.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Recommend, explicitly approve, accept, assign, and verify one contract."""
+    try:
+        snapshot = asyncio.run(_software_inc_contract_snapshot(dry_run=dry_run))
+        recommendation = recommend_contracts(
+            snapshot,
+            team_name=team,
+            minimum_reward=Decimal(str(minimum_reward)),
+            minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+        )
+        result = asyncio.run(
+            accept_recommended_contract(
+                recommendation,
+                approval_provider=None if dry_run else _contract_approval,
+                dry_run=dry_run,
+            )
+        )
+        if json_output:
+            _emit(result)
+        else:
+            typer.echo(result.message)
+            typer.echo(f"gestures={result.gestures_sent}; verified={str(result.verified).lower()}")
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+def _current_contract_workflow(snapshot: GameSnapshot):
+    save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+    workflow = ContractWorkflowStore().current(
+        game_session_id=snapshot.game_session_id, save_identity=save_identity
+    )
+    if workflow is None:
+        raise SoftwareIncUIValidationError("no active contract workflow exists for this save")
+    return workflow
+
+
+@software_inc_contracts_app.command("status")
+def software_inc_contracts_status(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show the persisted workflow and current semantic work-item state."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+        repository = ContractWorkflowStore()
+        workflow = repository.current(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        ) or repository.latest(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        )
+        if workflow is None:
+            raise SoftwareIncUIValidationError("no contract workflow exists for the current save")
+        work = [
+            item
+            for item in active_contract_work(snapshot)
+            if item.contract_id == workflow.contract_id
+            or (item.contract_name == workflow.contract_name and item.client == workflow.client)
+        ]
+        if json_output:
+            _emit({"workflow": workflow, "work_items": work})
+            return
+        typer.echo(
+            f"{workflow.contract_name}: workflow={workflow.status.value}; "
+            f"observed_stage={workflow.observed_stage.value}; team={workflow.team_name}."
+        )
+        for item in work:
+            deadline = "not started" if item.contract_started is False else str(item.days_remaining)
+            typer.echo(
+                f"work_item={item.work_item_id}; stage={item.stage.value}; "
+                f"progress={item.progress}; bugs={item.bugs}; fixed_bugs={item.fixed_bugs}; "
+                f"days_remaining={deadline}."
+            )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("advance")
+def software_inc_contracts_advance(
+    seconds: Annotated[float, typer.Option("--seconds", min=0.1, max=30)] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Run one bounded work interval, then pause and verify progress and bugs."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        workflow = _current_contract_workflow(snapshot)
+        result = asyncio.run(
+            advance_contract(
+                workflow,
+                run_seconds=seconds,
+                deadline_risk_approval_provider=None if dry_run else _contract_approval,
+                dry_run=dry_run,
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("promote")
+def software_inc_contracts_promote(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Promote the exact contract only after observed readiness and approval."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        result = asyncio.run(
+            promote_contract(
+                _current_contract_workflow(snapshot),
+                approval_provider=None if dry_run else _contract_approval,
+                dry_run=dry_run,
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("review")
+def software_inc_contracts_review(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Open, approve, start, and verify one exact safe contract review."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        result = asyncio.run(
+            review_contract(
+                _current_contract_workflow(snapshot),
+                approval_provider=None if dry_run else _contract_approval,
+                dry_run=dry_run,
+            )
+        )
+        _render_contract_operation(result, json_output=json_output)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("release")
+def software_inc_contracts_release(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Release the exact contract only when the live UI exposes its valid action."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        result = asyncio.run(
+            release_contract(
+                _current_contract_workflow(snapshot),
+                approval_provider=None if dry_run else _contract_approval,
+                dry_run=dry_run,
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_contracts_app.command("do")
+def software_inc_contracts_do(
+    instruction: Annotated[str, typer.Argument(help="One bounded plain-English contract action.")],
+    seconds: Annotated[
+        float,
+        typer.Option("--seconds", min=0.1, max=30, help="Bounded real-time work interval."),
+    ] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Execute one deterministic Prompt 6A request from plain English."""
+    try:
+        intent = parse_contract_intent(instruction)
+        if intent.action is ContractIntentAction.BROWSE:
+            result = asyncio.run(browse_contracts(dry_run=dry_run))
+            _render_contract_operation(result, json_output=json_output)
+            return
+        if intent.action in {ContractIntentAction.RECOMMEND, ContractIntentAction.ACCEPT}:
+            if intent.team_name is None or intent.minimum_reward is None:
+                raise SoftwareIncUIValidationError(
+                    "contract recommendation requires an exact team and reward floor"
+                )
+            snapshot = asyncio.run(_software_inc_contract_snapshot(dry_run=dry_run))
+            recommendation = recommend_contracts(
+                snapshot,
+                team_name=intent.team_name,
+                minimum_reward=intent.minimum_reward,
+                minimum_cash_reserve=intent.minimum_cash_reserve,
+            )
+            if intent.action is ContractIntentAction.RECOMMEND:
+                _emit(recommendation) if json_output else _render_contract_recommendation(
+                    recommendation
+                )
+                return
+            result = asyncio.run(
+                accept_recommended_contract(
+                    recommendation,
+                    approval_provider=None if dry_run else _contract_approval,
+                    dry_run=dry_run,
+                )
+            )
+            _render_contract_operation(result, json_output=json_output)
+            return
+
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        workflow = _current_contract_workflow(snapshot)
+        if intent.action is ContractIntentAction.ADVANCE:
+            result = asyncio.run(
+                advance_contract(
+                    workflow,
+                    run_seconds=seconds,
+                    deadline_risk_approval_provider=None if dry_run else _contract_approval,
+                    dry_run=dry_run,
+                )
+            )
+        elif intent.action is ContractIntentAction.REVIEW:
+            result = asyncio.run(
+                review_contract(
+                    workflow,
+                    approval_provider=None if dry_run else _contract_approval,
+                    dry_run=dry_run,
+                )
+            )
+        elif intent.action is ContractIntentAction.PROMOTE:
+            result = asyncio.run(
+                promote_contract(
+                    workflow,
+                    approval_provider=None if dry_run else _contract_approval,
+                    dry_run=dry_run,
+                )
+            )
+        elif intent.action is ContractIntentAction.RELEASE:
+            result = asyncio.run(
+                release_contract(
+                    workflow,
+                    approval_provider=None if dry_run else _contract_approval,
+                    dry_run=dry_run,
+                )
+            )
+        else:  # pragma: no cover - exhaustive enum guard
+            raise SoftwareIncUIValidationError(
+                f"unsupported contract action {intent.action.value!r}"
+            )
+        _render_contract_operation(result, json_output=json_output)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+def _training_approval(approval: TrainingApproval) -> bool:
+    typer.echo("Approval required: " + approval.action_summary)
+    return typer.confirm("Approve this exact education commitment?", default=False)
+
+
+def _render_training_recommendation(recommendation: TrainingRecommendation) -> None:
+    candidate = recommendation.recommended
+    if candidate is None:
+        typer.echo(
+            f"No eligible education candidate; {recommendation.rejected_count} observed "
+            "employees were rejected."
+        )
+        for reason in recommendation.rejection_reasons:
+            typer.echo("Rejected because: " + reason)
+        return
+    employee = candidate.employee
+    typer.echo(
+        f"Recommend: {employee.employee_name} from {employee.team_name} — "
+        f"Designer/System level {employee.level} -> {candidate.target_level}, "
+        f"three sequential one-month courses, projected direct cost "
+        f"${candidate.projected_direct_cost:,.2f}."
+    )
+    typer.echo(
+        f"Team capacity {candidate.team_capacity_before} -> "
+        f"{candidate.team_capacity_during}; continuing payroll during education "
+        f"${candidate.payroll_during_training:,.2f}; cash after projected direct cost "
+        f"${candidate.cash_after_projected_cost:,.2f}. First course: "
+        f"${candidate.current_course_cost:,.2f}."
+    )
+    for alternative in recommendation.alternatives:
+        typer.echo(
+            f"Alternative: {alternative.employee.employee_name}; Designer/System level "
+            f"{alternative.employee.level}; projected cost "
+            f"${alternative.projected_direct_cost:,.2f}."
+        )
+    for unknown in recommendation.material_unknowns:
+        typer.echo("Unknown: " + unknown)
+
+
+def _current_training_workflow(snapshot: GameSnapshot) -> TrainingWorkflow:
+    save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+    workflow = TrainingWorkflowStore().current(
+        game_session_id=snapshot.game_session_id, save_identity=save_identity
+    )
+    if workflow is None:
+        raise SoftwareIncUIValidationError("no active education workflow exists for this save")
+    return workflow
+
+
+@software_inc_training_app.command("recommend")
+def software_inc_training_recommend(
+    team: Annotated[str, typer.Option("--team", help="Exact observed team name.")] = "Core",
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 0.0,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Recommend one employee for three sequential Designer/System courses."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        recommendation = recommend_training(
+            snapshot,
+            team_name=team,
+            minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+        )
+        _emit(recommendation) if json_output else _render_training_recommendation(recommendation)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_training_app.command("start")
+def software_inc_training_start(
+    team: Annotated[str, typer.Option("--team", help="Exact observed team name.")] = "Core",
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 0.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Approve and start the next exact one-month course in a three-course curriculum."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+        existing = TrainingWorkflowStore().current(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        )
+        recommendation = (
+            None
+            if existing is not None
+            else recommend_training(
+                snapshot,
+                team_name=team,
+                minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+            )
+        )
+        result = asyncio.run(
+            start_training(
+                recommendation,
+                approval_provider=None if dry_run else _training_approval,
+                dry_run=dry_run,
+                existing_workflow=existing,
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_training_app.command("status")
+def software_inc_training_status(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show persisted and current semantic education state."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+        repository = TrainingWorkflowStore()
+        workflow = repository.current(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        ) or repository.latest(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        )
+        if workflow is None:
+            raise SoftwareIncUIValidationError("no education workflow exists for this save")
+        observed = exact_employee_training(
+            snapshot,
+            employee_id=workflow.employee_id,
+            role="Designer",
+            specialization="System",
+        )
+        if json_output:
+            _emit({"workflow": workflow, "observed": observed})
+        else:
+            typer.echo(
+                f"{workflow.employee_name}: workflow={workflow.status.value}; "
+                f"Designer/System={observed.level}; active_courses="
+                f"{', '.join(observed.active_courses) or 'none'}."
+            )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_training_app.command("advance")
+def software_inc_training_advance(
+    seconds: Annotated[float, typer.Option("--seconds", min=0.1, max=30)] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Run one bounded interval, guarantee pause, and verify education progress."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        result = asyncio.run(
+            advance_training(
+                _current_training_workflow(snapshot),
+                run_seconds=seconds,
+                dry_run=dry_run,
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_training_app.command("do")
+def software_inc_training_do(
+    instruction: Annotated[str, typer.Argument(help="One bounded plain-English education action.")],
+    seconds: Annotated[float, typer.Option("--seconds", min=0.1, max=30)] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Execute one deterministic Prompt 6B request from plain English."""
+    try:
+        intent = parse_training_intent(instruction)
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        if intent.action in {TrainingIntentAction.RECOMMEND, TrainingIntentAction.START}:
+            if intent.team_name is None or intent.minimum_cash_reserve is None:
+                raise SoftwareIncUIValidationError(
+                    "education recommendation requires exact team and cash reserve"
+                )
+            if intent.action is TrainingIntentAction.RECOMMEND:
+                recommendation = recommend_training(
+                    snapshot,
+                    team_name=intent.team_name,
+                    minimum_cash_reserve=intent.minimum_cash_reserve,
+                )
+                _emit(recommendation) if json_output else _render_training_recommendation(
+                    recommendation
+                )
+                return
+            save_identity = json.dumps(
+                snapshot.save_identity.model_dump(mode="json"), sort_keys=True
+            )
+            existing = TrainingWorkflowStore().current(
+                game_session_id=snapshot.game_session_id, save_identity=save_identity
+            )
+            recommendation = (
+                None
+                if existing is not None
+                else recommend_training(
+                    snapshot,
+                    team_name=intent.team_name,
+                    minimum_cash_reserve=intent.minimum_cash_reserve,
+                )
+            )
+            result = asyncio.run(
+                start_training(
+                    recommendation,
+                    approval_provider=None if dry_run else _training_approval,
+                    dry_run=dry_run,
+                    existing_workflow=existing,
+                )
+            )
+        elif intent.action is TrainingIntentAction.ADVANCE:
+            result = asyncio.run(
+                advance_training(
+                    _current_training_workflow(snapshot),
+                    run_seconds=seconds,
+                    dry_run=dry_run,
+                )
+            )
+        else:
+            workflow = _current_training_workflow(snapshot)
+            observed = exact_employee_training(
+                snapshot,
+                employee_id=workflow.employee_id,
+                role="Designer",
+                specialization="System",
+            )
+            _emit({"workflow": workflow, "observed": observed}) if json_output else typer.echo(
+                f"{workflow.employee_name}: {workflow.status.value}; System level "
+                f"{observed.level}; courses={', '.join(observed.active_courses) or 'none'}."
+            )
+            return
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+def _product_approval(approval: ProductApproval) -> bool:
+    typer.echo("Approval required: " + approval.action_summary)
+    return typer.confirm("Approve this exact Atlas commitment?", default=False)
+
+
+def _product_approval_provider(auto_approve: bool) -> Callable[[ProductApproval], bool]:
+    return (lambda _approval: True) if auto_approve else _product_approval
+
+
+def _render_product_recommendation(recommendation: ProductRecommendation) -> None:
+    configuration = recommendation.configuration
+    runway = recommendation.runway
+    typer.echo(
+        f"{'Recommend' if recommendation.recommended else 'Reject'}: "
+        f"{configuration.name} — {configuration.product_type}/{configuration.category}; "
+        f"features {', '.join(configuration.features)}; OS "
+        f"{', '.join(configuration.operating_systems)}; team "
+        f"{recommendation.team.team_name}; price ${configuration.price:,.2f}."
+    )
+    typer.echo(
+        f"Conservative runway: cash ${runway.observed_cash:,.2f}; "
+        f"{runway.conservative_months:g} month(s); payroll "
+        f"${runway.observed_monthly_payroll:,.2f}/month; infrastructure "
+        f"${runway.observed_monthly_infrastructure:,.2f}/month; projected "
+        f"${runway.projected_cash_after:,.2f}; reserve "
+        f"${runway.minimum_cash_reserve:,.2f}."
+    )
+    for reason in recommendation.reasons:
+        typer.echo("Rejected because: " + reason)
+    for unknown in recommendation.material_unknowns:
+        typer.echo("Unknown: " + unknown)
+
+
+def _current_product_workflow(
+    snapshot: GameSnapshot, *, include_completed: bool = False
+) -> ProductWorkflow:
+    save_identity = json.dumps(snapshot.save_identity.model_dump(mode="json"), sort_keys=True)
+    repository = ProductWorkflowStore()
+    workflow = repository.current(
+        game_session_id=snapshot.game_session_id, save_identity=save_identity
+    )
+    if workflow is None and include_completed:
+        workflow = repository.latest(
+            game_session_id=snapshot.game_session_id, save_identity=save_identity
+        )
+    if workflow is None:
+        raise SoftwareIncUIValidationError("no Atlas workflow exists for this save")
+    return workflow
+
+
+@software_inc_products_app.command("types")
+def software_inc_products_types(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List the version-pinned Atlas 2D Editor type observation."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        observed = product_type(snapshot, ATLAS_PRODUCT_TYPE)
+        _emit(observed) if json_output else typer.echo(
+            f"{observed.name}: unlocked={observed.unlocked}; categories="
+            f"{', '.join(observed.categories)}; optimal development time "
+            f"{observed.optimal_development_time:g}."
+        )
+    except (GameBridgeError, SoftwareIncError, OSError, ValidationError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("features")
+def software_inc_products_features(
+    product_type_name: Annotated[str, typer.Option("--type")] = ATLAS_PRODUCT_TYPE,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List exact current product features and declared dependencies."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        features = product_features(snapshot, product_type_name)
+        if json_output:
+            _emit(features)
+        else:
+            for feature in features:
+                typer.echo(
+                    f"{feature.name}: specialization={feature.specialization or 'none'}; "
+                    f"dependencies={', '.join(feature.dependencies) or 'none'}; "
+                    f"dev_time={feature.development_time:g}; "
+                    f"server={feature.server_requirement:g}; unlocked={feature.unlocked}."
+                )
+    except (GameBridgeError, SoftwareIncError, OSError, ValidationError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("operating-systems")
+def software_inc_products_operating_systems(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show available and selected OSes from the visible design window."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        values = product_ui_state(snapshot).values
+        if values.get("scene") != "product_configuration":
+            raise SoftwareIncUIValidationError(
+                "open the New software design window to observe current operating systems"
+            )
+        options = operating_system_options(snapshot)
+        result = {
+            "available": options,
+            "selected": values.get("selected_operating_systems", ""),
+        }
+        if json_output:
+            _emit(result)
+        else:
+            for option in options:
+                typer.echo(
+                    f"{option.product_id}:{option.name}: userbase={option.userbase:,}; "
+                    f"release={option.release_date}; selected={option.selected}."
+                )
+            typer.echo("Selected: " + (str(result["selected"]).replace("|", ", ") or "none"))
+    except (GameBridgeError, SoftwareIncError, OSError, ValidationError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("recommend")
+def software_inc_products_recommend(
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 50000.0,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Recommend the exact currently visible Atlas configuration without input."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        recommendation = recommend_atlas(
+            snapshot,
+            minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+        )
+        _emit(recommendation) if json_output else _render_product_recommendation(recommendation)
+    except (GameBridgeError, SoftwareIncError, OSError, ValidationError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("start")
+def software_inc_products_start(
+    minimum_cash_reserve: Annotated[float, typer.Option("--minimum-cash-reserve", min=0)] = 50000.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Preauthorize the exact fresh Atlas commitment (sandbox)."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Configure, approve, and create the exact Atlas design."""
+    try:
+        result = asyncio.run(
+            start_atlas(
+                minimum_cash_reserve=Decimal(str(minimum_cash_reserve)),
+                approval_provider=None if dry_run else _product_approval_provider(yes),
+                dry_run=dry_run,
+                progress_provider=(
+                    None if json_output else lambda message: typer.echo("Atlas: " + message)
+                ),
+            )
+        )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("close")
+def software_inc_products_close(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Close the reversible product configuration window."""
+    try:
+        result = asyncio.run(close_product_configuration(dry_run=dry_run))
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("status")
+def software_inc_products_status(
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show persisted Atlas state beside the current semantic work item."""
+    try:
+        snapshot = asyncio.run(_software_inc_bridge_observe_async())
+        workflow = _current_product_workflow(snapshot, include_completed=True)
+        observed = product_work(snapshot, workflow.product_name)
+        if json_output:
+            _emit({"workflow": workflow, "observed": observed})
+        else:
+            typer.echo(
+                f"Atlas: workflow={workflow.status.value}; stage={workflow.stage.value}; "
+                f"progress={workflow.progress:g}; iteration={workflow.iteration}; "
+                f"held={workflow.held}; game_paused="
+                f"{snapshot.game_state.get('simulation_speed') in {'0', '0.0'}}."
+            )
+    except (GameBridgeError, SoftwareIncError, OSError, ValidationError) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+def _run_product_action(
+    action: ProductIntentAction,
+    snapshot: GameSnapshot,
+    *,
+    seconds: float,
+    dry_run: bool,
+    auto_approve: bool = False,
+) -> ProductOperationResult:
+    workflow = _current_product_workflow(
+        snapshot,
+        include_completed=action in {ProductIntentAction.ADVANCE, ProductIntentAction.PROMOTE},
+    )
+    if action is ProductIntentAction.ADVANCE:
+        return asyncio.run(advance_product(workflow, run_seconds=seconds, dry_run=dry_run))
+    if action is ProductIntentAction.REVIEW:
+        return asyncio.run(
+            review_product(
+                workflow,
+                approval_provider=(None if dry_run else _product_approval_provider(auto_approve)),
+                dry_run=dry_run,
+            )
+        )
+    if action is ProductIntentAction.ITERATE:
+        return asyncio.run(
+            iterate_product(
+                workflow,
+                approval_provider=(None if dry_run else _product_approval_provider(auto_approve)),
+                dry_run=dry_run,
+            )
+        )
+    if action is ProductIntentAction.PROMOTE:
+        return asyncio.run(
+            promote_product(
+                workflow,
+                approval_provider=(None if dry_run else _product_approval_provider(auto_approve)),
+                dry_run=dry_run,
+            )
+        )
+    if action in {ProductIntentAction.HOLD, ProductIntentAction.RESUME}:
+        return asyncio.run(
+            set_product_hold(
+                workflow,
+                held=action is ProductIntentAction.HOLD,
+                dry_run=dry_run,
+            )
+        )
+    raise SoftwareIncUIValidationError(f"unsupported Atlas action {action.value!r}")
+
+
+def _product_action_command(
+    action: ProductIntentAction,
+    *,
+    seconds: float = 10.0,
+    dry_run: bool,
+    json_output: bool,
+    auto_approve: bool = False,
+) -> None:
+    snapshot = asyncio.run(_software_inc_bridge_observe_async())
+    result = _run_product_action(
+        action,
+        snapshot,
+        seconds=seconds,
+        dry_run=dry_run,
+        auto_approve=auto_approve,
+    )
+    _emit(result) if json_output else typer.echo(result.message)
+
+
+@software_inc_products_app.command("advance")
+def software_inc_products_advance(
+    seconds: Annotated[float, typer.Option("--seconds", min=0.1, max=30)] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Run one bounded Atlas interval and guarantee pause."""
+    try:
+        _product_action_command(
+            ProductIntentAction.ADVANCE,
+            seconds=seconds,
+            dry_run=dry_run,
+            json_output=json_output,
+        )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+def _simple_product_command(
+    action: ProductIntentAction,
+    *,
+    dry_run: bool,
+    json_output: bool,
+    auto_approve: bool = False,
+) -> None:
+    _product_action_command(
+        action,
+        dry_run=dry_run,
+        json_output=json_output,
+        auto_approve=auto_approve,
+    )
+
+
+@software_inc_products_app.command("review")
+def software_inc_products_review(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Preauthorize the exact fresh review commitment (sandbox)."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Configure and approve an exact Atlas review."""
+    try:
+        _simple_product_command(
+            ProductIntentAction.REVIEW,
+            dry_run=dry_run,
+            json_output=json_output,
+            auto_approve=yes,
+        )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("iterate")
+def software_inc_products_iterate(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Preauthorize the exact fresh iteration commitment (sandbox)."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Approve iteration from the exact Atlas review result."""
+    try:
+        _simple_product_command(
+            ProductIntentAction.ITERATE,
+            dry_run=dry_run,
+            json_output=json_output,
+            auto_approve=yes,
+        )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("promote")
+def software_inc_products_promote(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Preauthorize the exact fresh stage commitment (sandbox)."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Approve the next exact Atlas stage transition."""
+    try:
+        _simple_product_command(
+            ProductIntentAction.PROMOTE,
+            dry_run=dry_run,
+            json_output=json_output,
+            auto_approve=yes,
+        )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("hold")
+def software_inc_products_hold(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Hold Atlas without advancing game time."""
+    try:
+        _simple_product_command(ProductIntentAction.HOLD, dry_run=dry_run, json_output=json_output)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("resume")
+def software_inc_products_resume(
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Resume Atlas project work without advancing game time."""
+    try:
+        _simple_product_command(
+            ProductIntentAction.RESUME, dry_run=dry_run, json_output=json_output
+        )
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
+
+
+@software_inc_products_app.command("do")
+def software_inc_products_do(
+    instruction: Annotated[str, typer.Argument(help="One bounded plain-English Atlas action.")],
+    seconds: Annotated[float, typer.Option("--seconds", min=0.1, max=30)] = 10.0,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Preauthorize an exact fresh Atlas commitment (sandbox)."),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Execute one deterministic Prompt 7 request from plain English."""
+    try:
+        intent = parse_product_intent(instruction)
+        if intent.mapping_note and not json_output:
+            typer.echo("Version mapping: " + intent.mapping_note)
+        if intent.action is ProductIntentAction.CREATE:
+            result = asyncio.run(
+                start_atlas(
+                    minimum_cash_reserve=intent.minimum_cash_reserve,
+                    approval_provider=None if dry_run else _product_approval_provider(yes),
+                    dry_run=dry_run,
+                    progress_provider=(
+                        None if json_output else lambda message: typer.echo("Atlas: " + message)
+                    ),
+                )
+            )
+        else:
+            snapshot = asyncio.run(_software_inc_bridge_observe_async())
+            if intent.action is ProductIntentAction.STATUS:
+                workflow = _current_product_workflow(snapshot, include_completed=True)
+                _emit(
+                    {"workflow": workflow, "observed": product_work(snapshot, "Atlas")}
+                ) if json_output else typer.echo(
+                    f"Atlas is {workflow.stage.value}; progress {workflow.progress:g}; "
+                    f"held={workflow.held}."
+                )
+                return
+            result = _run_product_action(
+                intent.action,
+                snapshot,
+                seconds=seconds,
+                dry_run=dry_run,
+                auto_approve=yes,
+            )
+        _emit(result) if json_output else typer.echo(result.message)
+    except (
+        ComputerControlError,
+        GameBridgeError,
+        SoftwareIncError,
+        OSError,
+        ValidationError,
+    ) as error:
+        _fail(error, SOFTWARE_INC_FAILURE)
 
 
 def _rail_route_bridge_installer() -> RailRouteBridgeInstaller:
@@ -1295,7 +3365,7 @@ def _emit_analysis(
 @app.command("ask")
 def analysis_ask(
     question: Annotated[str, typer.Argument(help="Natural-language gameplay question.")],
-    adapter: Annotated[AdapterName, typer.Option("--adapter")] = AdapterName.OPENTTD,
+    adapter: Annotated[AdapterId, typer.Option("--adapter")] = AdapterId.OPENTTD,
     compiler_provider: Annotated[
         AnalysisProviderName,
         typer.Option("--compiler-provider", help="none, codex, or openai; hosted use is explicit."),
@@ -1331,7 +3401,7 @@ def analysis_ask(
     style: Annotated[ExplanationStyle, typer.Option("--style")] = ExplanationStyle.COMPACT,
 ) -> None:
     """Compile and answer a read-only gameplay question."""
-    if adapter is not AdapterName.OPENTTD:
+    if adapter is not AdapterId.OPENTTD:
         _fail(
             ValueError("Phase 8B analysis currently supports only the OpenTTD adapter"),
             INVALID_INPUT,
@@ -2136,9 +4206,15 @@ def task_create(
         ),
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
-    adapter: Annotated[AdapterName, typer.Option("--adapter")] = AdapterName.REFERENCE,
+    adapter: Annotated[AdapterId, typer.Option("--adapter")] = AdapterId.REFERENCE,
 ) -> None:
     try:
+        registration = adapter_registration(adapter)
+        if not registration.runtime_factory_available:
+            raise ValueError(
+                registration.unavailable_reason
+                or f"task runtime is unavailable for {adapter.value!r}"
+            )
         if specification is not None and instruction is not None:
             raise ValueError("--spec and --instruction are mutually exclusive")
         if instruction is not None:
@@ -2167,7 +4243,7 @@ def task_create(
             )
         else:
             spec = TaskSpecification.model_validate_json(specification.read_text())
-        spec = spec.model_copy(update={"adapter_type": adapter.value})
+        spec = spec.model_copy(update={"adapter_type": adapter})
         now = datetime.now(UTC)
         task = Task(
             id=task_id or uuid4(),
@@ -2209,7 +4285,7 @@ def task_compile(
             help="Opt in to local JSON recordings containing the instruction and full prompt.",
         ),
     ] = None,
-    adapter: Annotated[AdapterName, typer.Option("--adapter")] = AdapterName.REFERENCE,
+    adapter: Annotated[AdapterId, typer.Option("--adapter")] = AdapterId.REFERENCE,
 ) -> None:
     text = instruction if instruction is not None else typer.prompt("Prompt")
     try:

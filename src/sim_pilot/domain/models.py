@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import (
@@ -13,13 +13,20 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_validator,
     model_validator,
 )
 
-from sim_pilot.domain.types import ConstraintType, DecisionType, ObjectiveType, TaskStatus
+from sim_pilot.domain.types import (
+    AdapterId,
+    ConstraintType,
+    DecisionType,
+    ObjectiveType,
+    TaskStatus,
+)
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-type AdapterType = Literal["reference", "openttd"]
+type AdapterType = AdapterId
 type JsonScalar = None | bool | int | float | str
 type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]
 
@@ -72,12 +79,20 @@ class AuthorityPolicy(DomainModel):
 class TaskSpecification(DomainModel):
     """The compiled, structured definition of delegated work."""
 
-    adapter_type: AdapterType = "reference"
+    adapter_type: AdapterType = AdapterId.REFERENCE
     objective: Objective
     constraints: tuple[Constraint, ...] = ()
     authority: AuthorityPolicy
     notifications: tuple[NonEmptyString, ...] = ()
     stop_conditions: tuple[NonEmptyString, ...] = ()
+
+    @field_validator("adapter_type", mode="before")
+    @classmethod
+    def parse_adapter_type(cls, value: object) -> object:
+        """Accept persisted string identifiers while retaining a closed enum contract."""
+        if isinstance(value, str):
+            return AdapterId(value)
+        return value
 
 
 class Observation(DomainModel):

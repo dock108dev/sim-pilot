@@ -240,6 +240,40 @@ def test_runtime_does_not_import_openttd_client() -> None:
     assert not {path: modules for path, modules in violations.items() if modules}
 
 
+def test_generic_boundaries_do_not_import_software_inc() -> None:
+    roots = ("domain", "runtime", "persistence", "computer_control", "game_bridge")
+    files = tuple(path for root in roots for path in (PACKAGE_ROOT / root).rglob("*.py"))
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module
+            for module in imported_modules(path)
+            if module.startswith("sim_pilot.software_inc")
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
+def test_software_inc_does_not_import_other_games_or_runtime_layers() -> None:
+    files = (PACKAGE_ROOT / "software_inc").rglob("*.py")
+    forbidden = (
+        "sim_pilot.rail_route",
+        "sim_pilot.openttd",
+        "sim_pilot.adapters",
+        "sim_pilot.runtime",
+        "sim_pilot.persistence",
+        "sim_pilot.intent_compiler",
+        "sim_pilot.decision_provider",
+    )
+    violations = {
+        str(path.relative_to(PACKAGE_ROOT)): sorted(
+            module for module in imported_modules(path) if module.startswith(forbidden)
+        )
+        for path in files
+    }
+    assert not {path: modules for path, modules in violations.items() if modules}
+
+
 def test_game_bridge_is_below_game_and_action_boundaries() -> None:
     files = (PACKAGE_ROOT / "game_bridge").rglob("*.py")
     forbidden = (

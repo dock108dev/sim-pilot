@@ -27,39 +27,65 @@ foreach (var handle in reader.TypeDefinitions)
     var qualifiedName = string.IsNullOrEmpty(typeNamespace) ? name : $"{typeNamespace}.{name}";
     if (!qualifiedName.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
 
-    Console.WriteLine($"TYPE {TypeVisibility(type.Attributes)} {qualifiedName}");
+    Console.WriteLine($"TYPE {TypeVisibility(type.Attributes)} {qualifiedName} BASE {SafeDecode(() => typeNames.EntityName(type.BaseType))}");
     foreach (var propertyHandle in type.GetProperties())
     {
         var property = reader.GetPropertyDefinition(propertyHandle);
-        var signature = property.DecodeSignature(typeNames, genericContext: null);
-        Console.WriteLine($"  PROPERTY {signature.ReturnType} {reader.GetString(property.Name)}");
+        Console.WriteLine(
+            $"  PROPERTY {SafeDecode(() => property.DecodeSignature(typeNames, genericContext: null).ReturnType)} " +
+            reader.GetString(property.Name));
     }
     foreach (var fieldHandle in type.GetFields())
     {
         var field = reader.GetFieldDefinition(fieldHandle);
-        var fieldType = field.DecodeSignature(typeNames, genericContext: null);
-        Console.WriteLine($"  FIELD {FieldVisibility(field.Attributes)} {fieldType} {reader.GetString(field.Name)}");
+        Console.WriteLine(
+            $"  FIELD {FieldVisibility(field.Attributes)} " +
+            $"{SafeDecode(() => field.DecodeSignature(typeNames, genericContext: null))} {reader.GetString(field.Name)}");
     }
     foreach (var methodHandle in type.GetMethods())
     {
         var method = reader.GetMethodDefinition(methodHandle);
         if ((method.Attributes & MethodAttributes.SpecialName) != 0) continue;
-        var signature = method.DecodeSignature(typeNames, genericContext: null);
+        MethodSignature<string>? signature = null;
+        try
+        {
+            signature = method.DecodeSignature(typeNames, genericContext: null);
+        }
+        catch (BadImageFormatException)
+        {
+            // Some shipped game assemblies contain metadata references the portable reader
+            // cannot resolve. Keep cataloging the remaining public surface instead of losing
+            // the entire type, which is especially important for version-specific audits.
+        }
         var parameterNames = method.GetParameters()
             .Select(reader.GetParameter)
             .Where(parameter => parameter.SequenceNumber != 0)
             .OrderBy(parameter => parameter.SequenceNumber)
             .Select(parameter => reader.GetString(parameter.Name))
             .ToArray();
-        var parameters = signature.ParameterTypes.Select((typeName, index) =>
+        var parameters = (signature?.ParameterTypes ?? []).Select((typeName, index) =>
             index < parameterNames.Length && !string.IsNullOrEmpty(parameterNames[index])
                 ? $"{typeName} {parameterNames[index]}"
                 : typeName);
-        Console.WriteLine($"  METHOD {MethodVisibility(method.Attributes)} {signature.ReturnType} {reader.GetString(method.Name)}({string.Join(", ", parameters)})");
+        Console.WriteLine(
+            $"  METHOD {MethodVisibility(method.Attributes)} {signature?.ReturnType ?? "<unresolved>"} " +
+            $"{reader.GetString(method.Name)}({string.Join(", ", parameters)})");
     }
 }
 
 return 0;
+
+static string SafeDecode(Func<string> decode)
+{
+    try
+    {
+        return decode();
+    }
+    catch (BadImageFormatException)
+    {
+        return "<unresolved>";
+    }
+}
 
 static string TypeVisibility(TypeAttributes attributes) =>
     (attributes & TypeAttributes.VisibilityMask) switch
@@ -69,24 +95,37 @@ static string TypeVisibility(TypeAttributes attributes) =>
         _ => "nonpublic",
     };
 
-static string FieldVisibility(FieldAttributes attributes) =>
-    (attributes & FieldAttributes.FieldAccessMask) switch
+static string FieldVisibility(FieldAttributes attributes)
+{
+    var visibility = (attributes & FieldAttributes.FieldAccessMask) switch
     {
         FieldAttributes.Public => "public",
         FieldAttributes.Family or FieldAttributes.FamORAssem => "protected",
         _ => "nonpublic",
     };
+    return (attributes & FieldAttributes.Static) != 0 ? $"{visibility} static" : visibility;
+}
 
-static string MethodVisibility(MethodAttributes attributes) =>
-    (attributes & MethodAttributes.MemberAccessMask) switch
+static string MethodVisibility(MethodAttributes attributes)
+{
+    var visibility = (attributes & MethodAttributes.MemberAccessMask) switch
     {
         MethodAttributes.Public => "public",
         MethodAttributes.Family or MethodAttributes.FamORAssem => "protected",
         _ => "nonpublic",
     };
+    return (attributes & MethodAttributes.Static) != 0 ? $"{visibility} static" : visibility;
+}
 
 sealed class TypeNameProvider(MetadataReader reader) : ISignatureTypeProvider<string, object?>
 {
+    public string EntityName(EntityHandle handle) => handle.Kind switch
+    {
+        HandleKind.TypeDefinition => GetTypeFromDefinition(reader, (TypeDefinitionHandle)handle, 0),
+        HandleKind.TypeReference => GetTypeFromReference(reader, (TypeReferenceHandle)handle, 0),
+        HandleKind.TypeSpecification => GetTypeFromSpecification(reader, null, (TypeSpecificationHandle)handle, 0),
+        _ => "none",
+    };
     public string GetArrayType(string elementType, ArrayShape shape) => $"{elementType}[{new string(',', shape.Rank - 1)}]";
     public string GetByReferenceType(string elementType) => $"ref {elementType}";
     public string GetFunctionPointerType(MethodSignature<string> signature) => "function-pointer";

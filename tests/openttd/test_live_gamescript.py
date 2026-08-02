@@ -14,6 +14,7 @@ from sim_pilot.adapters.base import AdapterSnapshot
 from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.domain import (
     Action,
+    AdapterId,
     AuthorityPolicy,
     Decision,
     DecisionType,
@@ -187,7 +188,7 @@ def test_live_company_name_crash_reconciles_and_resumes_without_retry(tmp_path: 
             target = "Sim Pilot Recovery 7.6 B"
         task = make_task(
             specification=TaskSpecification(
-                adapter_type="openttd",
+                adapter_type=AdapterId.OPENTTD,
                 objective=Objective(
                     type=ObjectiveType.RUN_UNTIL,
                     description="Set the crash-test company name.",

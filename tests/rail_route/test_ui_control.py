@@ -192,10 +192,13 @@ class _Backend:
     def capabilities(self) -> ComputerControlCapabilities:
         return ComputerControlCapabilities(
             platform="macos",
+            exact_window_capture=True,
             screen_capture=True,
             accessibility_trusted=True,
             click=True,
             keyboard=True,
+            text=True,
+            scrolling=True,
             live_verified=True,
             detail="fixture",
         )
@@ -204,14 +207,19 @@ class _Backend:
         image = next(self._images)
         digest = hashlib.sha256(image.tobytes()).hexdigest()
         metadata = DesktopFrame(
-            frame_id=digest,
+            frame_id=hashlib.sha256(f"{digest}:{len(self.gestures)}".encode()).hexdigest(),
+            capture_sequence=len(self.gestures) + 1,
             captured_at=datetime.now(UTC),
             process_id=process_id,
+            window_id="rail-route-window",
+            window_title="Rail Route",
             window_bounds=WindowBounds(x=0, y=0, width=1512, height=982),
+            window_frontmost=True,
             pixel_width=3024,
             pixel_height=1964,
             display_scale=2.0,
             sha256=digest,
+            platform="macos",
         )
         return CapturedDesktopFrame(metadata, image)
 

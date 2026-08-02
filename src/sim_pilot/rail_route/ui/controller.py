@@ -70,7 +70,12 @@ async def execute_set_route_ui(
         kind=InputGestureKind.CLICK,
         point=origin_target.point,
         expected_process_id=before.observation.frame.process_id,
+        expected_window_id=before.observation.frame.window_id,
+        expected_window_bounds=before.observation.frame.window_bounds,
         expected_frame_id=before.observation.frame.frame_id,
+        expected_scene=before.observation.scene.value,
+        target_id=origin_target.signal_id,
+        intended_effect="select the origin signal for route preview",
     )
     observer.backend.execute(first_gesture, frame=before.observation.frame)
 
@@ -87,7 +92,12 @@ async def execute_set_route_ui(
         kind=InputGestureKind.CLICK,
         point=destination_target.point,
         expected_process_id=preview.observation.frame.process_id,
+        expected_window_id=preview.observation.frame.window_id,
+        expected_window_bounds=preview.observation.frame.window_bounds,
         expected_frame_id=preview.observation.frame.frame_id,
+        expected_scene=preview.observation.scene.value,
+        target_id=destination_target.signal_id,
+        intended_effect="complete the route at the destination signal",
     )
     observer.backend.execute(second_gesture, frame=preview.observation.frame)
 

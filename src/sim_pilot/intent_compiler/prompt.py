@@ -1,5 +1,7 @@
 """Versioned, environment-specific prompt contract for the Intent Compiler."""
 
+from sim_pilot.adapter_registry import adapter_registration
+from sim_pilot.domain import AdapterId
 from sim_pilot.intent_compiler.models import CompilerCapabilityCatalog
 
 PROMPT_VERSION = "intent-compiler-v3"
@@ -32,7 +34,7 @@ SUPPORTED_ACTIONS = (
 
 REFERENCE_CAPABILITIES = CompilerCapabilityCatalog(
     name="reference_simulation",
-    adapter_type="reference",
+    adapter_type=AdapterId.REFERENCE,
     resources=SUPPORTED_RESOURCES,
     actions=SUPPORTED_ACTIONS,
     project_types=("housing", "power"),
@@ -40,7 +42,7 @@ REFERENCE_CAPABILITIES = CompilerCapabilityCatalog(
 
 OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
     name="openttd_admin_network_v3_gamescript_v1",
-    adapter_type="openttd",
+    adapter_type=AdapterId.OPENTTD,
     resources=(
         "cash",
         "debt",
@@ -59,17 +61,34 @@ OPENTTD_CAPABILITIES = CompilerCapabilityCatalog(
     string_resources=("server_name", "company_name"),
 )
 
+RAIL_ROUTE_CAPABILITIES = CompilerCapabilityCatalog(
+    name="rail_route_reference_integration_unavailable_to_task_runtime",
+    adapter_type=AdapterId.RAIL_ROUTE,
+    resources=(),
+    actions=(),
+)
+
+SOFTWARE_INC_CAPABILITIES = CompilerCapabilityCatalog(
+    name="software_inc_prompt_1_discovery_only",
+    adapter_type=AdapterId.SOFTWARE_INC,
+    resources=(),
+    actions=(),
+)
+
 CAPABILITY_CATALOGS = {
     REFERENCE_CAPABILITIES.adapter_type: REFERENCE_CAPABILITIES,
     OPENTTD_CAPABILITIES.adapter_type: OPENTTD_CAPABILITIES,
+    RAIL_ROUTE_CAPABILITIES.adapter_type: RAIL_ROUTE_CAPABILITIES,
+    SOFTWARE_INC_CAPABILITIES.adapter_type: SOFTWARE_INC_CAPABILITIES,
 }
 
 
 def capability_catalog(adapter_type: str) -> CompilerCapabilityCatalog:
     """Return the sole supported catalog for an adapter or fail explicitly."""
     try:
-        return CAPABILITY_CATALOGS[adapter_type]
-    except KeyError as error:
+        registration = adapter_registration(adapter_type)
+        return CAPABILITY_CATALOGS[registration.adapter_id]
+    except (KeyError, ValueError) as error:
         raise ValueError(f"unsupported adapter type: {adapter_type!r}") from error
 
 
@@ -129,12 +148,13 @@ def compiler_prompt(catalog: CompilerCapabilityCatalog) -> str:
         if catalog.string_resources
         else ""
     )
+    resources = ", ".join(catalog.resources) or "none"
+    actions = ", ".join(catalog.actions) or "none"
     return f"""
 You are the Sim Pilot Intent Compiler, prompt version {PROMPT_VERSION}.
 
 Translate one user instruction into structured CompilerResponse data only. The active environment
-is {catalog.name}. Supported resources: {", ".join(catalog.resources)}. Supported actions:
-{", ".join(catalog.actions)}.{string_guidance}
+is {catalog.name}. Supported resources: {resources}. Supported actions: {actions}.{string_guidance}
 
 Use only reach_resource, maintain_resource, run_until, and complete_project objectives and the
 existing TaskSpecification schema. Never invent capabilities. If a request requires any action or

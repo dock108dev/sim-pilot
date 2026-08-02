@@ -1,7 +1,7 @@
 # RFC-001: Milestone 1 Runtime Design
 
 **Status:** Implemented
-**Version:** 1.0
+**Version:** 1.1
 
 ---
 
@@ -456,8 +456,9 @@ Terminal statuses do not transition.
 
 Contains
 
-- adapter_type (`reference` or `openttd`; `reference` by default; persisted so restart composition
-  is unambiguous; other values are invalid)
+- adapter_type (closed `AdapterId`: `reference`, `openttd`, `rail_route`, or `software_inc`;
+  `reference` by default; persisted so restart composition is unambiguous; registration does not
+  grant a runtime factory, and unavailable adapters fail closed during composition)
 - objective
 - constraints
 - authority
@@ -1081,3 +1082,156 @@ observational checkpoint. On resume the CLI reconstructs that health,
 resynchronizes through the same Admin transport, and rejects a different saved
 script identity as a new-game boundary. Checkpoints do not roll OpenTTD back and
 ambiguous actions are never automatically retried.
+
+## Software Inc. Phase 3 visible-control interface
+
+Software Inc. retains Game Bridge Protocol v3 as a read-only semantic observer with an empty
+gameplay-action catalog. Its separately capability-gated UI controller may compose exact-process
+foregrounding, exact-window capture, and ordinary macOS input. A synchronized observation brackets
+one screenshot with semantic snapshots and rejects changed bridge, session, save, process, window,
+projection, sequence, or timing identity.
+
+The Phase 3 catalog is `pause`, `resume`, and `open_manage_teams`. One runtime cycle sends at most
+one gesture. Target points come from the fresh current frame, not stored screen coordinates. A
+possibly sent but unverified gesture is never retried automatically. The controller persists an
+owner-only per-cycle trace without screenshot pixels and reports unsupported scenes or actions as
+blocked rather than asking a decision provider to improvise input.
+
+## Software Inc. Phase 4.5 guided interaction interface
+
+Software Inc. composes three application roles above observation and UI control. Teacher services
+answer questions and courses; Advisor services produce deterministic recommendations; Operator
+services accept only explicit delegation. Teacher and Advisor services do not import UI execution.
+
+Game-neutral strict contracts represent interaction classification, evidence, knowledge,
+capabilities, recommendations, and delegation results. Software Inc.-specific knowledge remains in
+its adapter, records provenance and a manual verification stage, and is filtered by game
+version/build. Model-generated text is not evidence and no model provider is required.
+
+A recommendation is bound to its source snapshot, game session, save identity, capability
+fingerprint, and expiration. Delegation re-observes current context and requires a direct UI action
+with current compatibility and live mutation proof. Questions, recommendations, stale identities,
+ambiguous instructions, the empty semantic action catalog, and offline-only Phase 4 staffing never
+send input.
+
+## Software Inc. Prompt 5 office-readiness interface
+
+The read-only Software Inc. adapter exposes complete `offices`, `infrastructure`, and `office_ui`
+surfaces alongside teams and employees. Office readiness compares current team membership with
+valid, unblocked, assignable placed furniture that requires a chair. `CanAssign` by itself is not a
+workstation signal. Advice must prefer already placed, unassigned capacity and must label missing
+utility or workflow facts.
+
+The first office operators are exact team working hours and exact employee roles. Both remain
+visible-UI workflows: keep the game paused, send no more than one current-frame gesture per cycle,
+re-observe, and verify the requested semantic postcondition. A matching request completes with zero
+input. Purchase authority binds item, quantity, unit and total price, cash reserve, and any recurring
+cost separately.
+
+## Software Inc. Prompt 5B workstation-placement interface
+
+The read-only adapter adds `build_catalog` and `build_ui` observations. They expose exact searchable
+furniture identity, current price/inventory, snap compatibility, preview identity/price/room and
+validity, room/team UI controls, and camera-projected visible world targets without invoking any
+gameplay method or UI callback.
+
+`prepare_team_workstation` is a separate visible-UI capability. It selects the cheapest compatible
+desk/computer/chair bundle, reuses exact valid partial components, binds default-no approval to the
+complete commitment and current identities, keeps the game paused, and sends no more than one
+right-click, pointer move, click, key, or text gesture per cycle. Pointer movement previews only;
+purchase click requires a fresh green preview for the exact item, price, and room. Each component,
+room assignment, workstation capacity, and cumulative cash change is re-observed before progress.
+Server creation remains unavailable.
+
+## Software Inc. Prompt 6A first-contract interface
+
+The read-only adapter through version `software-inc-readonly-v8` adds complete `contract_market`,
+`contract_results`, and `contract_ui` surfaces and enriches `work_items`, employees, and game state
+with contract linkage, public skill values, lifecycle/review state, and days per month. Available
+market coverage is complete only while the visible Contracts window is open. The semantic gameplay
+action catalog remains empty.
+
+Contract recommendation is deterministic and requires an exact team, complete market/team/employee/
+workspace/work-item observations, an explicit reward floor, a full-penalty cash-reserve check, no
+unapproved existing work displacement, and a conservative generated-month deadline buffer. It
+returns at most one recommendation and two alternatives and labels unmodeled future effectiveness,
+interruptions, expenses, and cash flow.
+
+The contract operator uses a separate owner-only SQLite workflow until Software Inc. is composed
+through the generic task runtime. It binds the save, game session, stable contract and work-item
+identity, exact team, policy limits, plan fingerprint, and increasing bridge sequence. Acceptance
+first reduces contract and team selection to the exact approved set. Acceptance, imminent deadline
+risk, exact review spending/configuration, promotion, and release each require independent
+default-no approval. One visible gesture is followed by a fresh synchronized observation; ambiguous
+outcomes are never retried automatically.
+
+Bounded work intervals always end paused and report progress/bugs without manufacturing a bug-count
+goal. Promotion requires observed minimum progress or the exact post-review promotion control.
+Review requires a live
+Alpha/Beta control and exact visible cost/configuration, then linked review work or a completed
+review-count increase. Release requires a unique result, exact payout cash delta, observed deadline
+status/penalties, and observed reputation; an interrupted verification reconciles an already-
+completed exact result without retrying release. A strict plain-English parser exposes only this bounded
+vocabulary and rejects missing team/reward constraints or ambiguous pronouns.
+
+## Software Inc. Prompt 6B first-training interface
+
+The read-only adapter through `software-inc-readonly-v9` adds complete `education` and
+`education_ui` surfaces and employee active-course fields. The bridge reads the game-owned
+Education duration, exact current specialization price, role/specialization levels, active course
+pairs, visible selection state, and normalized targets while retaining an empty gameplay-action
+catalog.
+
+The first training policy supports exactly one level-0 employee from an exact team in
+`Designer:System` through three sequential one-month courses to the level-3 maximum. It rejects an
+existing course, an employee who cannot gain all three levels, observed active-work displacement,
+or the projected $600 + $2,000 + $5,000 direct charges violating the caller's cash reserve. It
+reports continuing payroll and temporary team-capacity change separately and returns at most two
+alternatives.
+
+The training operator owns a separate owner-only SQLite workflow until Software Inc. is composed
+through the generic task runtime. Identity binds the save, session, employee, team, course, initial
+level, three-course projection, reserve, and plan fingerprint. Each course requires a fresh
+default-no exact approval for its current price,
+one visible gesture per fresh cycle, an observed active course, and an exact cash delta. Duplicate
+start and completed advance reconcile with zero input. Bounded progression runs at most 30 real
+seconds per invocation and uses shielded cleanup to finish paused even when the interval is
+interrupted. Each stage requires course disappearance plus exactly one System level; completion
+requires level 3 after all three approved courses.
+
+## Software Inc. Prompt 7 first-product interface
+
+The read-only adapter through `software-inc-readonly-v10` adds complete `product_catalog` and
+`product_ui` surfaces and replaces the former count-only product projection with stable released-
+product entities. Catalog observation records current Game Engine categories, features, declared
+dependencies, specialization, development-time value, code/art ratio, server requirement,
+availability, and price metadata. Design-window observation records the exact current page, name,
+type, category, features, operating systems, price, design/development teams, team warning, and
+normalized controls. The protocol gameplay-action catalog remains empty.
+
+Prompt 7 supports one product: `Atlas`, type `Game Engine`, assigned exactly to `Core`. The Advisor
+accepts only a complete visible configuration, verified catalog/type availability, an idle team
+with observed Programmer and Designer skill, selected operating systems, no unresolved team issue,
+no unsupported server requirement, and a conservative cash projection at or above the caller's
+reserve. The projection treats all observed payroll and infrastructure cost as continuing for the
+rounded-up selected-feature development duration and credits no forecast revenue.
+
+The visible-UI operator persists an owner-only, save/session-bound workflow. Reversible page,
+field, feature, operating-system, price, and team setup occurs one fresh gesture per cycle. The
+final design commitment and every review, iteration, and Design-to-Alpha or Alpha-to-Beta
+transition use a current default-no approval and a post-input semantic observation. Work may run
+only in caller-selected intervals of at most 30 real seconds, with shielded cleanup guaranteeing a
+return to pause. Hold/resume is verified on the exact work item. Duplicate creation reconciles
+without input, and a sent-but-unverified commitment is never retried. Prompt 7 deliberately stops
+at verified Beta. Release, marketing, support, and revenue policy are outside the frozen Software
+Inc. boundary; this RFC does not authorize a Prompt 8.
+
+## Software Inc. frozen-reference status
+
+The Software Inc. interfaces above are retained implementation and validation contracts, not an
+active roadmap. They remain available for maintenance, regression testing, and reuse of
+game-neutral patterns. New Software Inc. gameplay scope requires a new explicit product decision.
+
+No replacement game is selected here. A future integration must receive its own adapter and
+capability proof. Software Inc. knowledge, screen geometry, bridge observations, action evidence,
+and workflow assumptions cannot be relabeled or inherited by that integration.

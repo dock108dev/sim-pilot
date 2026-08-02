@@ -93,7 +93,11 @@ def test_plain_english_do_dispatches_only_ui_set_route(
         return SimpleNamespace(message="verified route fixture")
 
     monkeypatch.setattr("sim_pilot.cli.execute_set_route_ui", execute)
-    monkeypatch.setattr("sim_pilot.cli.append_ui_trace", lambda result: None)
+
+    def discard_result(_result: object) -> None:
+        return None
+
+    monkeypatch.setattr("sim_pilot.cli.append_ui_trace", discard_result)
 
     result = CliRunner().invoke(
         app,

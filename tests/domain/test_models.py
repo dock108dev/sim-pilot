@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from sim_pilot.domain import (
     Action,
+    AdapterId,
     AuthorityPolicy,
     Constraint,
     ConstraintType,
@@ -162,6 +163,14 @@ def test_task_specification_rejects_unknown_adapter_type() -> None:
 
     with pytest.raises(ValidationError, match="adapter_type"):
         TaskSpecification.model_validate(payload)
+
+
+def test_task_specification_accepts_registered_discovery_only_adapter() -> None:
+    specification = make_specification().model_copy(update={"adapter_type": AdapterId.SOFTWARE_INC})
+
+    restored = TaskSpecification.model_validate_json(specification.model_dump_json())
+
+    assert restored.adapter_type is AdapterId.SOFTWARE_INC
 
 
 def test_observation_is_immutable() -> None:

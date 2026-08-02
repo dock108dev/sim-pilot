@@ -3,9 +3,11 @@
 from .models import (
     ComputerControlCapabilities,
     DesktopFrame,
+    DesktopWindowIdentity,
     InputExecutionResult,
     InputGesture,
     InputGestureKind,
+    KeyModifier,
     ScreenPoint,
     WindowBounds,
 )
@@ -13,9 +15,11 @@ from .models import (
 __all__ = [
     "ComputerControlCapabilities",
     "DesktopFrame",
+    "DesktopWindowIdentity",
     "InputExecutionResult",
     "InputGesture",
     "InputGestureKind",
+    "KeyModifier",
     "ScreenPoint",
     "WindowBounds",
 ]

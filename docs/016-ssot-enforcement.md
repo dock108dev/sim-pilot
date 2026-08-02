@@ -9,7 +9,8 @@ authority boundaries after the security, abend-hardening, and read-only intellig
 
 | Domain | Source of truth | Current callers and boundary |
 |---|---|---|
-| Domain contracts | `sim_pilot.domain.models` and `sim_pilot.domain.types` | Runtime, compiler, adapters, persistence, and CLI use the same strict Pydantic models. `TaskSpecification.adapter_type` accepts only `reference` or `openttd`. |
+| Domain contracts | `sim_pilot.domain.models` and `sim_pilot.domain.types` | Runtime, compiler, adapters, persistence, and CLI use the same strict Pydantic models. `TaskSpecification.adapter_type` uses the closed `AdapterId` enum; registration does not imply runtime availability. |
+| Integration registry | `sim_pilot.adapter_registry` | One typed record states product-selection, discovery, compiler, runtime, observation, reconciliation, and action availability for every known integration. No integration is currently the flagship; missing authority fails closed. |
 | Configuration | `sim_pilot.config` | CLI composition, hosted-provider composition, and Alembic resolve supported environment settings here. |
 | Capability selection | `sim_pilot.intent_compiler.prompt.capability_catalog` | CLI and product evaluation select the reference or OpenTTD catalog through one fail-closed router. |
 | Intent validation | `sim_pilot.intent_compiler.compiler.IntentCompiler` and `sim_pilot.intent_compiler.validation` | Provider output is untrusted until deterministic catalog validation succeeds. |
@@ -21,6 +22,7 @@ authority boundaries after the security, abend-hardening, and read-only intellig
 | OpenTTD bridge protocol | `sim_pilot.openttd.gamescript.models` and `sim_pilot.openttd.gamescript.client` | The distributed GameScript, client parser, protocol negotiation, sequence checks, and resynchronization tests define the proven bridge boundary. Unsupported bridge messages and capabilities fail closed. |
 | Game-neutral bridge protocol | `sim_pilot.game_bridge.models` and `sim_pilot.game_bridge.client` | Strict protocol v1 envelopes, authenticated loopback framing, sequencing, identity, full snapshots, and resynchronization. It grants no gameplay authority. |
 | Rail Route bridge lifecycle | `sim_pilot.rail_route.bridge` plus `rail_route_bridge/` | Exact compatibility diagnosis, manifest-owned loader install/disable/uninstall, and game-side read-only translation remain separate from screen control and the persisted action runtime. |
+| Software Inc. discovery | `sim_pilot.software_inc` plus `software_inc_bridge/probe` | Exact installation/runtime evidence and a manifest-owned official lifecycle probe. Prompt 1 has no semantic observation, runtime factory, reconciler, or gameplay action. |
 | Persistence contracts | `sim_pilot.persistence.repositories` and `sim_pilot.persistence.unit_of_work` | Runtime depends on repository and unit-of-work interfaces. SQLite implementations remain below that boundary. |
 | Schema and database selection | Alembic migrations plus `sim_pilot.config.database_url` | Application and raw Alembic commands share URL resolution. Explicit programmatic migration URLs override the environment. |
 | Recovery dispatch | `sim_pilot.reconciliation.composition.default_reconciliation_dispatcher` | Persisted adapter type chooses exactly one reconciler; unknown and mismatched types fail closed. |

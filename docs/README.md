@@ -13,6 +13,8 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [Operations and CLI](operations.md): databases, providers, durable tasks, OpenTTD, recovery,
   diagnostics, and evaluation runs.
 - [Known limitations](known-limitations.md): current product boundary and unsupported behavior.
+- [Software Inc. freeze checkpoint](037-software-inc-freeze-checkpoint.md): frozen capability
+  inventory, evidence boundary, and next-game selection gate.
 - [Security hardening](014-security-hardening-review.md): trust boundaries, implemented controls,
   and remaining security roadmap.
 - [Failure handling](015-abend-handling.md): failure classification, durable outcomes, and operator
@@ -38,6 +40,30 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [Rail Route semantic bridge](025-rail-route-semantic-bridge.md): pinned loader, reversible
   installation, typed coverage, observation commands, and validation status.
 - [Sim Pilot Test Yard](026-rail-route-test-yard.md): deterministic disposable scenario contract.
+- [Software Inc. reference foundation](027-software-inc-foundation.md): adapter registration, exact
+  macOS Steam discovery, official lifecycle probe, recovery, and the empty gameplay boundary.
+- [Software Inc. read-only semantic bridge](028-software-inc-semantic-bridge.md): authenticated
+  main-thread observations, queries, and live non-mutation proof.
+- [Software Inc. verified UI control](029-software-inc-verified-ui-control.md): exact-window capture,
+  synchronized recognition, bounded gestures, and postcondition verification.
+- [Software Inc. teams and hiring](030-software-inc-teams-and-hiring.md): approval-gated team
+  creation, paid applicant observation, salary constraints, and recurring-cost verification.
+- [Software Inc. guided operator and game knowledge](031-software-inc-guided-operator-and-game-knowledge.md):
+  teacher/advisor/operator boundaries, versioned knowledge, crash courses, recommendations, and
+  explicit capability-gated delegation.
+- [Software Inc. office readiness](032-software-inc-office-readiness.md): schedules, roles, rooms,
+  placed equipment, infrastructure, approval boundaries, and current operator limitations.
+- [Software Inc. workstation placement](033-software-inc-workstation-placement.md): exact furniture
+  catalog planning, itemized approval, visible room assignment/placement, and semantic verification.
+- [Software Inc. first contract](034-software-inc-first-contract.md): complete contract observation,
+  suitability policy, approval-bound lifecycle control, persistence, and result verification.
+- [Software Inc. first training assignment](035-software-inc-first-training-assignment.md): exact
+  Education observation, System-design policy, approval, bounded progression, and skill verification.
+- [Software Inc. first product Atlas](036-software-inc-first-product-atlas.md): current catalog and
+  design observation, conservative runway, approval-bound creation, reviews, and controlled
+  Design-to-Alpha-to-Beta progression.
+- [Software Inc. freeze checkpoint](037-software-inc-freeze-checkpoint.md): the superseding product
+  direction and preserved reference boundary.
 
 ## Product and implementation contracts
 
@@ -54,7 +80,29 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [024 — Game Bridge Protocol v3](024-game-bridge-protocol.md)
 - [025 — Rail Route semantic bridge](025-rail-route-semantic-bridge.md)
 - [026 — Rail Route test yard](026-rail-route-test-yard.md)
+- [027 — Software Inc. reference foundation](027-software-inc-foundation.md)
+- [028 — Software Inc. read-only semantic bridge](028-software-inc-semantic-bridge.md)
+- [029 — Software Inc. verified UI control](029-software-inc-verified-ui-control.md)
+- [030 — Software Inc. teams and hiring](030-software-inc-teams-and-hiring.md)
+- [031 — Software Inc. guided operator and game knowledge](031-software-inc-guided-operator-and-game-knowledge.md)
+- [032 — Software Inc. office readiness](032-software-inc-office-readiness.md)
+- [033 — Software Inc. workstation placement](033-software-inc-workstation-placement.md)
+- [034 — Software Inc. first contract](034-software-inc-first-contract.md)
+- [035 — Software Inc. first training assignment](035-software-inc-first-training-assignment.md)
+- [036 — Software Inc. first product Atlas](036-software-inc-first-product-atlas.md)
+- [037 — Software Inc. freeze checkpoint](037-software-inc-freeze-checkpoint.md)
 - [ADR-019 — Rail Route UI actuation](adr/ADR-019%20Rail%20Route%20UI%20Actuation%20and%20Semantic%20Verification.md)
+- [ADR-020 — Software Inc. flagship integration (superseded)](adr/ADR-020%20Software%20Inc%20Flagship%20Integration.md)
+- [ADR-021 — Software Inc. read-only semantic bridge](adr/ADR-021%20Software%20Inc%20Read-Only%20Semantic%20Bridge.md)
+- [ADR-022 — Software Inc. verified UI control](adr/ADR-022%20Software%20Inc%20Verified%20UI%20Control.md)
+- [ADR-023 — Software Inc. teams and hiring](adr/ADR-023%20Software%20Inc%20Teams%20and%20Hiring.md)
+- [ADR-024 — Software Inc. guided operator and knowledge authority](adr/ADR-024%20Software%20Inc%20Guided%20Operator%20and%20Knowledge%20Authority.md)
+- [ADR-025 — Software Inc. office readiness and infrastructure](adr/ADR-025%20Software%20Inc%20Office%20Readiness%20and%20Infrastructure.md)
+- [ADR-026 — Software Inc. visible workstation placement](adr/ADR-026%20Software%20Inc%20Visible%20Workstation%20Placement.md)
+- [ADR-027 — Software Inc. first contract workflow](adr/ADR-027%20Software%20Inc%20First%20Contract%20Workflow.md)
+- [ADR-028 — Software Inc. first training assignment](adr/ADR-028%20Software%20Inc%20First%20Training%20Assignment.md)
+- [ADR-029 — Software Inc. first product Atlas](adr/ADR-029%20Software%20Inc%20First%20Product%20Atlas.md)
+- [ADR-030 — Software Inc. frozen reference capability](adr/ADR-030%20Software%20Inc%20Frozen%20Reference%20Capability.md)
 
 The RFCs define public behavior. The implementation guides describe how to work with the current
 tree. When they disagree, update the guide or stop and resolve the contract conflict before changing

@@ -6,6 +6,7 @@ from typing import cast
 from sim_pilot.adapters.openttd import OpenTTDAdapter
 from sim_pilot.domain import (
     Action,
+    AdapterId,
     AuthorityPolicy,
     Decision,
     DecisionType,
@@ -191,7 +192,7 @@ def test_company_name_bridge_action_completes_with_durable_checkpoint_metadata()
     )
     task = make_task(
         specification=TaskSpecification(
-            adapter_type="openttd",
+            adapter_type=AdapterId.OPENTTD,
             objective=Objective(
                 type=ObjectiveType.RUN_UNTIL,
                 description="Set the company name.",

@@ -12,7 +12,13 @@ from sim_pilot.domain.models import (
     Task,
     TaskSpecification,
 )
-from sim_pilot.domain.types import ConstraintType, DecisionType, ObjectiveType, TaskStatus
+from sim_pilot.domain.types import (
+    AdapterId,
+    ConstraintType,
+    DecisionType,
+    ObjectiveType,
+    TaskStatus,
+)
 from sim_pilot.domain.world import (
     CapabilityCoverage,
     CargoFlow,
@@ -31,6 +37,7 @@ from sim_pilot.domain.world import (
 
 __all__ = [
     "Action",
+    "AdapterId",
     "AdapterType",
     "AuthorityPolicy",
     "Constraint",

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using SimPilot.GameBridge;
 
 var tests = new (string Name, Action Run)[]
@@ -15,10 +16,12 @@ var tests = new (string Name, Action Run)[]
     ("read-only capability and snapshot", CapabilityModels),
     ("partial game-state coverage names only observed fields", PartialGameStateCoverage),
     ("semantic entities serialize with deterministic coverage", SemanticEntities),
+    ("adapter contract and surfaces are injected", InjectedContract),
     ("authenticated loopback exchange", AuthenticatedExchange),
     ("invalid authentication fails closed", InvalidAuthentication),
     ("idle authenticated client receives heartbeat", Heartbeat),
     ("single client ownership", SingleClientOwnership),
+    ("server reports sanitized provider failure", ProviderFailureLogging),
 };
 var failures = 0;
 foreach (var test in tests)
@@ -124,6 +127,20 @@ static void SemanticEntities()
     Equal("train-1:occupied:0:track-1", occupancy.AsObject()["entities"].AsArray().Single().AsObject()["entity_id"].AsString(), "track segment identity");
 }
 
+static void InjectedContract()
+{
+    var software = new BridgeContractDescriptor(3, "software-inc-readonly-v1", "software-inc", "1.8.41", 1048576, 18462,
+        "Sim Pilot Software Inc bridge", new[] { "teams", "game_state", "employees" });
+    try
+    {
+        BridgeContract.Configure(software);
+        var capability = ProtocolCodec.CapabilityPayload().AsObject();
+        Equal("employees,game_state,teams", string.Join(",", capability["observation_surfaces"].AsArray().Select(item => item.AsString())), "injected surfaces");
+        Equal(0, capability["gameplay_actions"].AsArray().Count, "injected action catalog");
+    }
+    finally { BridgeContract.Configure(BridgeContract.RailRoute); }
+}
+
 static void PartialGameStateCoverage()
 {
     var state = FakeProvider.State();
@@ -218,6 +235,20 @@ static void SingleClientOwnership()
     }
 }
 
+static void ProviderFailureLogging()
+{
+    string? logged = null;
+    using var server = new BridgeServer("correct-token-000000000000000000000", new FailingProvider(), 0,
+        BridgeContract.RailRoute, message => logged = message);
+    server.Start();
+    using var client = Connect(server.LocalEndpoint!);
+    LengthPrefixedFrame.Write(client.GetStream(), ProtocolCodec.SerializeEnvelope(ClientHello("correct-token-000000000000000000000")));
+    try { LengthPrefixedFrame.Read(client.GetStream()); } catch (IOException) { }
+    for (var attempt = 0; attempt < 100 && logged == null; attempt++) Thread.Sleep(10);
+    True(logged != null && logged.Contains("fixture capture failure", StringComparison.Ordinal), "provider failure logged");
+    True(!logged!.Contains("correct-token", StringComparison.Ordinal), "token not logged");
+}
+
 static Envelope ClientHello(string token) => new()
 {
     ProtocolVersion = BridgeContract.ProtocolVersion,
@@ -296,4 +327,9 @@ sealed class FakeProvider : IReadOnlyGameStateProvider
         GameStateAvailable = true,
         GameStateDetail = "direct public API fixture",
     };
+}
+
+sealed class FailingProvider : IReadOnlyGameStateProvider
+{
+    public RuntimeSnapshot Capture() => throw new InvalidOperationException("fixture capture failure");
 }

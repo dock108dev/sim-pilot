@@ -260,6 +260,201 @@ recovery removed all 23 unchanged manifest-owned files, preserved generated logs
 returned to an ordinary Steam launch with no bridge listener. The installer never edits Steam
 configuration, so the operator must clear the temporary launch option explicitly.
 
+## Frozen Software Inc. reference capability
+
+The Software Inc. roadmap is frozen. The retained commands remain available for maintenance,
+reproduction, and bounded use inside their documented evidence; they do not authorize a new
+Software Inc. milestone. Prompt 1 is discovery-only. It registers no gameplay actions and does not
+compose a Software Inc. task runtime:
+
+```bash
+uv run sim-pilot software-inc doctor
+uv run sim-pilot software-inc doctor --json
+uv run sim-pilot software-inc capabilities
+uv run sim-pilot software-inc probe doctor
+```
+
+Close Software Inc. before changing official mod files:
+
+```bash
+uv run sim-pilot software-inc probe install
+uv run sim-pilot software-inc probe verify
+uv run sim-pilot software-inc probe disable
+uv run sim-pilot software-inc probe uninstall
+```
+
+Install and recovery touch only the checksum-recorded source probe and its owner-only Sim Pilot
+manifest. `verify` confirms ownership, least authority, enablement, and any available lifecycle-log
+evidence. It does not claim that employee, team, project, product, office, or finance state is
+observable. See [027-software-inc-foundation.md](027-software-inc-foundation.md).
+
+After the first install, launch Software Inc., open **Mods → Code mods**, and toggle
+`SimPilotDiscoveryProbe` on. This is an explicit one-time game-owned activation step. Re-run
+`software-inc probe doctor`; `loaded: true` and an `activated` lifecycle event are the required
+live proof. If Software Inc. opens behind Steam, bring its window to the foreground because this
+build has `RunInBackground` disabled during startup.
+
+### Guided terminal
+
+The teacher and advisor paths are read-only and require no model provider:
+
+```bash
+uv run sim-pilot software-inc ask "What do teams do?"
+uv run sim-pilot software-inc ask "How many employees do I have?" --json
+uv run sim-pilot software-inc crash-course
+uv run sim-pilot software-inc crash-course hiring
+uv run sim-pilot software-inc crash-course office
+uv run sim-pilot software-inc crash-course schedules
+uv run sim-pilot software-inc crash-course roles
+uv run sim-pilot software-inc crash-course servers
+uv run sim-pilot software-inc crash-course training
+uv run sim-pilot software-inc crash-course --testing
+uv run sim-pilot software-inc recommend
+uv run sim-pilot software-inc capabilities --json
+uv run sim-pilot software-inc play
+```
+
+The default crash course uses checked-in knowledge if no live company is available and labels the
+missing personalization. Testing mode reports exact game/build, bridge and artifact identity,
+current save/session, semantic action count, live versus offline UI evidence, and known blockers.
+
+Inside `play`, `/recommend` stores one process-local current recommendation and `/why` explains it.
+`/operate use your recommended plan` rechecks expiration, save/session, capability fingerprint,
+and current capability compatibility before delegation. Questions, courses, status,
+recommendations, explanations, and ambiguous messages cannot call the UI executor.
+
+Only explicit delegation can send input. The Guided Operator currently permits `pause`, `resume`,
+and `open_manage_teams` when all live gates pass. It rejects Phase 4 staffing because that catalog
+is offline-tested but not live-promoted. Use
+[031-software-inc-guided-operator-and-game-knowledge.md](031-software-inc-guided-operator-and-game-knowledge.md)
+for evidence rules and the exact boundary.
+
+### Read-only bridge and verified UI control
+
+With the separately approved bridge enabled and a disposable company loaded:
+
+```bash
+uv run sim-pilot software-inc bridge capabilities
+uv run sim-pilot software-inc bridge observe
+uv run sim-pilot software-inc ui doctor
+uv run sim-pilot software-inc ui observe
+uv run sim-pilot software-inc ui capabilities
+```
+
+The UI observer foregrounds the already-running exact PID, captures its unique CoreGraphics game
+window, and brackets the frame with read-only semantic snapshots. Signed coordinates and all active
+displays are supported. If the existing window is partly offscreen or crosses displays, the observer
+moves it once to fit the primary display and verifies the same PID/window before capture. It does
+not resize, launch, or restart the game. Observation and dry-run commands send no gameplay input.
+Foreground activation uses AppKit against the exact existing Software Inc. bundle and verifies the
+resulting frontmost PID; Terminal does not need Automation permission to control System Events for
+this step. Full-screen Space transitions receive a bounded one-second exact-window settling period
+before capture or input; stale frames still fail closed.
+If the window is larger than the primary display, select a fitting in-game resolution or fullscreen
+mode and retry.
+
+```bash
+uv run sim-pilot software-inc ui do "pause the game"
+uv run sim-pilot software-inc ui do "resume the game"
+uv run sim-pilot software-inc ui do "open manage teams" --dry-run
+uv run sim-pilot software-inc ui do "open manage teams"
+uv run sim-pilot software-inc ui do "create a team named Support Alpha"
+uv run sim-pilot software-inc ui do \
+  "observe programmer applicants for Support Alpha under $8,000 per month"
+uv run sim-pilot software-inc ui do \
+  "hire one programmer for Support Alpha for no more than $8,000 per month"
+uv run sim-pilot software-inc office readiness Core
+uv run sim-pilot software-inc ask "Does Core have enough desks?"
+uv run sim-pilot software-inc ask "What hours does Core work?"
+uv run sim-pilot software-inc ui do "set Core working hours to 8-16" --dry-run
+uv run sim-pilot software-inc ui do "assign Gage Chen as Programmer for Core" --dry-run
+uv run sim-pilot software-inc ui do \
+  "prepare one workstation for Core while keeping $49,000 in reserve" --dry-run
+uv run sim-pilot software-inc ui do \
+  "prepare one workstation for Core while keeping $49,000 in reserve"
+uv run sim-pilot software-inc contracts do "browse contracts"
+uv run sim-pilot software-inc contracts do \
+  "find a small contract for Core with reward at least $10,000 while keeping $50,000 in reserve"
+uv run sim-pilot software-inc contracts do \
+  "accept the recommended contract for Core with reward at least $10,000 while keeping $50,000 in reserve"
+uv run sim-pilot software-inc contracts status
+uv run sim-pilot software-inc contracts do "advance the current contract" --seconds 10
+uv run sim-pilot software-inc contracts do "review the current contract"
+uv run sim-pilot software-inc contracts do "promote the current contract"
+uv run sim-pilot software-inc contracts do "release the current contract"
+uv run sim-pilot software-inc training do \
+  "recommend one suitable employee from Core for System design education while keeping $50,000 in cash"
+uv run sim-pilot software-inc training do \
+  "train one suitable employee from Core in System design for three months while keeping $50,000 in cash"
+uv run sim-pilot software-inc training status
+uv run sim-pilot software-inc training do "advance training" --seconds 10
+uv run sim-pilot software-inc crash-course products
+uv run sim-pilot software-inc crash-course development
+uv run sim-pilot software-inc products types
+uv run sim-pilot software-inc products features --type "Game Engine"
+uv run sim-pilot software-inc products operating-systems
+uv run sim-pilot software-inc products recommend --minimum-cash-reserve 50000
+uv run sim-pilot software-inc products start --minimum-cash-reserve 50000 --dry-run
+uv run sim-pilot software-inc products do \
+  "begin a small game engine called Atlas using Core and keep $50,000 in reserve"
+uv run sim-pilot software-inc products status
+uv run sim-pilot software-inc products do "advance Atlas" --seconds 10
+uv run sim-pilot software-inc products do "review Atlas"
+uv run sim-pilot software-inc products do "iterate Atlas"
+uv run sim-pilot software-inc products do "promote Atlas"
+uv run sim-pilot software-inc products do "hold Atlas"
+uv run sim-pilot software-inc products do "resume Atlas"
+```
+
+Use a disposable company. Every cycle sends zero or one gesture. If a sent gesture cannot be
+verified, do not repeat it until the resulting screen is inspected. Unknown scenes, blocking
+modals, changed windows, and stale targets stop before further input. The bridge action catalog
+remains empty. Owner-only traces under
+`~/Library/Application Support/Sim Pilot/software-inc/ui/traces.jsonl` contain no screenshot
+pixels, and UI control does not touch saves or installed bridge bytes.
+
+Team creation, paid applicant search, and final hire each form an exact approval-bound plan.
+Hiring can therefore prompt twice: the first prompt authorizes only the visible one-time search
+charge; the second names the exact applicant, target team, observed monthly salary, and user cap.
+Declining either prompt sends no commitment click. Staffing traces are stored separately at
+`~/Library/Application Support/Sim Pilot/software-inc/ui/staffing-traces.jsonl`.
+
+Schedule, role, and workstation workflows use the same owner-only staffing trace and
+one-gesture/re-observe contract. The workstation command first reuses suitable existing capacity,
+then prints an exact itemized plan and asks default-no approval. It can assign only an empty room,
+select exact visible catalog controls, and click placement only after first moving to a fresh
+room/snap target and then observing a green preview for the approved item, price, and room. It
+verifies every component and exact cumulative cash before continuing. Existing valid capacity
+completes with zero approval, gestures, or duplicate spending. Furniture relocation/sale,
+occupied-room reassignment, employee desk ownership, construction, and server creation remain
+unavailable. See
+[032-software-inc-office-readiness.md](032-software-inc-office-readiness.md) and
+[033-software-inc-workstation-placement.md](033-software-inc-workstation-placement.md).
+
+Contract recommendation opens and completely observes the visible market before applying exact
+team, role, workspace, active-work, reward, deadline, and full-penalty reserve rules. The contract
+workflow is owner-only and resumable. Each economic or irreversible commitment has its own
+default-no approval; one approval cannot authorize later review, promotion, deadline risk, or
+release. See [034-software-inc-first-contract.md](034-software-inc-first-contract.md).
+
+Training recommendation requires complete employee, team, work-item, Education, and finance
+observations. It reports exact direct cost, continuing payroll, temporary capacity, reserve, and
+unknown productivity benefit. The final Education click has one default-no exact approval. Every
+advance interval is capped at 30 real seconds and uses interruption-safe cleanup to finish paused;
+repeat it until the exact course disappears and System level increases. Duplicate starts and
+completed advances reconcile with zero input. See
+[035-software-inc-first-training-assignment.md](035-software-inc-first-training-assignment.md).
+
+Atlas recommendation requires the visible current-version design configuration, unlocked Game
+Engine catalog evidence, exact Core assignment, observed Programmer and Designer skill, selected
+features and operating systems, no unresolved team warning or unsupported server requirement, and
+a conservative payroll/infrastructure projection above the reserve. `start --dry-run` sends no
+input from paused gameplay. A live start may perform reversible setup, then prints one exact
+default-no creation approval. Every review, iteration, and stage promotion has a separate approval.
+`advance` runs at most 30 real seconds and guarantees pause; repeat bounded cycles as needed. Prompt
+7 stops at verified Beta and never releases Atlas. See
+[036-software-inc-first-product-atlas.md](036-software-inc-first-product-atlas.md).
+
 ## Approval and recovery
 
 Approval commands take an approval ID. Inspect the task and events before changing recovery state:
@@ -296,6 +491,8 @@ Exit codes are:
 | 21 | persistence or reconstruction failure |
 | 22 | migration failure |
 | 23 | OpenTTD configuration, connection, protocol, or action failure |
+| 24 | Rail Route discovery, bridge, observation, or action failure |
+| 25 | Software Inc. discovery or official-probe lifecycle failure |
 
 CLI errors include their typed exception class: `error[ExceptionType]: message`.
 

@@ -40,6 +40,28 @@ The C# Rail Route bridge is separately buildable and testable without the game. 
 Preparing BepInEx compile references is pinned and checksummed but never launches or edits Rail
 Route.
 
+The Software Inc. Prompt 1 source probe is compiled against the exact installed managed assemblies:
+
+```bash
+dotnet build software_inc_bridge/probe/SimPilotDiscoveryProbe.csproj \
+  -p:SoftwareIncManagedPath="/absolute/path/to/Software Inc.app/Contents/Resources/Data/Managed" \
+  --configuration Release
+```
+
+This compatibility build does not install the probe or launch the game.
+
+The read-only bridge, including Phase 4 applicant and visible staffing-UI observation, builds
+against the same exact managed directory:
+
+```bash
+dotnet build software_inc_bridge/bridge/SimPilotSoftwareIncBridge.csproj \
+  -p:SoftwareIncManagedPath="/absolute/path/to/Software Inc.app/Contents/Resources/Data/Managed" \
+  --configuration Release
+```
+
+The project references `UnityEngine.UI.dll` for read-only control geometry and labels. The output
+must retain zero warnings and the source guard must continue to reject gameplay mutation calls.
+
 Live tests are explicitly gated:
 
 ```bash
@@ -51,9 +73,39 @@ SIM_PILOT_LIVE_CODEX=1 SIM_PILOT_LIVE_CODEX_COMPILER=1 \
   uv run pytest -m live tests/intent_compiler/test_live_codex_cli.py
 SIM_PILOT_LIVE_CODEX=1 SIM_PILOT_LIVE_CODEX_DECISION=1 \
   uv run pytest -m live tests/decision_provider/test_live_codex_cli.py
+SIM_PILOT_LIVE_SOFTWARE_INC_UI=1 \
+  uv run pytest -m live tests/software_inc/test_live_ui.py
+SIM_PILOT_LIVE_SOFTWARE_INC_GUIDANCE=1 \
+  uv run pytest -m live tests/software_inc/test_live_guidance.py
+SIM_PILOT_LIVE_SOFTWARE_INC_OFFICE=1 \
+  uv run pytest -m live tests/software_inc/test_live_office.py
+SIM_PILOT_LIVE_SOFTWARE_INC_WORKSTATION=1 \
+  uv run pytest -m live tests/software_inc/test_live_workstation.py
+SIM_PILOT_LIVE_SOFTWARE_INC_CONTRACTS=1 \
+  uv run pytest -m live tests/software_inc/test_live_contracts.py
+SIM_PILOT_LIVE_SOFTWARE_INC_TRAINING=1 \
+  uv run pytest -m live tests/software_inc/test_live_training.py
+SIM_PILOT_LIVE_SOFTWARE_INC_PRODUCTS=1 \
+  uv run pytest -m live tests/software_inc/test_live_products.py
 ```
 
 Only run live tests after authorizing the corresponding hosted usage or disposable game server.
+The Software Inc. UI test is safe only in the pinned disposable company and verifies the currently
+open Manage Teams state without dismissing a blocking tutorial or sending a gesture.
+The guided test additionally permits one bounded `open_manage_teams` action and proves that its
+read paths plus rejected Phase 4 delegation leave save fingerprints unchanged.
+The office test asks current-save questions and executes only an already-satisfied schedule, which
+must complete with zero input and unchanged save bytes. It does not authorize a role change,
+purchase, placement, room assignment, or server creation.
+The workstation test is intentionally destructive: it assigns an empty room and buys the exact
+approved desk/computer/chair bundle when missing. Run its dry-run terminal command first and set the
+live gate only for a disposable company after reviewing the printed prices and reserve.
+The contract test opens and reads the market, applies the deterministic recommendation policy, and
+proves unchanged save bytes. It does not authorize acceptance, review spending, promotion,
+deadline-risk continuation, or release; exercise those through the interactive CLI prompts.
+The training test observes the exact Education model and may perform only reversible navigation to
+the pending approval. It sends no commitment click and requires unchanged save bytes. Start and
+complete the assignment only through the interactive terminal approval and bounded advance commands.
 
 ## Package boundaries
 
@@ -67,12 +119,16 @@ Only run live tests after authorizing the corresponding hosted usage or disposab
 | `sim_pilot.decision_provider` | Model-backed runtime decision implementations. |
 | `sim_pilot.analysis` | Read-only deterministic gameplay requests, analyzers, evidence, interaction composition, freshness, and local sessions. |
 | `sim_pilot.analysis_provider` | Optional Codex CLI and OpenAI analysis compilers and explanations. |
+| `sim_pilot.guidance` | Strict game-neutral teacher, advisor, evidence, knowledge, recommendation, and delegation-result contracts. |
 | `sim_pilot.provider_support` | Shared provider subprocess support, currently the Codex CLI boundary. |
 | `sim_pilot.persistence` | Repository and unit-of-work contracts plus in-memory storage. |
 | `sim_pilot.persistence.sqlite` | SQLAlchemy repositories, schema, transactions, and Alembic helpers. |
 | `sim_pilot.openttd` | Admin Network and GameScript protocol clients below the adapter boundary. |
 | `sim_pilot.game_bridge` | Game-neutral strict envelopes, snapshots, and authenticated atomic-action client. |
 | `sim_pilot.rail_route.bridge` | Rail Route translation, configuration, and reversible loader lifecycle. |
+| `sim_pilot.software_inc` | Software Inc.-specific discovery, bridge composition, versioned knowledge, guidance services, and exact-window visual recognition below generic boundaries. |
+| `sim_pilot.computer_control` | Game-neutral exact-frame metadata, bounded gesture contracts, and native platform input backends. |
+| `sim_pilot.adapter_registry` | Typed availability and authority for every known integration. |
 | `sim_pilot.reconciliation` | Adapter-specific crash-window classification and application composition. |
 
 Dependency direction is enforced by `tests/architecture/test_dependency_direction.py`:
@@ -131,6 +187,10 @@ sequence, the simulation must produce identical results.
 - `tests/persistence`: repository contracts, transactions, and migrations.
 - `tests/intent_compiler` and `tests/decision_provider`: provider boundaries and structured output.
 - `tests/openttd`: protocol, adapter, GameScript, and opt-in live behavior.
+- `tests/software_inc`: discovery, reversible probe/bridge recovery, semantic observation,
+  guided interaction, versioned knowledge, deterministic recommendations, screenshot-bound UI
+  control, approvals, teams, applicants, hiring, office readiness, workstation placement, and
+  contract, training, and Atlas product-lifecycle verification.
 - `tests/analysis`: request contracts, analyzers, evidence, compiler, explanation, CLI data, and
   separately gated live analysis.
 - `tests/architecture`: import and dependency-direction guards.

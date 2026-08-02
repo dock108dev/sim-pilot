@@ -15,6 +15,15 @@ class TaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class AdapterId(StrEnum):
+    """Canonical identifiers for known game and simulation integrations."""
+
+    REFERENCE = "reference"
+    OPENTTD = "openttd"
+    RAIL_ROUTE = "rail_route"
+    SOFTWARE_INC = "software_inc"
+
+
 class ObjectiveType(StrEnum):
     """Objective variants supported by the Month 1 design."""
 

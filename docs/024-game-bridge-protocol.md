@@ -1,15 +1,16 @@
 # Sim Pilot Game Bridge Protocol v3
 
-**Status:** Implemented offline; live deployment pending a safe Rail Route restart
+**Status:** Implemented and live-proven for Rail Route; Software Inc. adapter pending activation
 
 **Version:** 3
 
 ## Boundary
 
 Game Bridge Protocol v3 is a game-neutral read-only protocol carried as length-prefixed UTF-8 JSON
-over loopback TCP. One authenticated client owns the connection. The production adapter is
-`rail-route-ui-observer-v1`; its gameplay-action catalog is exactly empty. Player-visible mutation
-belongs to the separate computer-control boundary in ADR-019.
+over loopback TCP. One authenticated client owns the connection. Adapter identity, supported game
+version, listener port, thread name, and deterministically ordered observation surfaces are injected
+by each game integration. Every read-only adapter's gameplay-action catalog is exactly empty.
+Player-visible mutation belongs to a separately reviewed capability boundary.
 
 The frame is a four-byte unsigned big-endian payload length followed by one JSON object. Maximum
 payload size is 1,048,576 bytes. Zero-length, oversized, malformed, unauthenticated, non-loopback,
@@ -31,9 +32,10 @@ V3 accepts only:
 There is no gameplay request or arbitrary method envelope. Historic v2 `set_route_request` and
 `set_route_response` messages are unknown in v3 and cannot reach the production plugin.
 
-The selected tuple is exactly protocol `3`, game `rail-route`, game `2.3.24`, and adapter
-`rail-route-ui-observer-v1`. The manifest advertises nine observation surfaces, full snapshots,
-resynchronization, no deltas, and no gameplay actions.
+The two selected tuples are protocol `3`, game `rail-route`, game `2.3.24`, adapter
+`rail-route-ui-observer-v1`; and protocol `3`, game `software-inc`, game `1.8.41`, adapter
+`software-inc-readonly-v1`. Each manifest advertises its adapter-specific observation surfaces,
+full snapshots, resynchronization, no deltas, and no gameplay actions.
 
 ## Observation semantics
 
@@ -55,16 +57,15 @@ access, malformed input, protocol confusion, stale delivery, and accidental auth
 It does not defend against another process running as the same OS user.
 
 V1 is the historic read-only contract. V2 is retained only as experimental direct-action evidence.
-V3 supersedes both for the installed UI-observer adapter. Any future wire or authority expansion
-requires a new protocol decision.
+V3 supersedes both for read-only adapters. Any future wire or authority expansion requires a new
+protocol decision.
 
 ## Validation record
 
 V1 live-proved the nine Rail Route observation surfaces on Prague, including deterministic
 identities, reconnect/resynchronization, authentication, and unchanged save/community bytes.
 
-V3 passes strict Python model/client tests, a read-only C# server suite, formatting/type checks, and
-an offline plugin build against the pinned BepInEx and Rail Route assemblies. The current running
-process still hosts the older v2 plugin until Rail Route is safely closed, the checksum-owned plugin
-is upgraded, and the game restarts through Steam. Live v3 and `set_route_ui` results must be appended
-here only after that gate passes.
+V3 passes strict Python model/client tests, a read-only C# server suite including injected adapter
+contracts, formatting/type checks, and exact offline builds against both supported games. Rail Route
+has live proof. Software Inc. live semantic results belong in `028-software-inc-semantic-bridge.md`
+only after the explicit broad-access approval and in-game activation gates pass.

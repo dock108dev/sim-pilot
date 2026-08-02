@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>SimPilot.SoftwareInc.DiscoveryProbe</AssemblyName>
+    <RootNamespace>SimPilotSoftwareIncProbe</RootNamespace>
+    <Version>1.0.0</Version>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SoftwareIncManagedPath Condition="'$(SoftwareIncManagedPath)' == ''">__SOFTWARE_INC_MANAGED_PATH_REQUIRED__</SoftwareIncManagedPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(SoftwareIncManagedPath)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(SoftwareIncManagedPath)/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(SoftwareIncManagedPath)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="ValidateSoftwareIncRuntime" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(SoftwareIncManagedPath)/Assembly-CSharp.dll')" Text="Set SoftwareIncManagedPath to the exact Software Inc. managed assembly directory." />
+  </Target>
+</Project>

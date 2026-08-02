@@ -1,23 +1,17 @@
 """Owner-only append-only evidence for Rail Route UI objectives."""
 
 import os
+from contextlib import suppress
 from pathlib import Path
 
 from sim_pilot.rail_route.ui.controller import RailRouteUIRouteResult
 
 DEFAULT_TRACE_PATH = (
-    Path.home()
-    / "Library"
-    / "Application Support"
-    / "Sim Pilot"
-    / "rail-route-ui"
-    / "traces.jsonl"
+    Path.home() / "Library" / "Application Support" / "Sim Pilot" / "rail-route-ui" / "traces.jsonl"
 )
 
 
-def append_ui_trace(
-    result: RailRouteUIRouteResult, *, path: Path = DEFAULT_TRACE_PATH
-) -> Path:
+def append_ui_trace(result: RailRouteUIRouteResult, *, path: Path = DEFAULT_TRACE_PATH) -> Path:
     """Durably append one complete result without retaining screenshot pixels."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.parent.chmod(0o700)
@@ -28,10 +22,8 @@ def append_ui_trace(
             stream.flush()
             os.fsync(stream.fileno())
     except Exception:
-        try:
+        with suppress(OSError):
             os.close(descriptor)
-        except OSError:
-            pass
         raise
     path.chmod(0o600)
     return path

@@ -14,6 +14,8 @@ public sealed class BridgeServer : IDisposable
     private readonly string authenticationToken;
     private readonly IReadOnlyGameStateProvider stateProvider;
     private readonly TcpListener listener;
+    private readonly BridgeContractDescriptor contract;
+    private readonly Action<string>? errorLogger;
     private readonly string bridgeInstanceId = Guid.NewGuid().ToString("D");
     private readonly HashSet<string> messageIds = new(StringComparer.Ordinal);
     private Thread? thread;
@@ -21,12 +23,17 @@ public sealed class BridgeServer : IDisposable
     private int activeClient;
     private long sequence;
 
-    public BridgeServer(string authenticationToken, IReadOnlyGameStateProvider stateProvider, int port = BridgeContract.DefaultPort)
+    public BridgeServer(string authenticationToken, IReadOnlyGameStateProvider stateProvider,
+        int port = BridgeContract.DefaultPort, BridgeContractDescriptor? contract = null,
+        Action<string>? errorLogger = null)
     {
         if (string.IsNullOrWhiteSpace(authenticationToken) || Encoding.UTF8.GetByteCount(authenticationToken) < 32)
             throw new ArgumentException("authentication token must contain at least 32 UTF-8 bytes", nameof(authenticationToken));
         this.authenticationToken = authenticationToken;
         this.stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
+        this.contract = contract ?? BridgeContract.RailRoute;
+        this.errorLogger = errorLogger;
+        BridgeContract.Configure(this.contract);
         listener = new TcpListener(IPAddress.Loopback, port);
     }
 
@@ -38,7 +45,7 @@ public sealed class BridgeServer : IDisposable
         listener.Start(1);
         var endpoint = (IPEndPoint)listener.LocalEndpoint;
         if (!IPAddress.IsLoopback(endpoint.Address)) throw new InvalidOperationException("bridge refused a non-loopback listener");
-        thread = new Thread(AcceptLoop) { IsBackground = true, Name = "Sim Pilot Rail Route bridge" };
+        thread = new Thread(AcceptLoop) { IsBackground = true, Name = contract.ThreadName };
         thread.Start();
     }
 
@@ -89,6 +96,10 @@ public sealed class BridgeServer : IDisposable
         catch (IOException) { }
         catch (SocketException) { }
         catch (FormatException) { }
+        catch (Exception error)
+        {
+            errorLogger?.Invoke("bridge client failed: " + error.GetType().Name + ": " + error.Message);
+        }
         finally
         {
             client.Close();
@@ -210,9 +221,9 @@ public sealed class BridgeServer : IDisposable
         var state = captured ?? stateProvider.Capture();
         var envelope = new Envelope
         {
-            ProtocolVersion = BridgeContract.ProtocolVersion,
-            AdapterVersion = BridgeContract.AdapterVersion,
-            GameId = BridgeContract.GameId,
+            ProtocolVersion = contract.ProtocolVersion,
+            AdapterVersion = contract.AdapterVersion,
+            GameId = contract.GameId,
             GameVersion = state.GameVersion,
             Platform = state.Platform,
             Architecture = state.Architecture,

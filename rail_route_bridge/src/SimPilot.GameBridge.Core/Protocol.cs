@@ -12,6 +12,61 @@ public static class BridgeContract
     public const string SupportedGameVersion = "2.3.24";
     public const int MaximumMessageBytes = 1_048_576;
     public const int DefaultPort = 18461;
+
+    public static BridgeContractDescriptor RailRoute { get; } = new(
+        ProtocolVersion,
+        AdapterVersion,
+        GameId,
+        SupportedGameVersion,
+        MaximumMessageBytes,
+        DefaultPort,
+        "Sim Pilot Rail Route bridge",
+        new[] { "game_state", "incoming_traffic", "platforms", "routes", "signals", "stations", "switches", "track_occupancy", "trains" });
+
+    private static BridgeContractDescriptor active = RailRoute;
+
+    public static BridgeContractDescriptor Active => active;
+
+    public static void Configure(BridgeContractDescriptor descriptor)
+    {
+        if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+        active = descriptor;
+    }
+}
+
+public sealed class BridgeContractDescriptor
+{
+    public BridgeContractDescriptor(int protocolVersion, string adapterVersion, string gameId,
+        string supportedGameVersion, int maximumMessageBytes, int defaultPort, string threadName,
+        IReadOnlyList<string> observationSurfaces)
+    {
+        if (protocolVersion < 1 || string.IsNullOrWhiteSpace(adapterVersion) ||
+            string.IsNullOrWhiteSpace(gameId) || string.IsNullOrWhiteSpace(supportedGameVersion))
+            throw new ArgumentException("bridge identity values are required");
+        if (maximumMessageBytes < 1024 || defaultPort < 0 || defaultPort > 65535 ||
+            string.IsNullOrWhiteSpace(threadName)) throw new ArgumentOutOfRangeException(nameof(defaultPort));
+        var surfaces = new List<string>(observationSurfaces ?? throw new ArgumentNullException(nameof(observationSurfaces)));
+        surfaces.Sort(StringComparer.Ordinal);
+        if (surfaces.Count == 0 || surfaces[0] == string.Empty || new HashSet<string>(surfaces, StringComparer.Ordinal).Count != surfaces.Count)
+            throw new ArgumentException("observation surfaces must be non-empty and unique", nameof(observationSurfaces));
+        ProtocolVersion = protocolVersion;
+        AdapterVersion = adapterVersion;
+        GameId = gameId;
+        SupportedGameVersion = supportedGameVersion;
+        MaximumMessageBytes = maximumMessageBytes;
+        DefaultPort = defaultPort;
+        ThreadName = threadName;
+        ObservationSurfaces = surfaces.ToArray();
+    }
+
+    public int ProtocolVersion { get; }
+    public string AdapterVersion { get; }
+    public string GameId { get; }
+    public string SupportedGameVersion { get; }
+    public int MaximumMessageBytes { get; }
+    public int DefaultPort { get; }
+    public string ThreadName { get; }
+    public IReadOnlyList<string> ObservationSurfaces { get; }
 }
 
 public enum MessageType { ClientHello, BridgeHello, AuthenticationFailure, Heartbeat, CapabilityManifest, FullSnapshotRequest, FullSnapshotResponse, ResynchronizationRequest, ProtocolError }
@@ -59,6 +114,7 @@ public sealed class RuntimeSnapshot
     public string? CurrentTime { get; set; }
     public string? SimulationSpeed { get; set; }
     public string? GameMode { get; set; }
+    public IReadOnlyDictionary<string, JsonValue>? GameStateValues { get; set; }
     public bool GameStateAvailable { get; set; }
     public string GameStateDetail { get; set; } = "game state is unavailable";
     public IReadOnlyList<ObservationSurfaceState> SemanticSurfaces { get; set; } = Array.Empty<ObservationSurfaceState>();
@@ -76,7 +132,7 @@ public static class ProtocolCodec
     {
         var root = StrictJson.Parse(json).AsObject();
         Exact(root, EnvelopeKeys, "envelope");
-        var protocol = Integer(root, "protocol_version", BridgeContract.ProtocolVersion, BridgeContract.ProtocolVersion);
+        var protocol = Integer(root, "protocol_version", BridgeContract.Active.ProtocolVersion, BridgeContract.Active.ProtocolVersion);
         var timestampText = String(root, "timestamp");
         if (!DateTimeOffset.TryParse(timestampText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var timestamp) || timestamp.Offset != TimeSpan.Zero) throw new FormatException("timestamp must be RFC3339 UTC");
         var result = new Envelope
@@ -131,7 +187,8 @@ public static class ProtocolCodec
 
     private static void ValidateEnvelope(Envelope value)
     {
-        if (value.ProtocolVersion != BridgeContract.ProtocolVersion || value.AdapterVersion != BridgeContract.AdapterVersion || value.GameId != BridgeContract.GameId || value.GameVersion != BridgeContract.SupportedGameVersion) throw new FormatException("incompatible bridge envelope");
+        var contract = BridgeContract.Active;
+        if (value.ProtocolVersion != contract.ProtocolVersion || value.AdapterVersion != contract.AdapterVersion || value.GameId != contract.GameId || value.GameVersion != contract.SupportedGameVersion) throw new FormatException("incompatible bridge envelope");
         if (value.Platform != "macos" && value.Platform != "windows" && value.Platform != "linux") throw new FormatException("unsupported platform");
         if (value.Architecture != "x86_64" && value.Architecture != "arm64") throw new FormatException("unsupported architecture");
         if (string.IsNullOrWhiteSpace(value.BridgeInstanceId) || string.IsNullOrWhiteSpace(value.GameSessionId) || string.IsNullOrWhiteSpace(value.MessageId) || value.BridgeSequence < 1) throw new FormatException("envelope identity and sequence are required");
@@ -146,11 +203,12 @@ public static class ProtocolCodec
         {
             case MessageType.ClientHello:
                 Exact(payload, new[] { "authentication_token", "client_instance_id", "expected_adapter_version", "expected_game_id", "expected_game_version", "requested_protocol_version" }, "client_hello payload");
-                if (Text(payload, "authentication_token").Length < 32 || Text(payload, "expected_adapter_version") != BridgeContract.AdapterVersion || Text(payload, "expected_game_id") != BridgeContract.GameId || Text(payload, "expected_game_version") != BridgeContract.SupportedGameVersion || Integer(payload, "requested_protocol_version", BridgeContract.ProtocolVersion, BridgeContract.ProtocolVersion) != BridgeContract.ProtocolVersion) throw new FormatException("incompatible client hello");
+                var contract = BridgeContract.Active;
+                if (Text(payload, "authentication_token").Length < 32 || Text(payload, "expected_adapter_version") != contract.AdapterVersion || Text(payload, "expected_game_id") != contract.GameId || Text(payload, "expected_game_version") != contract.SupportedGameVersion || Integer(payload, "requested_protocol_version", contract.ProtocolVersion, contract.ProtocolVersion) != contract.ProtocolVersion) throw new FormatException("incompatible client hello");
                 Text(payload, "client_instance_id"); return;
             case MessageType.BridgeHello:
                 Exact(payload, new[] { "authenticated", "heartbeat_interval_seconds", "maximum_message_bytes", "negotiated_protocol_version" }, "bridge_hello payload");
-                if (!payload["authenticated"].AsBoolean() || payload["heartbeat_interval_seconds"].AsNumber() <= 0 || Integer(payload, "maximum_message_bytes", 1024, 16_777_216) < 1024 || Integer(payload, "negotiated_protocol_version", BridgeContract.ProtocolVersion, BridgeContract.ProtocolVersion) != BridgeContract.ProtocolVersion) throw new FormatException("invalid bridge hello"); return;
+                if (!payload["authenticated"].AsBoolean() || payload["heartbeat_interval_seconds"].AsNumber() <= 0 || Integer(payload, "maximum_message_bytes", 1024, 16_777_216) < 1024 || Integer(payload, "negotiated_protocol_version", BridgeContract.Active.ProtocolVersion, BridgeContract.Active.ProtocolVersion) != BridgeContract.Active.ProtocolVersion) throw new FormatException("invalid bridge hello"); return;
             case MessageType.AuthenticationFailure:
                 Exact(payload, new[] { "reason" }, "authentication_failure payload"); if (String(payload, "reason") != "authentication_failed") throw new FormatException("invalid authentication failure"); return;
             case MessageType.Heartbeat:
@@ -202,10 +260,15 @@ public static class ProtocolCodec
         }
     }
 
-    public static JsonValue BridgeHelloPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["authenticated"] = JsonValue.Boolean(true), ["negotiated_protocol_version"] = JsonValue.Integer(BridgeContract.ProtocolVersion), ["maximum_message_bytes"] = JsonValue.Integer(BridgeContract.MaximumMessageBytes), ["heartbeat_interval_seconds"] = JsonValue.Number(2.0) });
+    public static JsonValue BridgeHelloPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["authenticated"] = JsonValue.Boolean(true), ["negotiated_protocol_version"] = JsonValue.Integer(BridgeContract.Active.ProtocolVersion), ["maximum_message_bytes"] = JsonValue.Integer(BridgeContract.Active.MaximumMessageBytes), ["heartbeat_interval_seconds"] = JsonValue.Number(2.0) });
     public static JsonValue AuthenticationFailurePayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["reason"] = JsonValue.String("authentication_failed") });
     public static JsonValue HeartbeatPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["healthy"] = JsonValue.Boolean(true), ["detail"] = JsonValue.Null() });
-    public static JsonValue CapabilityPayload() => JsonValue.Object(new Dictionary<string, JsonValue> { ["schema_version"] = JsonValue.Integer(1), ["observation_surfaces"] = JsonValue.Array(JsonValue.String("game_state"), JsonValue.String("incoming_traffic"), JsonValue.String("platforms"), JsonValue.String("routes"), JsonValue.String("signals"), JsonValue.String("stations"), JsonValue.String("switches"), JsonValue.String("track_occupancy"), JsonValue.String("trains")), ["gameplay_actions"] = JsonValue.Array(), ["full_snapshots"] = JsonValue.Boolean(true), ["delta_snapshots"] = JsonValue.Boolean(false), ["resynchronization"] = JsonValue.Boolean(true) });
+    public static JsonValue CapabilityPayload()
+    {
+        var names = new JsonValue[BridgeContract.Active.ObservationSurfaces.Count];
+        for (var i = 0; i < names.Length; i++) names[i] = JsonValue.String(BridgeContract.Active.ObservationSurfaces[i]);
+        return JsonValue.Object(new Dictionary<string, JsonValue> { ["schema_version"] = JsonValue.Integer(1), ["observation_surfaces"] = JsonValue.Array(names), ["gameplay_actions"] = JsonValue.Array(), ["full_snapshots"] = JsonValue.Boolean(true), ["delta_snapshots"] = JsonValue.Boolean(false), ["resynchronization"] = JsonValue.Boolean(true) });
+    }
 
     public static JsonValue SnapshotResponsePayload(RuntimeSnapshot state, string bridgeId, long bridgeSequence, DateTimeOffset captured) => JsonValue.Object(new Dictionary<string, JsonValue>
     {
@@ -218,14 +281,14 @@ public static class ProtocolCodec
             ["bridge_sequence"] = JsonValue.Integer(bridgeSequence),
             ["bridge_instance_id"] = JsonValue.String(bridgeId),
             ["game_session_id"] = JsonValue.String(state.GameSessionId),
-            ["game_id"] = JsonValue.String(BridgeContract.GameId),
+            ["game_id"] = JsonValue.String(BridgeContract.Active.GameId),
             ["game_version"] = JsonValue.String(state.GameVersion),
-            ["adapter_version"] = JsonValue.String(BridgeContract.AdapterVersion),
+            ["adapter_version"] = JsonValue.String(BridgeContract.Active.AdapterVersion),
             ["platform"] = JsonValue.String(state.Platform),
             ["architecture"] = JsonValue.String(state.Architecture),
             ["map_identity"] = IdentityJson(state.MapIdentity),
             ["save_identity"] = IdentityJson(state.SaveIdentity),
-            ["game_state"] = JsonValue.Object(new Dictionary<string, JsonValue> { ["paused"] = state.Paused.HasValue ? JsonValue.Boolean(state.Paused.Value) : JsonValue.Null(), ["current_time"] = Nullable(state.CurrentTime), ["simulation_speed"] = Nullable(state.SimulationSpeed), ["game_mode"] = Nullable(state.GameMode) }),
+            ["game_state"] = GameState(state),
             ["surfaces"] = Surfaces(state),
             ["warnings"] = Strings(state.Warnings),
             ["limitations"] = Strings(state.Limitations),
@@ -240,9 +303,19 @@ public static class ProtocolCodec
         {
             Surface(new ObservationSurfaceState { Surface = "game_state", Status = GameStateCoverage(state), Fields = GameStateFields(state), Detail = state.GameStateDetail }),
         };
-        foreach (var name in new[] { "incoming_traffic", "platforms", "routes", "signals", "stations", "switches", "track_occupancy", "trains" })
+        foreach (var name in BridgeContract.Active.ObservationSurfaces)
+        {
+            if (name == "game_state") continue;
             result.Add(Surface(byName.TryGetValue(name, out var surface) ? surface : ObservationSurfaceState.Unsupported(name)));
+        }
+        result.Sort((left, right) => string.CompareOrdinal(left.AsObject()["coverage"].AsObject()["surface"].AsString(), right.AsObject()["coverage"].AsObject()["surface"].AsString()));
         return JsonValue.Array(result.ToArray());
+    }
+
+    private static JsonValue GameState(RuntimeSnapshot state)
+    {
+        if (state.GameStateValues != null) return EntityValues(state.GameStateValues);
+        return JsonValue.Object(new Dictionary<string, JsonValue> { ["paused"] = state.Paused.HasValue ? JsonValue.Boolean(state.Paused.Value) : JsonValue.Null(), ["current_time"] = Nullable(state.CurrentTime), ["simulation_speed"] = Nullable(state.SimulationSpeed), ["game_mode"] = Nullable(state.GameMode) });
     }
 
     private static JsonValue Surface(ObservationSurfaceState surface)
@@ -268,6 +341,12 @@ public static class ProtocolCodec
     private static string[] GameStateFields(RuntimeSnapshot state)
     {
         if (!state.GameStateAvailable) return Array.Empty<string>();
+        if (state.GameStateValues != null)
+        {
+            var keys = new List<string>(state.GameStateValues.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            return keys.ToArray();
+        }
         var fields = new List<string>();
         if (state.CurrentTime != null) fields.Add("current_time");
         if (state.GameMode != null) fields.Add("game_mode");
@@ -280,6 +359,7 @@ public static class ProtocolCodec
     {
         var count = GameStateFields(state).Length;
         if (!state.GameStateAvailable || count == 0) return CoverageStatus.Unavailable;
+        if (state.GameStateValues != null) return CoverageStatus.ObservedComplete;
         return count == 4 ? CoverageStatus.ObservedComplete : CoverageStatus.ObservedPartial;
     }
 

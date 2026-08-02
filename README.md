@@ -2,9 +2,19 @@
 
 Sim Pilot is a local Python runtime that converts natural-language objectives into validated,
 verified actions against deterministic simulations. It includes a reference simulation, durable
-SQLite task execution, explicit OpenAI and authenticated Codex CLI providers, and a bounded
-OpenTTD 15.3 integration. A version-pinned macOS Rail Route control slice supports verified
-pause/resume commands from a plain-English terminal session.
+SQLite task execution, explicit OpenAI and authenticated Codex CLI providers, and retained OpenTTD,
+Rail Route, and Software Inc. integrations. Software Inc. is frozen as a reference capability: its
+implemented discovery, observation, guidance, approval, and visible-UI work remains available for
+maintenance and reuse, but its game-specific roadmap is no longer the default product direction.
+
+The frozen Software Inc. terminal also acts as a teacher and advisor. It answers from live observations
+and versioned repository knowledge, offers a short crash course, recommends one bounded next
+objective, and mutates the game only after explicit delegation to a currently compatible,
+live-proven action.
+
+No successor game has been selected. The next product decision must first prove a short,
+terminal-first, plain-English-to-visible-result loop in a game the player actually wants to play.
+See the [freeze checkpoint](docs/037-software-inc-freeze-checkpoint.md).
 
 The runtime executes one action per cycle and treats every model-produced decision as untrusted
 until deterministic policy and adapter validation succeed. Model-backed providers and live-game
@@ -109,7 +119,165 @@ Codex or OpenAI compilation and explanation are optional and must be selected ex
 freshness, evidence drill-down, and limitations. Named client-window inspection currently returns
 `unsupported` because the proven OpenTTD boundary has no verifiable viewport postcondition.
 
-## Control Rail Route
+## Frozen Software Inc. reference capability
+
+Software Inc. remains registered without generic persisted-task gameplay authority. Its roadmap is
+frozen at this checkpoint: the commands below preserve the reviewed capability and evidence but do
+not authorize another Software Inc. milestone or imply that it is the next product target. The
+discovery commands inspect the exact installation/runtime and manage one official lifecycle probe:
+
+```bash
+uv run sim-pilot software-inc doctor
+uv run sim-pilot software-inc doctor --json
+uv run sim-pilot software-inc capabilities
+uv run sim-pilot software-inc crash-course
+uv run sim-pilot software-inc ask "What do teams do?"
+uv run sim-pilot software-inc ask "How many employees do I have?"
+uv run sim-pilot software-inc recommend
+uv run sim-pilot software-inc play
+uv run sim-pilot software-inc probe doctor
+uv run sim-pilot software-inc probe install
+uv run sim-pilot software-inc probe verify
+uv run sim-pilot software-inc probe disable
+uv run sim-pilot software-inc probe uninstall
+```
+
+File-changing probe commands require the game to be closed. After the first install, launch the
+game and enable `SimPilotDiscoveryProbe` once in **Mods → Code mods**; Software Inc. owns that
+explicit activation setting. The probe exposes no gameplay state or actions. See the
+[Software Inc. foundation](docs/027-software-inc-foundation.md).
+
+The separate Phase 2 bridge adds authenticated, read-only semantic observation while keeping the
+gameplay action catalog empty:
+
+```bash
+uv run sim-pilot software-inc bridge doctor
+# Close the game before the next command.
+uv run sim-pilot software-inc bridge install --approve-broad-access
+uv run sim-pilot software-inc bridge verify
+# Relaunch, enable Sim Pilot Read-Only Bridge, load a company, and pause.
+uv run sim-pilot software-inc bridge observe
+uv run sim-pilot software-inc bridge list teams
+uv run sim-pilot software-inc bridge list employees
+uv run sim-pilot software-inc bridge prove-read-only
+```
+
+The approval grants Software Inc.'s compiled-mod access only for the owner-only token read and
+loopback listener. See the [Phase 2 operating guide](docs/028-software-inc-semantic-bridge.md).
+
+Phase 3 keeps that bridge read only and adds a separate visible-UI catalog:
+
+```bash
+uv run sim-pilot software-inc ui doctor
+uv run sim-pilot software-inc ui observe
+uv run sim-pilot software-inc ui capabilities
+uv run sim-pilot software-inc ui do "pause the game"
+uv run sim-pilot software-inc ui do "resume the game"
+uv run sim-pilot software-inc ui do "open manage teams"
+```
+
+Every cycle sends at most one frame-bound gesture and verifies it from a new synchronized
+screenshot and semantic observation. See the
+[Phase 3 UI-control guide](docs/029-software-inc-verified-ui-control.md).
+
+Phase 4 keeps bridge mutation authority empty and adds player-visible staffing workflows:
+
+```bash
+uv run sim-pilot software-inc ui do "create a team named Support Alpha"
+uv run sim-pilot software-inc ui do \
+  "hire one programmer for Support Alpha for no more than $8,000 per month"
+```
+
+The CLI asks separately before a paid applicant search and before the chosen applicant's recurring
+monthly salary. These Phase 4 operations remain unavailable through the Guided Operator until their
+separate live mutation gate passes. See the
+[Phase 4 teams-and-hiring guide](docs/030-software-inc-teams-and-hiring.md).
+
+Prompt 5 adds office advice and bounded schedule/role control. Prompt 5B adds exact,
+approval-gated visible workstation setup:
+
+```bash
+uv run sim-pilot software-inc office readiness Core
+uv run sim-pilot software-inc crash-course office
+uv run sim-pilot software-inc crash-course schedules
+uv run sim-pilot software-inc crash-course servers
+uv run sim-pilot software-inc ask "Does Core have enough desks?"
+uv run sim-pilot software-inc ask "What hours does Core work?"
+uv run sim-pilot software-inc ui do "set Core working hours to 8-16" --dry-run
+uv run sim-pilot software-inc ui do "assign Gage Chen as Programmer for Core" --dry-run
+uv run sim-pilot software-inc ui do \
+  "prepare one workstation for Core while keeping $49,000 in reserve" --dry-run
+uv run sim-pilot software-inc ui do \
+  "prepare one workstation for Core while keeping $49,000 in reserve"
+```
+
+The live form prints the exact room, catalog bundle, item prices, projected cash, fixed recurring
+cost, and utility unknown before default-no confirmation. It places only after a fresh green preview
+in the exact target room. See the [Prompt 5 office-readiness guide](docs/032-software-inc-office-readiness.md)
+and [Prompt 5B workstation guide](docs/033-software-inc-workstation-placement.md).
+
+Prompt 6A adds the first approval-bound contract lifecycle:
+
+```bash
+uv run sim-pilot software-inc crash-course contracts
+uv run sim-pilot software-inc contracts do \
+  "find a small contract for Core with reward at least $10,000 while keeping $50,000 in reserve"
+uv run sim-pilot software-inc contracts do \
+  "accept the recommended contract for Core with reward at least $10,000 while keeping $50,000 in reserve"
+uv run sim-pilot software-inc contracts do "advance the current contract" --seconds 10
+uv run sim-pilot software-inc contracts do "review the current contract"
+uv run sim-pilot software-inc contracts do "promote the current contract"
+uv run sim-pilot software-inc contracts do "release the current contract"
+```
+
+Acceptance, imminent deadline risk, exactly priced review, promotion, and release use separate
+default-no prompts. See the [Prompt 6A first-contract guide](docs/034-software-inc-first-contract.md).
+
+Prompt 6B adds the first approval-bound education assignment:
+
+```bash
+uv run sim-pilot software-inc crash-course training
+uv run sim-pilot software-inc training do \
+  "recommend one suitable employee from Core for System design education while keeping $50,000 in cash"
+uv run sim-pilot software-inc training do \
+  "train one suitable employee from Core in System design for three months while keeping $50,000 in cash"
+uv run sim-pilot software-inc training do "advance training" --seconds 10
+uv run sim-pilot software-inc training do "training status"
+```
+
+The objective is implemented as three sequential one-month courses. Each commitment prompt names
+the exact employee, current-level cost, continuing payroll, temporary team capacity, cash after the
+charge, and reserve; later courses require fresh approval. Every bounded advance returns the game
+to pause and completion requires System level 3. See the
+[Prompt 6B training guide](docs/035-software-inc-first-training-assignment.md).
+
+Prompt 7 adds the first controlled software-product lifecycle:
+
+```bash
+uv run sim-pilot software-inc crash-course products
+uv run sim-pilot software-inc products types
+uv run sim-pilot software-inc products features --type "Game Engine"
+uv run sim-pilot software-inc products start --minimum-cash-reserve 50000 --dry-run
+uv run sim-pilot software-inc products do \
+  "begin a small game engine called Atlas using Core and keep $50,000 in reserve"
+uv run sim-pilot software-inc products do "advance Atlas" --seconds 10
+uv run sim-pilot software-inc products do "review Atlas"
+uv run sim-pilot software-inc products do "iterate Atlas"
+uv run sim-pilot software-inc products do "promote Atlas"
+```
+
+The Advisor credits no forecast revenue and rejects configurations whose observed payroll and
+infrastructure runway would cross the reserve. Creation, reviews, iterations, and both promotions
+use separate default-no approvals. Every bounded advance returns the game to pause, and Prompt 7
+stops at verified Beta without releasing the product. See the
+[Prompt 7 Atlas guide](docs/036-software-inc-first-product-atlas.md).
+
+Inside `software-inc play`, use `/crash_course`, `/status`, `/recommend`, `/why`, `/capabilities`,
+and `/operate <objective>`. Questions and recommendations never send UI input. Unsupported or
+offline-only objectives fail closed. See the
+[Guided Operator guide](docs/031-software-inc-guided-operator-and-game-knowledge.md).
+
+## Retained Rail Route integration
 
 Rail Route 2.3.24 on macOS can be observed and paused or resumed through its own Space binding.
 Sim Pilot validates that an active single-player game view is visible, sends at most one input,
@@ -157,7 +325,7 @@ symlink, or collision. See the [semantic bridge guide](docs/025-rail-route-seman
 CLI -> Runtime -> Domain <- Adapters
         |                  |
         v                  v
-   Persistence       Simulation / OpenTTD / Rail Route
+   Persistence       Reference / OpenTTD / Rail Route / Software Inc.
 ```
 
 - `sim_pilot.domain` owns strict public models.
