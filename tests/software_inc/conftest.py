@@ -61,4 +61,12 @@ def software_inc_installation(
     )
     monkeypatch.setattr("sim_pilot.software_inc.discovery.macos.window_identity", fixture_window)
     state = tmp_path / "state"
-    return SoftwareIncDiscovery(steamapps=steamapps, state_directory=state), game_root, state
+    return (
+        SoftwareIncDiscovery(
+            steamapps=steamapps,
+            state_directory=state,
+            system="Darwin",
+        ),
+        game_root,
+        state,
+    )

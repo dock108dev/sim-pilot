@@ -14,7 +14,7 @@ from sim_pilot.software_inc.errors import SoftwareIncDiscoveryError
 
 
 def test_missing_installation_is_explicit(tmp_path: Path) -> None:
-    result = SoftwareIncDiscovery(steamapps=tmp_path / "steamapps").inspect()
+    result = SoftwareIncDiscovery(steamapps=tmp_path / "steamapps", system="Darwin").inspect()
 
     assert result.installed is False
     assert result.distribution is Distribution.UNKNOWN
@@ -87,11 +87,12 @@ def test_unsafe_manifest_install_directory_is_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(SoftwareIncDiscoveryError, match="unsafe"):
-        SoftwareIncDiscovery(steamapps=steamapps).inspect()
+        SoftwareIncDiscovery(steamapps=steamapps, system="Darwin").inspect()
 
 
-def test_windows_remains_explicitly_unverified(tmp_path: Path) -> None:
-    result = SoftwareIncDiscovery(steamapps=tmp_path, system="Windows").inspect()
+@pytest.mark.parametrize("system", ["Linux", "Windows"])
+def test_non_macos_platforms_remain_explicitly_unverified(tmp_path: Path, system: str) -> None:
+    result = SoftwareIncDiscovery(steamapps=tmp_path, system=system).inspect()
 
     assert result.installed is False
     assert result.coverage[0].status is DiscoveryStatus.UNSUPPORTED

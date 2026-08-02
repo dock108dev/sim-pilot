@@ -75,6 +75,7 @@ def installation(
     monkeypatch.setattr(
         RailRouteBridgeInstaller, "_game_running", staticmethod(fixture_game_running)
     )
+    monkeypatch.setattr("sim_pilot.rail_route.bridge.installer.platform.system", lambda: "Darwin")
     return installer, tmp_path
 
 
@@ -161,3 +162,16 @@ def test_install_rejects_archive_traversal(
 
     with pytest.raises(RailRouteBridgeInstallError, match="unexpected path"):
         installer.install(archive_path=archive)
+
+
+def test_diagnose_rejects_non_macos_platform(
+    installation: tuple[RailRouteBridgeInstaller, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installer, _temporary = installation
+    monkeypatch.setattr("sim_pilot.rail_route.bridge.installer.platform.system", lambda: "Linux")
+
+    report = installer.diagnose()
+
+    assert report.compatible is False
+    assert any("installation is implemented only for macOS" in reason for reason in report.reasons)
