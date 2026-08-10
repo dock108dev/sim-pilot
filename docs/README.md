@@ -15,6 +15,9 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [Known limitations](known-limitations.md): current product boundary and unsupported behavior.
 - [Software Inc. freeze checkpoint](037-software-inc-freeze-checkpoint.md): frozen capability
   inventory, evidence boundary, and next-game selection gate.
+- [Game-aware tool selection backlog](039-game-aware-tool-selection-backlog.md): deferred,
+  adapter-owned detection of the strongest proven observation and actuation surfaces after the
+  fixed Minami Lane bootstrap.
 - [Security hardening](014-security-hardening-review.md): trust boundaries, implemented controls,
   and remaining security roadmap.
 - [Failure handling](015-abend-handling.md): failure classification, durable outcomes, and operator
@@ -91,6 +94,7 @@ Start with the root [README](../README.md), then use the guide that matches the 
 - [035 — Software Inc. first training assignment](035-software-inc-first-training-assignment.md)
 - [036 — Software Inc. first product Atlas](036-software-inc-first-product-atlas.md)
 - [037 — Software Inc. freeze checkpoint](037-software-inc-freeze-checkpoint.md)
+- [039 — Game-aware tool selection backlog](039-game-aware-tool-selection-backlog.md)
 - [ADR-019 — Rail Route UI actuation](adr/ADR-019%20Rail%20Route%20UI%20Actuation%20and%20Semantic%20Verification.md)
 - [ADR-020 — Software Inc. flagship integration (superseded)](adr/ADR-020%20Software%20Inc%20Flagship%20Integration.md)
 - [ADR-021 — Software Inc. read-only semantic bridge](adr/ADR-021%20Software%20Inc%20Read-Only%20Semantic%20Bridge.md)

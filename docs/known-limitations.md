@@ -179,6 +179,9 @@ The following require product or operational direction rather than a documentati
 
 - selection of a successor game after a terminal-first, one-visible-action, independently verified
   player loop is agreed; selection itself does not authorize implementation;
+- game-aware selection of observation and actuation tools remains deferred until the fixed Minami
+  Lane bootstrap is configured, separately authorized, proven, and useful; see
+  [the backlog](039-game-aware-tool-selection-backlog.md);
 - whether to introduce a long-running worker or multi-task execution model;
 - package publication, deployment, backups, and data-retention policy;
 - security-scanner ownership and CI failure thresholds;
